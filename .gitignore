@@ -1,0 +1,45 @@
+# ---- Build directories (out-of-source CMake builds) ----
+build/
+build-*/
+cmake-build-*/
+
+# ---- Qt Creator user/session files (machine-specific, never commit) ----
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+*.autosave
+*.qtc_clangd/
+
+# ---- CMake stray artifacts (in case of accidental in-source config) ----
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# ---- Compiled/build outputs ----
+*.o
+*.obj
+*.so
+*.so.*
+*.a
+*.dylib
+*.dll
+*.exe
+*.out
+
+# ---- Generated headers (uncomment if you don't want to track them) ----
+# src/include/tavoos/export.hpp
+
+# ---- OS / editor junk ----
+.DS_Store
+Thumbs.db
+*~
+*.swp
+.vscode/
+.idea/

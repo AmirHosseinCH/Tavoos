@@ -1,0 +1,14 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/TavoosCompilerGuard.cmake")
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(glm CONFIG)
+find_dependency(Freetype)
+find_dependency(OpenGL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/TavoosTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TavoosResources.cmake")
+
+check_required_components(Tavoos)
