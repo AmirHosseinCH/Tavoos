@@ -58,6 +58,11 @@ int main() {
 
 See [examples/main.cpp](examples/main.cpp) for a complete, buildable version.
 
+## Documentation
+
+- [docs/GUIDE.md](docs/GUIDE.md) - using Tavoos: core concepts, widget properties, types, animation, resource embedding.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how Tavoos itself is built: object model, layout, rendering, animation, events.
+
 ## Building
 
 See [BUILDING.md](BUILDING.md) for requirements, dependencies, and build/install instructions.
