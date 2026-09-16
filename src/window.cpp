@@ -139,11 +139,10 @@ Widget* Window::dispatchBubble(Widget* start, EventT& event, void (Widget::*trig
 }
 
 Widget* Window::hitTestChildren(Window* self, double x, double y) {
-    for (const auto& child : self->children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get())) {
-            if (auto* hit = widget->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
-                return hit;
-        }
+    const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
+    for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+        if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+            return hit;
     }
     return nullptr;
 }

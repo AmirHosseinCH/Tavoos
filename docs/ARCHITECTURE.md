@@ -1031,18 +1031,24 @@ the framebuffer actually has.
 
 Each concrete widget's `render()` calls the matching `Renderer::render*()` method
 (`renderRectangle`, `renderImage`, `renderSVG`, `renderText`) with its own shader/uniforms;
-`Widget::renderChildren()` (not `Renderer`) recurses into children in tree order:
+`Widget::renderChildren()` (not `Renderer`) recurses into children, in `z()` order:
 
 ```cpp
 void Widget::renderChildren(Renderer& renderer) {
     if (renderer.isCapturingMask())
         return;   // see Clipping below - children must not render during mask capture
-    for (const auto& child : children())
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            if (widget->visible())
-                renderer.renderWidget(*widget);
+    for (Widget* const widget : zOrderedChildren(*this))
+        if (widget->visible())
+            renderer.renderWidget(*widget);
 }
 ```
+
+`zOrderedChildren()` (a private static `Widget` helper, shared with `Renderer::
+renderForWindow`'s window-level loop and `Window::hitTestChildren`) collects a parent's
+`Widget*` children and `std::stable_sort`s them ascending by `z()` - equal-z widgets keep
+their document order, so this is a no-op for any tree that never sets `z()`. Rendering walks
+the sorted list forward (lowest z first, painted underneath); hit-testing (below) walks it in
+reverse (highest z checked first, so it wins an overlap).
 
 ### Clipping
 
@@ -1307,10 +1313,10 @@ bool Widget::hasHandlerFor(EventType type) {
 ```cpp
 Widget* Widget::hitTestTree(float px, float py) const {
     if (!visible()) return nullptr;
-    for (auto it = children().rbegin(); it != children().rend(); ++it)   // reverse: last-drawn first
-        if (auto* widget = dynamic_cast<Widget*>(it->get()))
-            if (auto* hit = widget->hitTestTree(px, py))
-                return hit;
+    const std::vector<Widget*> ordered = zOrderedChildren(*this);
+    for (auto it = ordered.rbegin(); it != ordered.rend(); ++it)   // reverse: highest z / last-drawn first
+        if (auto* hit = (*it)->hitTestTree(px, py))
+            return hit;
     if (hitTest(px, py))
         return const_cast<Widget*>(this);
     return nullptr;
@@ -1323,13 +1329,12 @@ bool Widget::hitTest(float px, float py) const {
 }
 ```
 
-Children are walked in *reverse* order (`rbegin()`/`rend()`) - since later-added children
-render on top (see [Building the tree](#building-the-tree)/`renderChildren`'s forward
-iteration), reversing for hit-testing means the topmost overlapping widget wins. `hitTest`
-transforms the screen-space point into the widget's *local* space via the inverse
-`worldMatrix()` - so rotation and scale (applied in `localMatrix()`, see below) are correctly
-accounted for, not just axis-aligned bounding boxes - then bounds-checks against
-`m_displayedWidth/Height`.
+Children are walked in the *reverse* of render order (the same `zOrderedChildren()` list
+used for rendering, reversed) - the topmost widget for painting is also the one that wins an
+overlapping hit-test, matching rendering exactly. `hitTest` transforms the screen-space point
+into the widget's *local* space via the inverse `worldMatrix()` - so rotation and scale
+(applied in `localMatrix()`, see below) are correctly accounted for, not just axis-aligned
+bounding boxes - then bounds-checks against `m_displayedWidth/Height`.
 
 ```cpp
 glm::mat4 Widget::localMatrix() const {

@@ -30,18 +30,28 @@ Widget::Widget(Object* parent) : Object{parent} {
                          m_gridRow, m_gridColumn);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
-    bindRepaintTriggers(m_opacity, m_visible, m_clip);
+    bindRepaintTriggers(m_opacity, m_visible, m_clip, m_z);
+}
+
+std::vector<Widget*> Widget::zOrderedChildren(const Object& parent) {
+    std::vector<Widget*> widgets;
+    for (const auto& child : parent.children())
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widgets.push_back(widget);
+
+    std::stable_sort(widgets.begin(), widgets.end(), [](const Widget* a, const Widget* b) {
+        return a->z() < b->z();
+    });
+    return widgets;
 }
 
 void Widget::renderChildren(Renderer& renderer) {
     if (renderer.isCapturingMask())
         return;
 
-    for (const auto& child : children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get())) {
-            if (widget->visible())
-                renderer.renderWidget(*widget);
-        }
+    for (Widget* const widget : zOrderedChildren(*this)) {
+        if (widget->visible())
+            renderer.renderWidget(*widget);
     }
 }
 
@@ -60,11 +70,10 @@ Widget *Widget::hitTestTree(float px, float py) const {
     if (!visible())
         return nullptr;
 
-    for (auto it = children().rbegin(); it != children().rend(); ++it) {
-        if (auto* widget = dynamic_cast<Widget*>(it->get())) {
-            if (auto* hit = widget->hitTestTree(px, py))
-                return hit;
-        }
+    const std::vector<Widget*> ordered = zOrderedChildren(*this);
+    for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+        if (auto* hit = (*it)->hitTestTree(px, py))
+            return hit;
     }
 
     if (hitTest(px, py))

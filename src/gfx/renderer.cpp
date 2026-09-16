@@ -127,11 +127,9 @@ void Renderer::renderForWindow(Window& window) {
             widget->layout();
     }
 
-    for (const auto& child : window.children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get())) {
-            if (widget->visible())
-                renderWidget(*widget);
-        }
+    for (Widget* const widget : Widget::zOrderedChildren(window)) {
+        if (widget->visible())
+            renderWidget(*widget);
     }
 
     glfwSwapBuffers(window.handle());

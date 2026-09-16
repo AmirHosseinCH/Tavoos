@@ -8,6 +8,7 @@
 #include <tavoos/types.h>
 
 #include <type_traits>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -167,6 +168,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) z(this auto&& self, PropertyArg<int> z) {
+        z.applyTo(self.m_z);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) alignmentAnimation(this auto&& self, PropertyArg<bool> enabled, PropertyArg<float> duration, PropertyArg<EasingFn> easing = Easing::linear) {
         enabled.applyTo(self.m_alignmentAnimationEnabled);
         duration.applyTo(self.m_alignmentAnimationDuration);
@@ -279,6 +285,7 @@ public:
     bool focusable() const { return m_focusable; }
     float opacity() const { return m_opacity; }
     float effectiveOpacity() const { return m_effectiveOpacity; }
+    int z() const { return m_z; }
 
     float resolvedX()      const { return m_resolvedX; }
     float resolvedY()      const { return m_resolvedY; }
@@ -405,6 +412,7 @@ private:
     Property<bool> m_visible{true};
     Property<bool> m_focusable{false};
     Property<float> m_opacity{1.0f};
+    Property<int> m_z{0};
 
     float m_effectiveOpacity{1.0f};
     float m_resolvedX{0.0f};
@@ -460,6 +468,8 @@ private:
     Widget* hitTestTree(float px, float py) const;
     bool hasHandlerFor(EventType type);
     void updateEffectiveOpacity();
+
+    static std::vector<Widget*> zOrderedChildren(const Object& parent);
 
     bool m_layoutDirty{true};
     bool m_intrinsicSizeCacheValid{false};
