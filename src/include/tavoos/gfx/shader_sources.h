@@ -299,8 +299,15 @@ vec4 samplePaint(vec2 uv) {
 void main() {
     float sdfValue = texture(uAtlas, vUV).r;
     float dist = sdfValue - 0.5;
-    vec2 grad = vec2(dFdx(dist), dFdy(dist));
-    float aa = length(grad) * 0.85;
+
+    vec2 texel = 1.0 / vec2(textureSize(uAtlas, 0));
+    float dX = texture(uAtlas, vUV + vec2(texel.x, 0.0)).r - texture(uAtlas, vUV - vec2(texel.x, 0.0)).r;
+    float dY = texture(uAtlas, vUV + vec2(0.0, texel.y)).r - texture(uAtlas, vUV - vec2(0.0, texel.y)).r;
+    vec2 sdfGradPerTexel = vec2(dX, dY) * 0.5;
+
+    vec2 uvPerPixel = fwidth(vUV);
+    float aa = abs(sdfGradPerTexel.x / texel.x * uvPerPixel.x) + abs(sdfGradPerTexel.y / texel.y * uvPerPixel.y);
+    aa = clamp(aa * 0.55, 0.006, 0.2);
     float alpha = smoothstep(-aa, aa, dist);
 
     if (uMaskMode == 1) {
