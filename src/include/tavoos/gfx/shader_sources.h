@@ -308,7 +308,9 @@ void main() {
     vec2 uvPerPixel = fwidth(vUV);
     float aa = abs(sdfGradPerTexel.x / texel.x * uvPerPixel.x) + abs(sdfGradPerTexel.y / texel.y * uvPerPixel.y);
     aa = clamp(aa * 0.55, 0.006, 0.2);
-    float alpha = smoothstep(-aa, aa, dist);
+    float scale = 1.0 / max(max(uvPerPixel.x / texel.x, uvPerPixel.y / texel.y), 1e-4);
+    float small = clamp((0.25 - scale) / 0.10, 0.0, 1.0);
+    float alpha = smoothstep(-aa, aa, dist + 0.03 * small);
 
     if (uMaskMode == 1) {
         fragColor = vec4(alpha, 0.0, 0.0, 1.0);
