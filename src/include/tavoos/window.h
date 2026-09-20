@@ -87,6 +87,7 @@ private:
     void syncWindowTitle();
     static void closeCallback(GLFWwindow*);
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    static void windowSizeCallback(GLFWwindow* window, int width, int height);
     static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
     static void contentScaleCallback(GLFWwindow* window, float xscale, float yscale);
     static void windowFocusCallback(GLFWwindow* window, int focused);
