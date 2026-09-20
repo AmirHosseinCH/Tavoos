@@ -75,6 +75,7 @@ void Window::setup() {
 
     glfwSetWindowUserPointer(m_window, this);
     glfwSetWindowCloseCallback(m_window, &Window::closeCallback);
+    glfwSetWindowSizeCallback(m_window, &Window::windowSizeCallback);
     glfwSetFramebufferSizeCallback(m_window, &Window::framebufferSizeCallback);
     glfwSetWindowContentScaleCallback(m_window, &Window::contentScaleCallback);
     glfwSetWindowFocusCallback(m_window, &Window::windowFocusCallback);
@@ -208,6 +209,18 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
         }
 
         self->m_pressedWidget = nullptr;
+    }
+}
+
+void Window::windowSizeCallback(GLFWwindow* window, int width, int height) {
+    auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+    self->m_width.set(width);
+    self->m_height.set(height);
+    self->markDirty();
+
+    for (const auto& child : self->children()) {
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->requestRelayout();
     }
 }
 
