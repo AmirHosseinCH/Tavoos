@@ -23,6 +23,24 @@ void ButtonBase::render(Renderer& renderer) {
     renderChildren(renderer);
 }
 
+Widget::Size ButtonBase::computeIntrinsicSize() {
+    float contentWidth = 0.0f;
+    float contentHeight = 0.0f;
+    if (m_content) {
+        const Size size = m_content->intrinsicSize();
+        contentWidth = size.width + m_content->marginLeft() + m_content->marginRight();
+        contentHeight = size.height + m_content->marginTop() + m_content->marginBottom();
+    }
+    return { (width() > 0) ? static_cast<float>(width()) : contentWidth,
+             (height() > 0) ? static_cast<float>(height()) : contentHeight };
+}
+
+void ButtonBase::replaceSlot(Widget*& slot) {
+    removeChild(slot);
+    slot = nullptr;
+    assign(m_hovered, false);
+}
+
 bool ButtonBase::hasHandlerFor(EventType type) {
     switch (type) {
     case EventType::MousePress:
