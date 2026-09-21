@@ -20,7 +20,7 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
     m_text.onChange([this](const std::string&) { requestRelayout(); });
     m_font.onChange([this](const Font&) { requestRelayout(); });
 
-    background([this](RectangleWidget& rect) { rect.radius(8).color(m_color); });
+    background([this](RectangleWidget& rect) { rect.radius(m_radius.state()).color(m_color); });
     content([this](TextWidget& label) {
         label.text(m_text.state()).font(m_font.state()).color(m_textColorOut)
             .marginLeft(16).marginRight(16).marginTop(8).marginBottom(8);

@@ -30,6 +30,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) radius(this auto&& self, PropertyArg<int> radius) {
+        self.m_radius.set(radius);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) textColor(this auto&& self, PropertyArg<Paint> color) {
         color.applyTo(self.m_textColor);
         return std::forward<decltype(self)>(self);
@@ -62,6 +67,7 @@ public:
 
     std::string text() const { return m_text; }
     Font font() const { return m_font; }
+    int radius() const { return m_radius; }
     float transition() const { return m_transition; }
 
     State<Paint>& colorState() { return m_color; }
@@ -78,6 +84,7 @@ private:
 
     BindableState<std::string> m_text;
     BindableState<Font> m_font;
+    BindableState<int> m_radius{8};
     Property<Paint> m_textColor{Paint{Color::White}};
     Property<Paint> m_disabledTextColor{Paint{Color::rgba(160, 163, 175)}};
     AnimatedState<Paint> m_textColorOut;
