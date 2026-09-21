@@ -19,6 +19,7 @@ set(TAVOOS_SOURCES
     widget/svg.cpp
     widget/text.cpp
     widget/buttonbase.cpp
+    widget/buttonwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
     text/fontface.cpp
@@ -53,6 +54,7 @@ target_sources(Tavoos
     include/tavoos/widget/svg.h
     include/tavoos/widget/text.h
     include/tavoos/widget/buttonbase.h
+    include/tavoos/widget/buttonwidget.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h
