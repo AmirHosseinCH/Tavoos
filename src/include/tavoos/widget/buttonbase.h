@@ -31,11 +31,18 @@ protected:
     void triggerRelease(MouseEvent& event) override;
     void triggerMouseEnter(MouseEvent& event) override;
     void triggerMouseLeave(MouseEvent& event) override;
+    void triggerKeyPress(KeyEvent& event) override;
+    void triggerKeyRelease(KeyEvent& event) override;
+    void triggerFocusOut(Event& event) override;
 
 private:
+    void sendClick(float x, float y, KeyModifier modifiers);
+    void sendClickFromKeyboard(KeyModifier modifiers);
+
     Property<bool> m_enabled{true};
     State<bool> m_enabledState{true};
     State<bool> m_hovered{false};
+    bool m_spaceDown{false};
 };
 
 }
