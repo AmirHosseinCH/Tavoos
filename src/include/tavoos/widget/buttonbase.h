@@ -33,6 +33,7 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    unsigned contentRevision() const noexcept { return m_contentRevision; }
     bool enabled() const { return m_enabled; }
     bool hovered() const { return m_hovered; }
 
@@ -74,6 +75,7 @@ private:
             if (body)
                 body(slot);
         });
+        ++m_contentRevision;
         requestRelayout();
     }
 
@@ -88,6 +90,7 @@ private:
 
     Widget* m_background{nullptr};
     Widget* m_content{nullptr};
+    unsigned m_contentRevision{0};
 };
 
 }

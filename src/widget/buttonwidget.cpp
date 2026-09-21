@@ -1,4 +1,6 @@
 #include <tavoos/widget/buttonwidget.h>
+#include <tavoos/widget/row.h>
+#include <tavoos/widget/svg.h>
 
 namespace Tavoos {
 
@@ -20,11 +22,50 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
     m_text.onChange([this](const std::string&) { requestRelayout(); });
     m_font.onChange([this](const Font&) { requestRelayout(); });
 
-    background([this](RectangleWidget& rect) { rect.radius(m_radius.state()).color(m_color); });
-    content([this](TextWidget& label) {
-        label.text(m_text.state()).font(m_font.state()).color(m_textColorOut)
-            .marginLeft(16).marginRight(16).marginTop(8).marginBottom(8);
+    m_icon.onChange([this](const std::string& source) {
+        if (source.empty() == m_hasIcon)
+            rebuildContent();
     });
+    m_iconPosition.onChange([this](const ButtonIconPosition&) { rebuildContent(); });
+    m_display.onChange([this](const ButtonDisplay&) { rebuildContent(); });
+
+    background([this](RectangleWidget& rect) { rect.radius(m_radius.state()).color(m_color); });
+    rebuildContent();
+}
+
+void ButtonWidget::rebuildContent() {
+    if (m_ownRevision != 0 && m_ownRevision != contentRevision())
+        return;
+
+    m_hasIcon = !m_icon.get().empty();
+    const bool showIcon = m_hasIcon && m_display != ButtonDisplay::TextOnly;
+    const bool showText = m_display != ButtonDisplay::IconOnly;
+    const bool iconFirst = m_iconPosition == ButtonIconPosition::Left;
+    const float padding = showText ? 16.0f : 8.0f;
+
+    auto addIcon = [this](RowWidget& row) {
+        row.addChild<SVGWidget>([this](SVGWidget& svg) {
+            svg.source(m_icon.state()).width(m_iconSize.state()).height(m_iconSize.state())
+                .color(m_textColorOut).alignment(Alignment::CenterVertical);
+        });
+    };
+    auto addLabel = [this](RowWidget& row) {
+        row.addChild<TextWidget>([this](TextWidget& label) {
+            label.text(m_text.state()).font(m_font.state()).color(m_textColorOut)
+                .alignment(Alignment::CenterVertical);
+        });
+    };
+
+    content<RowWidget>([&](RowWidget& row) {
+        row.spacing(8).marginLeft(padding).marginRight(padding).marginTop(8).marginBottom(8);
+        if (showIcon && iconFirst)
+            addIcon(row);
+        if (showText)
+            addLabel(row);
+        if (showIcon && !iconFirst)
+            addIcon(row);
+    });
+    m_ownRevision = contentRevision();
 }
 
 void ButtonWidget::updateColor(bool animate) {
