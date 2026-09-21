@@ -7,6 +7,7 @@ namespace Tavoos {
 ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
     m_color.set(m_idleColor.get());
     m_textColorOut.set(m_textColor.get());
+    m_borderColorOut.set(m_borderColor.get());
 
     m_idleColor.onChange([this](const Paint&) { updateColor(false); });
     m_hoverColor.onChange([this](const Paint&) { updateColor(false); });
@@ -15,7 +16,12 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
     enabledState().onChange([this](const bool&) {
         updateColor(true);
         updateTextColor(true);
+        updateBorderColor(true);
     });
+
+    m_borderColor.onChange([this](const Paint&) { updateBorderColor(false); });
+    m_disabledBorderColor.onChange([this](const Paint&) { updateBorderColor(false); });
+    m_variant.onChange([this](const ButtonVariant& variant) { applyVariant(variant); });
 
     m_textColor.onChange([this](const Paint&) { updateTextColor(false); });
     m_disabledTextColor.onChange([this](const Paint&) { updateTextColor(false); });
@@ -29,7 +35,9 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
     m_iconPosition.onChange([this](const ButtonIconPosition&) { rebuildContent(); });
     m_display.onChange([this](const ButtonDisplay&) { rebuildContent(); });
 
-    background([this](RectangleWidget& rect) { rect.radius(m_radius.state()).color(m_color); });
+    background([this](RectangleWidget& rect) {
+        rect.radius(m_radius.state()).color(m_color).borderWidth(m_borderWidth.state()).borderColor(m_borderColorOut);
+    });
     rebuildContent();
 }
 
@@ -71,6 +79,31 @@ void ButtonWidget::rebuildContent() {
 void ButtonWidget::updateColor(bool animate) {
     const Paint& target = !enabled() ? m_disabledColor.get() : hovered() ? m_hoverColor.get() : m_idleColor.get();
     m_color.animateTo(target, animate ? m_transition.get() : 0.0f);
+}
+
+void ButtonWidget::applyVariant(ButtonVariant variant) {
+    const Paint accent{Color::rgba(60, 130, 255)};
+    const Paint gray{Color::rgba(160, 163, 175)};
+
+    if (variant == ButtonVariant::Filled) {
+        m_idleColor.set(accent);
+        m_hoverColor.set(Paint{Color::rgba(84, 148, 255)});
+        m_disabledColor.set(Paint{Color::rgba(228, 229, 235)});
+        m_textColor.set(Paint{Color::White});
+        m_borderWidth.set(0.0f);
+    } else {
+        m_idleColor.set(Paint{Color::rgba(60, 130, 255, 0)});
+        m_hoverColor.set(Paint{Color::rgba(60, 130, 255, 26)});
+        m_disabledColor.set(Paint{Color::rgba(60, 130, 255, 0)});
+        m_textColor.set(accent);
+        m_borderWidth.set(variant == ButtonVariant::Outlined ? 1.0f : 0.0f);
+    }
+    m_disabledTextColor.set(gray);
+}
+
+void ButtonWidget::updateBorderColor(bool animate) {
+    const Paint& target = enabled() ? m_borderColor.get() : m_disabledBorderColor.get();
+    m_borderColorOut.animateTo(target, animate ? m_transition.get() : 0.0f);
 }
 
 void ButtonWidget::updateTextColor(bool animate) {

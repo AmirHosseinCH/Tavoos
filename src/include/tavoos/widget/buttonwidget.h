@@ -11,6 +11,8 @@
 
 namespace Tavoos {
 
+enum class ButtonVariant { Filled, Outlined, Text };
+
 enum class ButtonIconPosition { Left, Right };
 
 enum class ButtonDisplay { TextAndIcon, TextOnly, IconOnly };
@@ -31,6 +33,26 @@ public:
 
     decltype(auto) font(this auto&& self, State<Font>& font) {
         self.m_font.set(font);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) variant(this auto&& self, PropertyArg<ButtonVariant> variant) {
+        variant.applyTo(self.m_variant);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) borderWidth(this auto&& self, PropertyArg<float> width) {
+        self.m_borderWidth.set(width);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) borderColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_borderColor);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) disabledBorderColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_disabledBorderColor);
         return std::forward<decltype(self)>(self);
     }
 
@@ -92,6 +114,8 @@ public:
     std::string text() const { return m_text; }
     Font font() const { return m_font; }
     int radius() const { return m_radius; }
+    ButtonVariant variant() const { return m_variant; }
+    float borderWidth() const { return m_borderWidth; }
     std::string icon() const { return m_icon; }
     int iconSize() const { return m_iconSize; }
     ButtonIconPosition iconPosition() const { return m_iconPosition; }
@@ -103,6 +127,8 @@ public:
 private:
     void updateColor(bool animate);
     void updateTextColor(bool animate);
+    void updateBorderColor(bool animate);
+    void applyVariant(ButtonVariant variant);
     void rebuildContent();
 
     Property<Paint> m_idleColor{Paint{Color::rgba(60, 130, 255)}};
@@ -114,6 +140,11 @@ private:
     BindableState<std::string> m_text;
     BindableState<Font> m_font;
     BindableState<int> m_radius{8};
+    Property<ButtonVariant> m_variant{ButtonVariant::Filled};
+    BindableState<float> m_borderWidth{0.0f};
+    Property<Paint> m_borderColor{Paint{Color::rgba(205, 208, 218)}};
+    Property<Paint> m_disabledBorderColor{Paint{Color::rgba(220, 222, 230)}};
+    AnimatedState<Paint> m_borderColorOut;
     BindableState<std::string> m_icon;
     BindableState<int> m_iconSize{16};
     Property<ButtonIconPosition> m_iconPosition{ButtonIconPosition::Left};
