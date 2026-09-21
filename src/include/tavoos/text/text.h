@@ -1,4 +1,5 @@
 #pragma once
+#include <tavoos/text/font.h>
 #include <tavoos/text/fontenums.h>
 #include <tavoos/text/glyphmetrics.h>
 #include <tavoos/text/fontface.h>

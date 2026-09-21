@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tavoos/export.hpp>
+#include <tavoos/text/font.h>
 #include <tavoos/text/fontenums.h>
 #include <tavoos/text/textlayout.h>
 #include <tavoos/types.h>
@@ -44,6 +45,16 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) font(this auto&& self, const Font& font) {
+        self.m_font.set(font);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) font(this auto&& self, State<Font>& font) {
+        self.m_font.bind(font);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) color(this auto&& self, PropertyArg<Paint> c) {
         c.applyTo(self.m_color);
         return std::forward<decltype(self)>(self);
@@ -70,6 +81,7 @@ public:
     }
 
     std::string text() const { return m_text; }
+    Font font() const { return {m_family, m_fontSize, m_weight, m_style}; }
     std::string family() const { return m_family; }
     FontWeight weight() const { return m_weight; }
     FontStyle style() const { return m_style; }
@@ -113,6 +125,7 @@ private:
     Property<FontWeight> m_weight{FontWeight::Regular};
     Property<FontStyle> m_style{FontStyle::Normal};
     Property<float> m_fontSize{14.0f};
+    Property<Font> m_font;
     Property<Paint> m_color{Color::Black};
     Property<Alignment> m_textAlignment{Alignment::Left | Alignment::Top};
     Property<WrapMode> m_wrapMode{WrapMode::NoWrap};

@@ -79,6 +79,7 @@ target_sources(Tavoos
     include/tavoos/resources/resourceregistry.h
     include/tavoos/resources/pathscheme.h
     include/tavoos/resources/resources.h
+    include/tavoos/text/font.h
     include/tavoos/text/fontenums.h
     include/tavoos/text/glyphmetrics.h
     include/tavoos/text/fontface.h
