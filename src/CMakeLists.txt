@@ -64,6 +64,7 @@ target_sources(Tavoos
     include/tavoos/reactive/propertyarg.h
     include/tavoos/reactive/sidedproperty.h
     include/tavoos/reactive/cornerproperty.h
+    include/tavoos/reactive/bindablestate.h
     include/tavoos/reactive/reactive.h
     include/tavoos/events/event.h
     include/tavoos/events/mouseevent.h
