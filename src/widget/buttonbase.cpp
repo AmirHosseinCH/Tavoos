@@ -39,6 +39,7 @@ void ButtonBase::replaceSlot(Widget*& slot) {
     removeChild(slot);
     slot = nullptr;
     assign(m_hovered, false);
+    assign(m_pressed, false);
 }
 
 bool ButtonBase::hasHandlerFor(EventType type) {
@@ -66,6 +67,7 @@ void ButtonBase::triggerMouseEnter(MouseEvent& event) {
 
 void ButtonBase::triggerMouseLeave(MouseEvent& event) {
     assign(m_hovered, false);
+    assign(m_pressed, false);
     Widget::triggerMouseLeave(event);
 }
 
@@ -74,6 +76,8 @@ void ButtonBase::triggerPress(MouseEvent& event) {
         return;
 
     assign(m_hovered, true);
+    if (event.button() == MouseButton::Left)
+        assign(m_pressed, true);
     Widget::triggerPress(event);
 }
 
@@ -82,6 +86,9 @@ void ButtonBase::triggerRelease(MouseEvent& event) {
         return;
 
     Widget::triggerRelease(event);
+
+    if (event.button() == MouseButton::Left)
+        assign(m_pressed, false);
 
     if (m_hovered && event.button() == MouseButton::Left)
         sendClick(event.x(), event.y(), event.modifiers());
@@ -94,6 +101,7 @@ void ButtonBase::triggerKeyPress(KeyEvent& event) {
     const int key = event.keyCode();
     if (key == static_cast<int>(Key::Space)) {
         m_spaceDown = true;
+        assign(m_pressed, true);
     } else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter)) {
         sendClickFromKeyboard(event.modifiers());
     } else {
@@ -113,12 +121,14 @@ void ButtonBase::triggerKeyRelease(KeyEvent& event) {
     }
 
     m_spaceDown = false;
+    assign(m_pressed, false);
     Widget::triggerKeyRelease(event);
     sendClickFromKeyboard(event.modifiers());
 }
 
 void ButtonBase::triggerFocusOut(Event& event) {
     m_spaceDown = false;
+    assign(m_pressed, false);
     Widget::triggerFocusOut(event);
 }
 

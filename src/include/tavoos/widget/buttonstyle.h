@@ -8,6 +8,7 @@ namespace Tavoos {
 struct ButtonStyle {
     Paint idleColor{Color::rgba(60, 130, 255)};
     Paint hoverColor{Color::rgba(84, 148, 255)};
+    Paint pressedColor{Color::rgba(36, 112, 255)};
     Paint disabledColor{Color::rgba(228, 229, 235)};
     Paint textColor{Color::White};
     Paint disabledTextColor{Color::rgba(160, 163, 175)};

@@ -13,8 +13,10 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
 
     m_idleColor.onChange([this](const Paint&) { updateColor(false); });
     m_hoverColor.onChange([this](const Paint&) { updateColor(false); });
+    m_pressedColor.onChange([this](const Paint&) { updateColor(false); });
     m_disabledColor.onChange([this](const Paint&) { updateColor(false); });
     hoveredState().onChange([this](const bool&) { updateColor(true); });
+    pressedState().onChange([this](const bool&) { updateColor(true); });
     enabledState().onChange([this](const bool&) {
         updateColor(true);
         updateTextColor(true);
@@ -55,6 +57,7 @@ void ButtonWidget::applyStyle(const ButtonStyle& value) {
     } else {
         idleColor(value.idleColor);
         hoverColor(value.hoverColor);
+        pressedColor(value.pressedColor);
         disabledColor(value.disabledColor);
         textColor(value.textColor);
         disabledTextColor(value.disabledTextColor);
@@ -108,7 +111,10 @@ void ButtonWidget::render(Renderer& renderer) {
 }
 
 void ButtonWidget::updateColor(bool animate) {
-    const Paint& target = !enabled() ? m_disabledColor.get() : hovered() ? m_hoverColor.get() : m_idleColor.get();
+    const Paint& target = !enabled() ? m_disabledColor.get()
+                         : pressed() ? m_pressedColor.get()
+                         : hovered() ? m_hoverColor.get()
+                         : m_idleColor.get();
     m_color.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
 }
 
@@ -116,6 +122,7 @@ void ButtonWidget::applyVariant(ButtonVariant variant, const ButtonStyle& base) 
     if (variant == ButtonVariant::Filled) {
         m_idleColor.set(base.idleColor);
         m_hoverColor.set(base.hoverColor);
+        m_pressedColor.set(base.pressedColor);
         m_disabledColor.set(base.disabledColor);
         m_textColor.set(base.textColor);
         m_borderWidth.set(0.0f);
@@ -125,9 +132,12 @@ void ButtonWidget::applyVariant(ButtonVariant variant, const ButtonStyle& base) 
         transparent.a = 0.0f;
         Color tint = accent;
         tint.a = 26.0f / 255.0f;
+        Color strongTint = accent;
+        strongTint.a = 46.0f / 255.0f;
 
         m_idleColor.set(Paint{transparent});
         m_hoverColor.set(Paint{tint});
+        m_pressedColor.set(Paint{strongTint});
         m_disabledColor.set(Paint{transparent});
         m_textColor.set(Paint{accent});
         m_borderWidth.set(variant == ButtonVariant::Outlined ? 1.0f : 0.0f);

@@ -36,9 +36,11 @@ public:
     unsigned contentRevision() const noexcept { return m_contentRevision; }
     bool enabled() const { return m_enabled; }
     bool hovered() const { return m_hovered; }
+    bool pressed() const { return m_pressed; }
 
     State<bool>& enabledState() { return m_enabledState; }
     State<bool>& hoveredState() { return m_hovered; }
+    State<bool>& pressedState() { return m_pressed; }
 
 protected:
     void render(Renderer& renderer) override;
@@ -86,6 +88,7 @@ private:
     Property<bool> m_enabled{true};
     State<bool> m_enabledState{true};
     State<bool> m_hovered{false};
+    State<bool> m_pressed{false};
     bool m_spaceDown{false};
 
     Widget* m_background{nullptr};
