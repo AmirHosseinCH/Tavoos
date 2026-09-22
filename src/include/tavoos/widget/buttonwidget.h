@@ -143,7 +143,7 @@ private:
     void updateColor(bool animate);
     void updateTextColor(bool animate);
     void updateBorderColor(bool animate);
-    void applyVariant(ButtonVariant variant);
+    void applyVariant(ButtonVariant variant, const ButtonStyle& base);
     void applyStyle(const ButtonStyle& style);
     void rebuildContent();
 
@@ -157,6 +157,7 @@ private:
     BindableState<Font> m_font;
     BindableState<int> m_radius{8};
     Property<ButtonVariant> m_variant{ButtonVariant::Filled};
+    bool m_variantWins{false};
     BindableState<float> m_borderWidth{0.0f};
     Property<Paint> m_borderColor;
     Property<Paint> m_disabledBorderColor;

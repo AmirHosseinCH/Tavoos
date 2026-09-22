@@ -23,7 +23,10 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
 
     m_borderColor.onChange([this](const Paint&) { updateBorderColor(false); });
     m_disabledBorderColor.onChange([this](const Paint&) { updateBorderColor(false); });
-    m_variant.onChange([this](const ButtonVariant& variant) { applyVariant(variant); });
+    m_variant.onChange([this](const ButtonVariant& variant) {
+        m_variantWins = true;
+        applyVariant(variant, m_style.get());
+    });
 
     m_textColor.onChange([this](const Paint&) { updateTextColor(false); });
     m_disabledTextColor.onChange([this](const Paint&) { updateTextColor(false); });
@@ -47,14 +50,18 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
 }
 
 void ButtonWidget::applyStyle(const ButtonStyle& value) {
-    idleColor(value.idleColor);
-    hoverColor(value.hoverColor);
-    disabledColor(value.disabledColor);
-    textColor(value.textColor);
-    disabledTextColor(value.disabledTextColor);
+    if (m_variantWins) {
+        applyVariant(m_variant.get(), value);
+    } else {
+        idleColor(value.idleColor);
+        hoverColor(value.hoverColor);
+        disabledColor(value.disabledColor);
+        textColor(value.textColor);
+        disabledTextColor(value.disabledTextColor);
+        borderWidth(value.borderWidth);
+    }
     borderColor(value.borderColor);
     disabledBorderColor(value.disabledBorderColor);
-    borderWidth(value.borderWidth);
     radius(value.radius);
     font(value.font);
     transition(value.transition);
@@ -100,24 +107,27 @@ void ButtonWidget::updateColor(bool animate) {
     m_color.animateTo(target, animate ? m_transition.get() : 0.0f);
 }
 
-void ButtonWidget::applyVariant(ButtonVariant variant) {
-    const Paint accent{Color::rgba(60, 130, 255)};
-    const Paint gray{Color::rgba(160, 163, 175)};
-
+void ButtonWidget::applyVariant(ButtonVariant variant, const ButtonStyle& base) {
     if (variant == ButtonVariant::Filled) {
-        m_idleColor.set(accent);
-        m_hoverColor.set(Paint{Color::rgba(84, 148, 255)});
-        m_disabledColor.set(Paint{Color::rgba(228, 229, 235)});
-        m_textColor.set(Paint{Color::White});
+        m_idleColor.set(base.idleColor);
+        m_hoverColor.set(base.hoverColor);
+        m_disabledColor.set(base.disabledColor);
+        m_textColor.set(base.textColor);
         m_borderWidth.set(0.0f);
     } else {
-        m_idleColor.set(Paint{Color::rgba(60, 130, 255, 0)});
-        m_hoverColor.set(Paint{Color::rgba(60, 130, 255, 26)});
-        m_disabledColor.set(Paint{Color::rgba(60, 130, 255, 0)});
-        m_textColor.set(accent);
+        Color accent = base.idleColor.solid;
+        Color transparent = accent;
+        transparent.a = 0.0f;
+        Color tint = accent;
+        tint.a = 26.0f / 255.0f;
+
+        m_idleColor.set(Paint{transparent});
+        m_hoverColor.set(Paint{tint});
+        m_disabledColor.set(Paint{transparent});
+        m_textColor.set(Paint{accent});
         m_borderWidth.set(variant == ButtonVariant::Outlined ? 1.0f : 0.0f);
     }
-    m_disabledTextColor.set(gray);
+    m_disabledTextColor.set(base.disabledTextColor);
 }
 
 void ButtonWidget::updateBorderColor(bool animate) {
