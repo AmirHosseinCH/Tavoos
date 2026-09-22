@@ -82,6 +82,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) iconSpacing(this auto&& self, PropertyArg<float> spacing) {
+        self.m_iconSpacing.set(spacing);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) display(this auto&& self, PropertyArg<ButtonDisplay> display) {
         display.applyTo(self.m_display);
         return std::forward<decltype(self)>(self);
@@ -134,6 +139,7 @@ public:
     std::string icon() const { return m_icon; }
     int iconSize() const { return m_iconSize; }
     ButtonIconPosition iconPosition() const { return m_iconPosition; }
+    float iconSpacing() const { return m_iconSpacing; }
     ButtonDisplay display() const { return m_display; }
     float transition() const { return m_transition; }
 
@@ -168,6 +174,7 @@ private:
     BindableState<std::string> m_icon;
     BindableState<int> m_iconSize{16};
     Property<ButtonIconPosition> m_iconPosition{ButtonIconPosition::Left};
+    BindableState<float> m_iconSpacing{8.0f};
     Property<ButtonDisplay> m_display{ButtonDisplay::TextAndIcon};
     bool m_hasIcon{false};
     unsigned m_ownRevision{0};
