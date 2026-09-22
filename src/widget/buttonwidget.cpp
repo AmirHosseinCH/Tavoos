@@ -1,4 +1,6 @@
 #include <tavoos/widget/buttonwidget.h>
+
+#include <tavoos/application.h>
 #include <tavoos/widget/row.h>
 #include <tavoos/widget/svg.h>
 
@@ -39,6 +41,23 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
         rect.radius(m_radius.state()).color(m_color).borderWidth(m_borderWidth.state()).borderColor(m_borderColorOut);
     });
     rebuildContent();
+
+    m_style.onChange([this](const ButtonStyle& style) { applyStyle(style); });
+    style(Application::instance()->theme().button);
+}
+
+void ButtonWidget::applyStyle(const ButtonStyle& value) {
+    idleColor(value.idleColor);
+    hoverColor(value.hoverColor);
+    disabledColor(value.disabledColor);
+    textColor(value.textColor);
+    disabledTextColor(value.disabledTextColor);
+    borderColor(value.borderColor);
+    disabledBorderColor(value.disabledBorderColor);
+    borderWidth(value.borderWidth);
+    radius(value.radius);
+    font(value.font);
+    transition(value.transition);
 }
 
 void ButtonWidget::rebuildContent() {

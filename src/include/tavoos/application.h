@@ -2,6 +2,7 @@
 
 #include <tavoos/export.hpp>
 #include <tavoos/text/fontenums.h>
+#include <tavoos/theme.h>
 
 #include <memory>
 #include <vector>
@@ -32,6 +33,8 @@ public:
                       Tavoos::FontWeight weight = Tavoos::FontWeight::Regular,
                       Tavoos::FontStyle style = Tavoos::FontStyle::Normal);
 
+    Theme& theme() noexcept { return m_theme; }
+
     int run();
     void shutdown();
 
@@ -39,6 +42,7 @@ public:
 
 private:
     static Application* m_instance;
+    Theme m_theme;
     std::unique_ptr<Renderer> renderer;
     std::vector<std::unique_ptr<Window>> m_windows;
     bool m_shouldQuit{false};

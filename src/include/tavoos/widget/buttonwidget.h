@@ -6,6 +6,7 @@
 #include <tavoos/text/font.h>
 #include <tavoos/types.h>
 #include <tavoos/widget/buttonbase.h>
+#include <tavoos/widget/buttonstyle.h>
 
 #include <string>
 
@@ -33,6 +34,16 @@ public:
 
     decltype(auto) font(this auto&& self, State<Font>& font) {
         self.m_font.set(font);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) style(this auto&& self, const ButtonStyle& style) {
+        self.m_style.set(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) style(this auto&& self, State<ButtonStyle>& style) {
+        self.m_style.set(style);
         return std::forward<decltype(self)>(self);
     }
 
@@ -113,6 +124,10 @@ public:
 
     std::string text() const { return m_text; }
     Font font() const { return m_font; }
+    ButtonStyle style() const {
+        return { m_idleColor.get(), m_hoverColor.get(), m_disabledColor.get(), m_textColor.get(), m_disabledTextColor.get(),
+                 m_borderColor.get(), m_disabledBorderColor.get(), m_borderWidth.get(), m_radius.get(), m_font.get(), m_transition.get() };
+    }
     int radius() const { return m_radius; }
     ButtonVariant variant() const { return m_variant; }
     float borderWidth() const { return m_borderWidth; }
@@ -129,12 +144,13 @@ private:
     void updateTextColor(bool animate);
     void updateBorderColor(bool animate);
     void applyVariant(ButtonVariant variant);
+    void applyStyle(const ButtonStyle& style);
     void rebuildContent();
 
-    Property<Paint> m_idleColor{Paint{Color::rgba(60, 130, 255)}};
-    Property<Paint> m_hoverColor{Paint{Color::rgba(84, 148, 255)}};
-    Property<Paint> m_disabledColor{Paint{Color::rgba(228, 229, 235)}};
-    Property<float> m_transition{0.12f};
+    Property<Paint> m_idleColor;
+    Property<Paint> m_hoverColor;
+    Property<Paint> m_disabledColor;
+    Property<float> m_transition;
     AnimatedState<Paint> m_color;
 
     BindableState<std::string> m_text;
@@ -142,8 +158,8 @@ private:
     BindableState<int> m_radius{8};
     Property<ButtonVariant> m_variant{ButtonVariant::Filled};
     BindableState<float> m_borderWidth{0.0f};
-    Property<Paint> m_borderColor{Paint{Color::rgba(205, 208, 218)}};
-    Property<Paint> m_disabledBorderColor{Paint{Color::rgba(220, 222, 230)}};
+    Property<Paint> m_borderColor;
+    Property<Paint> m_disabledBorderColor;
     AnimatedState<Paint> m_borderColorOut;
     BindableState<std::string> m_icon;
     BindableState<int> m_iconSize{16};
@@ -151,9 +167,11 @@ private:
     Property<ButtonDisplay> m_display{ButtonDisplay::TextAndIcon};
     bool m_hasIcon{false};
     unsigned m_ownRevision{0};
-    Property<Paint> m_textColor{Paint{Color::White}};
-    Property<Paint> m_disabledTextColor{Paint{Color::rgba(160, 163, 175)}};
+    Property<Paint> m_textColor;
+    Property<Paint> m_disabledTextColor;
     AnimatedState<Paint> m_textColorOut;
+
+    BindableState<ButtonStyle> m_style;
 };
 
 }
