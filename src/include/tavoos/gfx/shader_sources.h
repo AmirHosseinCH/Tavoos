@@ -131,8 +131,13 @@ void main() {
     vec4 fillPaint = samplePaint(uv);
     vec4 borderPaint = sampleBorderPaint(uv);
 
-    vec3 rgb = mix(borderPaint.rgb, fillPaint.rgb, fillAlpha);
-    float alpha = outerAlpha * mix(borderPaint.a, fillPaint.a, fillAlpha);
+    vec3 fillPremult = fillPaint.rgb * fillPaint.a;
+    vec3 borderPremult = borderPaint.rgb * borderPaint.a;
+    vec3 mixedPremult = mix(borderPremult, fillPremult, fillAlpha);
+    float mixedAlpha = mix(borderPaint.a, fillPaint.a, fillAlpha);
+
+    vec3 rgb = mixedAlpha > 0.0 ? mixedPremult / mixedAlpha : vec3(0.0);
+    float alpha = outerAlpha * mixedAlpha;
 
     fragColor = vec4(rgb, alpha);
 }
