@@ -67,13 +67,14 @@ int Application::run() {
     double lastTime = glfwGetTime();
 
     while (!m_shouldQuit) {
-        if (AnimationManager::instance().hasActiveAnimations())
+        const bool wasAnimating = AnimationManager::instance().hasActiveAnimations();
+        if (wasAnimating)
             glfwPollEvents();
         else
             glfwWaitEvents();
 
         const double now = glfwGetTime();
-        const float dt = static_cast<float>(now - lastTime);
+        const float dt = wasAnimating ? static_cast<float>(now - lastTime) : 0.0f;
         lastTime = now;
         AnimationManager::instance().tick(dt);
 
