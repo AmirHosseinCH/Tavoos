@@ -102,9 +102,14 @@ void ButtonWidget::rebuildContent() {
     m_ownRevision = contentRevision();
 }
 
+void ButtonWidget::render(Renderer& renderer) {
+    m_settled = true;
+    ButtonBase::render(renderer);
+}
+
 void ButtonWidget::updateColor(bool animate) {
     const Paint& target = !enabled() ? m_disabledColor.get() : hovered() ? m_hoverColor.get() : m_idleColor.get();
-    m_color.animateTo(target, animate ? m_transition.get() : 0.0f);
+    m_color.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
 }
 
 void ButtonWidget::applyVariant(ButtonVariant variant, const ButtonStyle& base) {
@@ -132,12 +137,12 @@ void ButtonWidget::applyVariant(ButtonVariant variant, const ButtonStyle& base) 
 
 void ButtonWidget::updateBorderColor(bool animate) {
     const Paint& target = enabled() ? m_borderColor.get() : m_disabledBorderColor.get();
-    m_borderColorOut.animateTo(target, animate ? m_transition.get() : 0.0f);
+    m_borderColorOut.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
 }
 
 void ButtonWidget::updateTextColor(bool animate) {
     const Paint& target = enabled() ? m_textColor.get() : m_disabledTextColor.get();
-    m_textColorOut.animateTo(target, animate ? m_transition.get() : 0.0f);
+    m_textColorOut.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
 }
 
 }

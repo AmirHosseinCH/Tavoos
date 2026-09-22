@@ -139,6 +139,9 @@ public:
 
     State<Paint>& colorState() { return m_color; }
 
+protected:
+    void render(Renderer& renderer) override;
+
 private:
     void updateColor(bool animate);
     void updateTextColor(bool animate);
@@ -173,6 +176,7 @@ private:
     AnimatedState<Paint> m_textColorOut;
 
     BindableState<ButtonStyle> m_style;
+    bool m_settled{false};
 };
 
 }
