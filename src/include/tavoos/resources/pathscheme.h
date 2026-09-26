@@ -4,7 +4,7 @@
 
 namespace Tavoos {
 
-enum class PathScheme { File, Resource };
+enum class PathScheme { File, Resource, Data };
 
 struct ParsedPath {
     PathScheme scheme;

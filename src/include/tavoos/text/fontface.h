@@ -52,6 +52,8 @@ private:
     std::unordered_map<char32_t, GlyphMetrics> m_glyphCache;
     std::vector<std::unique_ptr<GlyphAtlas>> m_atlasPages;
     int m_atlasPageSize{1024};
+
+    std::string m_ownedFontData;
 };
 
 }
