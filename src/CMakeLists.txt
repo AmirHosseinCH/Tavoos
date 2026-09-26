@@ -58,13 +58,13 @@ target_sources(Tavoos
     include/tavoos/widget/svg.h
     include/tavoos/widget/text.h
     include/tavoos/widget/buttonbase.h
-    include/tavoos/widget/buttonstyle.h
     include/tavoos/widget/buttonwidget.h
-    include/tavoos/widget/checkboxstyle.h
     include/tavoos/widget/checkboxwidget.h
     include/tavoos/widget/radiogroup.h
-    include/tavoos/widget/radiostyle.h
     include/tavoos/widget/radiowidget.h
+    include/tavoos/widget/style/buttonstyle.h
+    include/tavoos/widget/style/checkboxstyle.h
+    include/tavoos/widget/style/radiostyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h

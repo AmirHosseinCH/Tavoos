@@ -5,7 +5,7 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
 #include <tavoos/widget/buttonbase.h>
-#include <tavoos/widget/checkboxstyle.h>
+#include <tavoos/widget/style/checkboxstyle.h>
 
 namespace Tavoos {
 

@@ -6,7 +6,7 @@
 #include <tavoos/types.h>
 #include <tavoos/widget/buttonbase.h>
 #include <tavoos/widget/radiogroup.h>
-#include <tavoos/widget/radiostyle.h>
+#include <tavoos/widget/style/radiostyle.h>
 
 namespace Tavoos {
 
