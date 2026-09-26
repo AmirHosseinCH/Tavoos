@@ -322,19 +322,21 @@ public:
 protected:
     void updateWorldMatrix();
 
-    void triggerClick(MouseEvent& event)       { if (m_onClick) m_onClick(event); }
-    void triggerDoubleClick(MouseEvent& event) { if (m_onDoubleClick) m_onDoubleClick(event); }
-    void triggerPress(MouseEvent& event)       { if (m_onPress) m_onPress(event); }
-    void triggerRelease(MouseEvent& event)     { if (m_onRelease) m_onRelease(event); }
-    void triggerMouseMove(MouseEvent& event)   { if (m_onMouseMove) m_onMouseMove(event); }
-    void triggerMouseEnter(MouseEvent& event)  { if (m_onMouseEnter) m_onMouseEnter(event); }
-    void triggerMouseLeave(MouseEvent& event)  { if (m_onMouseLeave) m_onMouseLeave(event); }
-    void triggerWheel(WheelEvent& event)       { if (m_onWheel) m_onWheel(event); }
-    void triggerKeyPress(KeyEvent& event)      { if (m_onKeyPress) m_onKeyPress(event); }
-    void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
-    void triggerTextInput(KeyEvent& event)     { if (m_onTextInput) m_onTextInput(event); }
-    void triggerFocusIn(Event& event)          { if (m_onFocusIn) m_onFocusIn(event); }
-    void triggerFocusOut(Event& event)         { if (m_onFocusOut) m_onFocusOut(event); }
+    virtual void triggerClick(MouseEvent& event)       { if (m_onClick) m_onClick(event); }
+    virtual void triggerDoubleClick(MouseEvent& event) { if (m_onDoubleClick) m_onDoubleClick(event); }
+    virtual void triggerPress(MouseEvent& event)       { if (m_onPress) m_onPress(event); }
+    virtual void triggerRelease(MouseEvent& event)     { if (m_onRelease) m_onRelease(event); }
+    virtual void triggerMouseMove(MouseEvent& event)   { if (m_onMouseMove) m_onMouseMove(event); }
+    virtual void triggerMouseEnter(MouseEvent& event)  { if (m_onMouseEnter) m_onMouseEnter(event); }
+    virtual void triggerMouseLeave(MouseEvent& event)  { if (m_onMouseLeave) m_onMouseLeave(event); }
+    virtual void triggerWheel(WheelEvent& event)       { if (m_onWheel) m_onWheel(event); }
+    virtual void triggerKeyPress(KeyEvent& event)      { if (m_onKeyPress) m_onKeyPress(event); }
+    virtual void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
+    virtual void triggerTextInput(KeyEvent& event)     { if (m_onTextInput) m_onTextInput(event); }
+    virtual void triggerFocusIn(Event& event)          { if (m_onFocusIn) m_onFocusIn(event); }
+    virtual void triggerFocusOut(Event& event)         { if (m_onFocusOut) m_onFocusOut(event); }
+
+    virtual bool hasHandlerFor(EventType type);
 
     virtual void render(Renderer&) = 0;
     void renderChildren(Renderer&);
@@ -466,7 +468,6 @@ private:
 
     bool hitTest(float px, float py) const;
     Widget* hitTestTree(float px, float py) const;
-    bool hasHandlerFor(EventType type);
     void updateEffectiveOpacity();
 
     static std::vector<Widget*> zOrderedChildren(const Object& parent);

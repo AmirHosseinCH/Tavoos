@@ -3,6 +3,7 @@
 #include <tavoos/application.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
+#include <tavoos/widget/buttonwidget.h>
 #include <tavoos/widget/widgets.h>
 #include <tavoos/window.h>
 
@@ -38,6 +39,11 @@ public:
     static void Image(std::function<void(ImageWidget&)> body)         { create<ImageWidget>(std::move(body)); }
     static void SVG(std::function<void(SVGWidget&)> body)             { create<SVGWidget>(std::move(body)); }
     static void Text(std::function<void(TextWidget&)> body)           { create<TextWidget>(std::move(body)); }
+    static void Button(std::function<void(ButtonWidget&)> body)       { create<ButtonWidget>(std::move(body)); }
+
+    template<typename T>
+        requires std::derived_from<T, Widget>
+    static void Create(std::function<void(T&)> body) { create<T>(std::move(body)); }
 
 private:
     static Object* currentItem;
