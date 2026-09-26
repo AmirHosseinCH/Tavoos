@@ -27,6 +27,9 @@ TextureCache::Entry* TextureCache::acquire(const std::string& uri) {
             return nullptr;
         }
         data = stbi_load_from_memory(res->data, static_cast<int>(res->size), &w, &h, &channels, 4);
+    } else if (parsed.scheme == PathScheme::Data) {
+        data = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(parsed.path.data()),
+                                      static_cast<int>(parsed.path.size()), &w, &h, &channels, 4);
     } else {
         data = stbi_load(parsed.path.c_str(), &w, &h, &channels, 4);
     }

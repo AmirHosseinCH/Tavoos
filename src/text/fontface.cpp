@@ -1,4 +1,5 @@
 #include <tavoos/resources/resourceregistry.h>
+#include <tavoos/resources/pathscheme.h>
 #include <tavoos/text/fontface.h>
 
 #include <cstddef>
@@ -7,33 +8,23 @@
 
 namespace Tavoos {
 
-namespace {
-
-struct ParsedSource { bool isResource; std::string path; };
-
-ParsedSource parseSource(const std::string& uri) {
-    if (uri.rfind("resource:/", 0) == 0)
-        return { true, uri.substr(10) };
-    if (uri.rfind("file:", 0) == 0)
-        return { false, uri.substr(5) };
-    return { false, uri };
-}
-
-}
-
 FontFace::FontFace(FT_Library ftLibrary, const std::string& sourcePath, FontWeight weight, FontStyle style)
     : m_weight{weight}, m_style{style} {
 
-    const ParsedSource parsed = parseSource(sourcePath);
+    const ParsedPath parsed = parseResourcePath(sourcePath);
     FT_Error err;
 
-    if (parsed.isResource) {
+    if (parsed.scheme == PathScheme::Resource) {
         const ResourceRegistry::Entry* res = ResourceRegistry::find(parsed.path);
         if (!res) {
             spdlog::error("font resource not found: '{}'", sourcePath);
             return;
         }
         err = FT_New_Memory_Face(ftLibrary, res->data, static_cast<FT_Long>(res->size), 0, &m_ftFace);
+    } else if (parsed.scheme == PathScheme::Data) {
+        m_ownedFontData = std::move(parsed.path);
+        err = FT_New_Memory_Face(ftLibrary, reinterpret_cast<const FT_Byte*>(m_ownedFontData.data()),
+                                  static_cast<FT_Long>(m_ownedFontData.size()), 0, &m_ftFace);
     } else {
         err = FT_New_Face(ftLibrary, parsed.path.c_str(), 0, &m_ftFace);
     }

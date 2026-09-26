@@ -24,6 +24,8 @@ lunasvg::Document* SVGDocumentCache::get(const std::string& uri) {
         }
         document = lunasvg::Document::loadFromData(
             reinterpret_cast<const char*>(res->data), res->size);
+    } else if (parsed.scheme == PathScheme::Data) {
+        document = lunasvg::Document::loadFromData(parsed.path.c_str(), parsed.path.size());
     } else {
         document = lunasvg::Document::loadFromFile(parsed.path);
     }
