@@ -1,9 +1,9 @@
 #pragma once
 
 #include <tavoos/reactive/reactive.h>
-#include <tavoos/widget/buttonstyle.h>
-#include <tavoos/widget/checkboxstyle.h>
-#include <tavoos/widget/radiostyle.h>
+#include <tavoos/widget/style/buttonstyle.h>
+#include <tavoos/widget/style/checkboxstyle.h>
+#include <tavoos/widget/style/radiostyle.h>
 
 namespace Tavoos {
 

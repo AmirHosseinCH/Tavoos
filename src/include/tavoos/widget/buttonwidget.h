@@ -6,7 +6,7 @@
 #include <tavoos/text/font.h>
 #include <tavoos/types.h>
 #include <tavoos/widget/buttonbase.h>
-#include <tavoos/widget/buttonstyle.h>
+#include <tavoos/widget/style/buttonstyle.h>
 
 #include <string>
 
