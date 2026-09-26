@@ -48,6 +48,7 @@ protected:
 
     bool hasHandlerFor(EventType type) override;
     void triggerClick(MouseEvent& event) override;
+    virtual void handleClick(MouseEvent& event);
     void triggerPress(MouseEvent& event) override;
     void triggerRelease(MouseEvent& event) override;
     void triggerMouseEnter(MouseEvent& event) override;

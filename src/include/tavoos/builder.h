@@ -4,6 +4,7 @@
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
 #include <tavoos/widget/buttonwidget.h>
+#include <tavoos/widget/checkboxwidget.h>
 #include <tavoos/widget/widgets.h>
 #include <tavoos/window.h>
 
@@ -40,6 +41,7 @@ public:
     static void SVG(std::function<void(SVGWidget&)> body)             { create<SVGWidget>(std::move(body)); }
     static void Text(std::function<void(TextWidget&)> body)           { create<TextWidget>(std::move(body)); }
     static void Button(std::function<void(ButtonWidget&)> body)       { create<ButtonWidget>(std::move(body)); }
+    static void Checkbox(std::function<void(CheckboxWidget&)> body)   { create<CheckboxWidget>(std::move(body)); }
 
     template<typename T>
         requires std::derived_from<T, Widget>
