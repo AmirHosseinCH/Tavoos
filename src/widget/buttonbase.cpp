@@ -60,6 +60,10 @@ bool ButtonBase::hasHandlerFor(EventType type) {
 void ButtonBase::triggerClick(MouseEvent&) {
 }
 
+void ButtonBase::handleClick(MouseEvent& event) {
+    Widget::triggerClick(event);
+}
+
 void ButtonBase::triggerMouseEnter(MouseEvent& event) {
     assign(m_hovered, true);
     Widget::triggerMouseEnter(event);
@@ -134,7 +138,7 @@ void ButtonBase::triggerFocusOut(Event& event) {
 
 void ButtonBase::sendClick(float x, float y, KeyModifier modifiers) {
     MouseEvent click{EventType::MouseClick, x, y, MouseButton::Left, modifiers};
-    Widget::triggerClick(click);
+    handleClick(click);
 }
 
 void ButtonBase::sendClickFromKeyboard(KeyModifier modifiers) {

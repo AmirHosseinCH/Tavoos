@@ -20,6 +20,7 @@ set(TAVOOS_SOURCES
     widget/text.cpp
     widget/buttonbase.cpp
     widget/buttonwidget.cpp
+    widget/checkboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
     text/fontface.cpp
@@ -57,6 +58,8 @@ target_sources(Tavoos
     include/tavoos/widget/buttonbase.h
     include/tavoos/widget/buttonstyle.h
     include/tavoos/widget/buttonwidget.h
+    include/tavoos/widget/checkboxstyle.h
+    include/tavoos/widget/checkboxwidget.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h
