@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -11,6 +12,12 @@ namespace Tavoos {
 struct Point {
     float x{0.0f};
     float y{0.0f};
+};
+
+struct DragAxis {
+    bool enabled{true};
+    int min{std::numeric_limits<int>::min()};
+    int max{std::numeric_limits<int>::max()};
 };
 
 template<typename T>

@@ -7,6 +7,8 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
 
+#include <algorithm>
+#include <cmath>
 #include <type_traits>
 #include <vector>
 
@@ -222,6 +224,51 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) draggable(this auto&& self, PropertyArg<bool> draggable) {
+        draggable.applyTo(self.m_draggable);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragThreshold(this auto&& self, PropertyArg<float> threshold) {
+        threshold.applyTo(self.m_dragThreshold);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragXAxis(this auto&& self, const DragAxis& axis) {
+        self.m_dragXAxis.set(axis);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragXAxis(this auto&& self, State<DragAxis>& axis) {
+        self.m_dragXAxis.bind(axis);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragYAxis(this auto&& self, const DragAxis& axis) {
+        self.m_dragYAxis.set(axis);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragYAxis(this auto&& self, State<DragAxis>& axis) {
+        self.m_dragYAxis.bind(axis);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) onDragStart(this auto&& self, std::function<void(DragEvent&)> callback) {
+        self.m_onDragStart = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) onDragMove(this auto&& self, std::function<void(DragEvent&)> callback) {
+        self.m_onDragMove = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) onDragEnd(this auto&& self, std::function<void(DragEvent&)> callback) {
+        self.m_onDragEnd = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) onWheel(this auto&& self, std::function<void(WheelEvent&)> callback) {
         self.m_onWheel = std::move(callback);
         return std::forward<decltype(self)>(self);
@@ -283,6 +330,10 @@ public:
 
     bool visible() const { return m_visible; }
     bool focusable() const { return m_focusable; }
+    bool draggable() const { return m_draggable; }
+    float dragThreshold() const { return m_dragThreshold; }
+    DragAxis dragXAxis() const { return m_dragXAxis; }
+    DragAxis dragYAxis() const { return m_dragYAxis; }
     float opacity() const { return m_opacity; }
     float effectiveOpacity() const { return m_effectiveOpacity; }
     int z() const { return m_z; }
@@ -334,6 +385,26 @@ protected:
     virtual void triggerMouseMove(MouseEvent& event)   { if (m_onMouseMove) m_onMouseMove(event); }
     virtual void triggerMouseEnter(MouseEvent& event)  { if (m_onMouseEnter) m_onMouseEnter(event); }
     virtual void triggerMouseLeave(MouseEvent& event)  { if (m_onMouseLeave) m_onMouseLeave(event); }
+    virtual void triggerDragStart(DragEvent& event) { if (m_onDragStart) m_onDragStart(event); }
+
+    virtual void triggerDragMove(DragEvent& event) {
+        if (m_draggable) {
+            const DragAxis& xAxis = m_dragXAxis.get();
+            const DragAxis& yAxis = m_dragYAxis.get();
+            if (xAxis.enabled) {
+                const int newX = x() + static_cast<int>(std::lround(event.dx()));
+                x(std::clamp(newX, xAxis.min, xAxis.max));
+            }
+            if (yAxis.enabled) {
+                const int newY = y() + static_cast<int>(std::lround(event.dy()));
+                y(std::clamp(newY, yAxis.min, yAxis.max));
+            }
+        }
+        if (m_onDragMove)
+            m_onDragMove(event);
+    }
+
+    virtual void triggerDragEnd(DragEvent& event) { if (m_onDragEnd) m_onDragEnd(event); }
     virtual void triggerWheel(WheelEvent& event)       { if (m_onWheel) m_onWheel(event); }
     virtual void triggerKeyPress(KeyEvent& event)      { if (m_onKeyPress) m_onKeyPress(event); }
     virtual void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
@@ -418,6 +489,10 @@ private:
     SidedProperty<float> m_margin{0.0f};
     Property<bool> m_visible{true};
     Property<bool> m_focusable{false};
+    Property<bool> m_draggable{false};
+    Property<float> m_dragThreshold{0.0f};
+    Property<DragAxis> m_dragXAxis{DragAxis{}};
+    Property<DragAxis> m_dragYAxis{DragAxis{}};
     Property<float> m_opacity{1.0f};
     Property<int> m_z{0};
 
@@ -464,6 +539,9 @@ private:
     std::function<void(MouseEvent&)> m_onMouseMove;
     std::function<void(MouseEvent&)> m_onMouseEnter;
     std::function<void(MouseEvent&)> m_onMouseLeave;
+    std::function<void(DragEvent&)> m_onDragStart;
+    std::function<void(DragEvent&)> m_onDragMove;
+    std::function<void(DragEvent&)> m_onDragEnd;
     std::function<void(WheelEvent&)> m_onWheel;
     std::function<void(KeyEvent&)> m_onKeyPress;
     std::function<void(KeyEvent&)> m_onKeyRelease;

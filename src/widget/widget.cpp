@@ -91,6 +91,9 @@ bool Widget::hasHandlerFor(EventType type) {
     case EventType::MouseMove:        return static_cast<bool>(m_onMouseMove);
     case EventType::MouseEnter:       return static_cast<bool>(m_onMouseEnter);
     case EventType::MouseLeave:       return static_cast<bool>(m_onMouseLeave);
+    case EventType::DragStart:        return static_cast<bool>(m_onDragStart) || m_draggable.get();
+    case EventType::DragMove:         return static_cast<bool>(m_onDragMove) || m_draggable.get();
+    case EventType::DragEnd:          return static_cast<bool>(m_onDragEnd) || m_draggable.get();
     case EventType::Wheel:            return static_cast<bool>(m_onWheel);
     case EventType::KeyPress:         return static_cast<bool>(m_onKeyPress);
     case EventType::KeyRelease:       return static_cast<bool>(m_onKeyRelease);
