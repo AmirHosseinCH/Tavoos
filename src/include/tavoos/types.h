@@ -8,6 +8,11 @@
 
 namespace Tavoos {
 
+struct Point {
+    float x{0.0f};
+    float y{0.0f};
+};
+
 template<typename T>
 struct EnableBitmaskOperators : std::false_type {};
 

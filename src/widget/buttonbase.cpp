@@ -124,8 +124,7 @@ void ButtonBase::sendClick(float x, float y, KeyModifier modifiers) {
 }
 
 void ButtonBase::sendClickFromKeyboard(KeyModifier modifiers) {
-    const glm::vec4 center = worldMatrix() * glm::vec4{displayedWidth() * 0.5f, displayedHeight() * 0.5f, 0.0f, 1.0f};
-    sendClick(center.x, center.y, modifiers);
+    sendClick(displayedWidth() * 0.5f, displayedHeight() * 0.5f, modifiers);
 }
 
 }

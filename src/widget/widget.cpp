@@ -61,7 +61,7 @@ bool Widget::parentIsLayouter() const {
 }
 
 bool Widget::hitTest(float px, float py) const {
-    const glm::vec4 localPoint = glm::inverse(worldMatrix()) * glm::vec4{px, py, 0.0f, 1.0f};
+    const Point localPoint = mapFromWindow({px, py});
     return localPoint.x >= 0.0f && localPoint.x <= m_displayedWidth &&
            localPoint.y >= 0.0f && localPoint.y <= m_displayedHeight;
 }
@@ -395,6 +395,26 @@ glm::mat4 Widget::localMatrix() const {
 
 const glm::mat4& Widget::worldMatrix() const {
     return m_worldMatrix;
+}
+
+Point Widget::mapToParent(const Point& point) const {
+    const glm::vec4 p = localMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
+}
+
+Point Widget::mapFromParent(const Point& point) const {
+    const glm::vec4 p = glm::inverse(localMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
+}
+
+Point Widget::mapToWindow(const Point& point) const {
+    const glm::vec4 p = worldMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
+}
+
+Point Widget::mapFromWindow(const Point& point) const {
+    const glm::vec4 p = glm::inverse(worldMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
 }
 
 void Widget::updateWorldMatrix() {
