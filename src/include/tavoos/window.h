@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tavoos/events/mouseevent.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
 #include <tavoos/reactive/reactive.h>
@@ -12,7 +13,6 @@ struct GLFWwindow;
 namespace Tavoos {
 
 class Widget;
-class MouseEvent;
 
 class TAVOOS_EXPORT Window : public Object {
     friend class Application;
@@ -106,6 +106,10 @@ private:
     Widget* m_hoveredWidget{nullptr};
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
+
+    bool m_dragging{false};
+    Point m_dragStartPoint{};
+    Point m_dragLastPoint{};
 
     Widget* m_lastClickWidget{nullptr};
     double m_lastClickTime{0.0};

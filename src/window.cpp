@@ -5,6 +5,7 @@
 #include <tavoos/window.h>
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
@@ -189,6 +190,9 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
     if (action == GLFW_PRESS) {
         self->m_pressedWidget = hit;
+        self->m_dragging = false;
+        self->m_dragStartPoint = windowPoint;
+        self->m_dragLastPoint = windowPoint;
 
         if (hit) {
             MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
@@ -207,6 +211,16 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             }
         }
     } else if (action == GLFW_RELEASE) {
+        if (self->m_pressedWidget && self->m_dragging) {
+            const float dx = windowPoint.x - self->m_dragLastPoint.x;
+            const float dy = windowPoint.y - self->m_dragLastPoint.y;
+            const float totalDx = windowPoint.x - self->m_dragStartPoint.x;
+            const float totalDy = windowPoint.y - self->m_dragStartPoint.y;
+            DragEvent dragEndEvent{EventType::DragEnd, dx, dy, totalDx, totalDy};
+            dispatchBubble(self->m_pressedWidget, dragEndEvent, &Widget::triggerDragEnd);
+            self->m_dragging = false;
+        }
+
         if (self->m_pressedWidget) {
             MouseEvent releaseEvent{EventType::MouseRelease, 0.0f, 0.0f, mb, km};
             dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
@@ -302,6 +316,35 @@ void Window::cursorPosCallback(GLFWwindow* window, double x, double y) {
     if (hit) {
         MouseEvent moveEvent{EventType::MouseMove, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
         dispatchMouseBubble(hit, moveEvent, windowPoint, &Widget::triggerMouseMove);
+    }
+
+    if (self->m_pressedWidget) {
+        const float totalDx = windowPoint.x - self->m_dragStartPoint.x;
+        const float totalDy = windowPoint.y - self->m_dragStartPoint.y;
+
+        bool justStarted = false;
+        if (!self->m_dragging) {
+            const float threshold = self->m_pressedWidget->dragThreshold();
+            const float totalDist = std::sqrt(totalDx * totalDx + totalDy * totalDy);
+            if (totalDist >= threshold) {
+                self->m_dragging = true;
+                justStarted = true;
+            }
+        }
+
+        if (self->m_dragging) {
+            const float dx = windowPoint.x - self->m_dragLastPoint.x;
+            const float dy = windowPoint.y - self->m_dragLastPoint.y;
+
+            if (justStarted) {
+                DragEvent dragStartEvent{EventType::DragStart, dx, dy, totalDx, totalDy};
+                dispatchBubble(self->m_pressedWidget, dragStartEvent, &Widget::triggerDragStart);
+            }
+
+            DragEvent dragMoveEvent{EventType::DragMove, dx, dy, totalDx, totalDy};
+            dispatchBubble(self->m_pressedWidget, dragMoveEvent, &Widget::triggerDragMove);
+            self->m_dragLastPoint = windowPoint;
+        }
     }
 }
 

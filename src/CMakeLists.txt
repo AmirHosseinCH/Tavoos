@@ -89,6 +89,7 @@ target_sources(Tavoos
     include/tavoos/reactive/bindablestate.h
     include/tavoos/reactive/reactive.h
     include/tavoos/events/event.h
+    include/tavoos/events/dragevent.h
     include/tavoos/events/mouseevent.h
     include/tavoos/events/wheelevent.h
     include/tavoos/events/keyevent.h
