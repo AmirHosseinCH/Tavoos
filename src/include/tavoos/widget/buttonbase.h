@@ -3,16 +3,11 @@
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
-#include <tavoos/widget/rectangle.h>
-#include <tavoos/widget/text.h>
-#include <tavoos/widget/widget.h>
-
-#include <functional>
-#include <type_traits>
+#include <tavoos/widget/slotwidget.h>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT ButtonBase : public Widget {
+class TAVOOS_EXPORT ButtonBase : public SlotWidget {
 public:
     ButtonBase(Object* parent);
 
@@ -21,19 +16,6 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    template<typename W = RectangleWidget>
-    decltype(auto) background(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
-        self.template installBackground<W>(std::move(body));
-        return std::forward<decltype(self)>(self);
-    }
-
-    template<typename W = TextWidget>
-    decltype(auto) content(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
-        self.template installContent<W>(std::move(body));
-        return std::forward<decltype(self)>(self);
-    }
-
-    unsigned contentRevision() const noexcept { return m_contentRevision; }
     bool enabled() const { return m_enabled; }
     bool hovered() const { return m_hovered; }
     bool pressed() const { return m_pressed; }
@@ -43,8 +25,7 @@ public:
     State<bool>& pressedState() { return m_pressed; }
 
 protected:
-    void render(Renderer& renderer) override;
-    Size computeIntrinsicSize() override;
+    void onSlotReplaced() override;
 
     bool hasHandlerFor(EventType type) override;
     void triggerClick(MouseEvent& event) override;
@@ -58,31 +39,6 @@ protected:
     void triggerFocusOut(Event& event) override;
 
 private:
-    template<typename W>
-    void installBackground(std::function<void(W&)> body) {
-        if (m_background)
-            replaceSlot(m_background);
-        m_background = addChild<W>([&body](W& slot) {
-            slot.z(-1).fill(Fill::Both);
-            if (body)
-                body(slot);
-        });
-    }
-
-    template<typename W>
-    void installContent(std::function<void(W&)> body) {
-        if (m_content)
-            replaceSlot(m_content);
-        m_content = addChild<W>([&body](W& slot) {
-            slot.alignment(Alignment::Center);
-            if (body)
-                body(slot);
-        });
-        ++m_contentRevision;
-        requestRelayout();
-    }
-
-    void replaceSlot(Widget*& slot);
     void sendClick(float x, float y, KeyModifier modifiers);
     void sendClickFromKeyboard(KeyModifier modifiers);
 
@@ -91,10 +47,6 @@ private:
     State<bool> m_hovered{false};
     State<bool> m_pressed{false};
     bool m_spaceDown{false};
-
-    Widget* m_background{nullptr};
-    Widget* m_content{nullptr};
-    unsigned m_contentRevision{0};
 };
 
 }

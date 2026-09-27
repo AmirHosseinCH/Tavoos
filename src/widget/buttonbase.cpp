@@ -11,7 +11,7 @@ void assign(State<bool>& state, bool value) {
 
 }
 
-ButtonBase::ButtonBase(Object* parent) : Widget{parent} {
+ButtonBase::ButtonBase(Object* parent) : SlotWidget{parent} {
     m_enabled.onChange([this](const bool& enabled) {
         assign(m_enabledState, enabled);
         focusable(enabled);
@@ -19,25 +19,7 @@ ButtonBase::ButtonBase(Object* parent) : Widget{parent} {
     focusable(true);
 }
 
-void ButtonBase::render(Renderer& renderer) {
-    renderChildren(renderer);
-}
-
-Widget::Size ButtonBase::computeIntrinsicSize() {
-    float contentWidth = 0.0f;
-    float contentHeight = 0.0f;
-    if (m_content) {
-        const Size size = m_content->intrinsicSize();
-        contentWidth = size.width + m_content->marginLeft() + m_content->marginRight();
-        contentHeight = size.height + m_content->marginTop() + m_content->marginBottom();
-    }
-    return { (width() > 0) ? static_cast<float>(width()) : contentWidth,
-             (height() > 0) ? static_cast<float>(height()) : contentHeight };
-}
-
-void ButtonBase::replaceSlot(Widget*& slot) {
-    removeChild(slot);
-    slot = nullptr;
+void ButtonBase::onSlotReplaced() {
     assign(m_hovered, false);
     assign(m_pressed, false);
 }

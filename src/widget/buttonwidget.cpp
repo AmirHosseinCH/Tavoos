@@ -3,6 +3,7 @@
 #include <tavoos/application.h>
 #include <tavoos/widget/row.h>
 #include <tavoos/widget/svg.h>
+#include <tavoos/widget/text.h>
 
 namespace Tavoos {
 
