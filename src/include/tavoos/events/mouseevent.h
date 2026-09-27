@@ -35,6 +35,8 @@ public:
     MouseButton button() const { return m_button; }
     KeyModifier modifiers() const { return m_mods; }
 
+    void setPosition(const Point& point) { m_x = point.x; m_y = point.y; }
+
 private:
     float m_x, m_y;
     MouseButton m_button;
