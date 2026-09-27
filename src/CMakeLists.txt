@@ -25,6 +25,7 @@ set(TAVOOS_SOURCES
     widget/radiogroup.cpp
     widget/radiowidget.cpp
     widget/switchwidget.cpp
+    widget/progressbarwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
     text/fontface.cpp
@@ -66,10 +67,12 @@ target_sources(Tavoos
     include/tavoos/widget/radiogroup.h
     include/tavoos/widget/radiowidget.h
     include/tavoos/widget/switchwidget.h
+    include/tavoos/widget/progressbarwidget.h
     include/tavoos/widget/style/buttonstyle.h
     include/tavoos/widget/style/checkboxstyle.h
     include/tavoos/widget/style/radiostyle.h
     include/tavoos/widget/style/switchstyle.h
+    include/tavoos/widget/style/progressbarstyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h

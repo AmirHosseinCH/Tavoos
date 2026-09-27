@@ -5,6 +5,7 @@
 #include <tavoos/object.h>
 #include <tavoos/widget/buttonwidget.h>
 #include <tavoos/widget/checkboxwidget.h>
+#include <tavoos/widget/progressbarwidget.h>
 #include <tavoos/widget/radiowidget.h>
 #include <tavoos/widget/switchwidget.h>
 #include <tavoos/widget/widgets.h>
@@ -46,6 +47,7 @@ public:
     static void Checkbox(std::function<void(CheckboxWidget&)> body)   { create<CheckboxWidget>(std::move(body)); }
     static void Radio(std::function<void(RadioWidget&)> body)         { create<RadioWidget>(std::move(body)); }
     static void Switch(std::function<void(SwitchWidget&)> body)       { create<SwitchWidget>(std::move(body)); }
+    static void ProgressBar(std::function<void(ProgressBarWidget&)> body) { create<ProgressBarWidget>(std::move(body)); }
 
     template<typename T>
         requires std::derived_from<T, Widget>
