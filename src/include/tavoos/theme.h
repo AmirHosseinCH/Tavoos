@@ -4,6 +4,7 @@
 #include <tavoos/widget/style/buttonstyle.h>
 #include <tavoos/widget/style/checkboxstyle.h>
 #include <tavoos/widget/style/radiostyle.h>
+#include <tavoos/widget/style/switchstyle.h>
 
 namespace Tavoos {
 
@@ -12,6 +13,7 @@ public:
     State<ButtonStyle> button{ButtonStyle{}};
     State<CheckboxStyle> checkbox{CheckboxStyle{}};
     State<RadioStyle> radio{RadioStyle{}};
+    State<SwitchStyle> switchControl{SwitchStyle{}};
 };
 
 }
