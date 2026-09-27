@@ -303,6 +303,11 @@ public:
     glm::mat4 localMatrix() const;
     const glm::mat4& worldMatrix() const;
 
+    Point mapToParent(const Point& point) const;
+    Point mapFromParent(const Point& point) const;
+    Point mapToWindow(const Point& point) const;
+    Point mapFromWindow(const Point& point) const;
+
     template<typename T>
     T* addChild(std::function<void(T&)> body = {}) {
         static_assert(std::is_base_of_v<Widget, T>, "addChild<T>() requires T to derive from Widget");
