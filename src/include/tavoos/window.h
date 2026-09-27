@@ -12,6 +12,7 @@ struct GLFWwindow;
 namespace Tavoos {
 
 class Widget;
+class MouseEvent;
 
 class TAVOOS_EXPORT Window : public Object {
     friend class Application;
@@ -97,6 +98,7 @@ private:
     static void charCallback(GLFWwindow* window, unsigned int codepoint);
     template<typename EventT>
     static Widget* dispatchBubble(Widget* start, EventT& event, void (Widget::*trigger)(EventT&));
+    static Widget* dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&));
 
     static Widget* hitTestChildren(Window* self, double x, double y);
     static void collectFocusable(Object* root, std::vector<Widget*>& out);

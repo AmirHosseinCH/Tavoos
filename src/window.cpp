@@ -139,6 +139,21 @@ Widget* Window::dispatchBubble(Widget* start, EventT& event, void (Widget::*trig
     return nullptr;
 }
 
+Widget* Window::dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&)) {
+    Widget* current = start;
+    while (current) {
+        if (current->hasHandlerFor(event.type())) {
+            event.setPosition(current->mapFromWindow(windowPoint));
+            event.accept();
+            (current->*trigger)(event);
+            if (event.isAccepted())
+                return current;
+        }
+        current = dynamic_cast<Widget*>(current->parent());
+    }
+    return nullptr;
+}
+
 Widget* Window::hitTestChildren(Window* self, double x, double y) {
     const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
@@ -170,14 +185,14 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
     const KeyModifier km = toKeyModifier(mods);
 
     Widget* const hit = hitTestChildren(self, mx, my);
+    const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
 
     if (action == GLFW_PRESS) {
         self->m_pressedWidget = hit;
 
         if (hit) {
-            const Point local = hit->mapFromWindow({static_cast<float>(mx), static_cast<float>(my)});
-            MouseEvent pressEvent{EventType::MousePress, local.x, local.y, mb, km};
-            dispatchBubble(hit, pressEvent, &Widget::triggerPress);
+            MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
+            dispatchMouseBubble(hit, pressEvent, windowPoint, &Widget::triggerPress);
 
             const double now = glfwGetTime();
             const float dx = static_cast<float>(mx) - self->m_lastClickX;
@@ -187,21 +202,19 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
                                   (dx * dx + dy * dy) <= Window::kDoubleClickDistanceThreshold * Window::kDoubleClickDistanceThreshold;
 
             if (isDoubleClick) {
-                MouseEvent doubleClickEvent{EventType::MouseDoubleClick, local.x, local.y, mb, km};
-                dispatchBubble(hit, doubleClickEvent, &Widget::triggerDoubleClick);
+                MouseEvent doubleClickEvent{EventType::MouseDoubleClick, 0.0f, 0.0f, mb, km};
+                dispatchMouseBubble(hit, doubleClickEvent, windowPoint, &Widget::triggerDoubleClick);
             }
         }
     } else if (action == GLFW_RELEASE) {
         if (self->m_pressedWidget) {
-            const Point local = self->m_pressedWidget->mapFromWindow({static_cast<float>(mx), static_cast<float>(my)});
-            MouseEvent releaseEvent{EventType::MouseRelease, local.x, local.y, mb, km};
-            dispatchBubble(self->m_pressedWidget, releaseEvent, &Widget::triggerRelease);
+            MouseEvent releaseEvent{EventType::MouseRelease, 0.0f, 0.0f, mb, km};
+            dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
         }
 
         if (hit && hit == self->m_pressedWidget) {
-            const Point local = hit->mapFromWindow({static_cast<float>(mx), static_cast<float>(my)});
-            MouseEvent clickEvent{EventType::MouseClick, local.x, local.y, mb, km};
-            dispatchBubble(hit, clickEvent, &Widget::triggerClick);
+            MouseEvent clickEvent{EventType::MouseClick, 0.0f, 0.0f, mb, km};
+            dispatchMouseBubble(hit, clickEvent, windowPoint, &Widget::triggerClick);
 
             if (self->m_pressedWidget == hit) {
                 self->m_lastClickWidget = hit;
@@ -272,25 +285,23 @@ void Window::cursorPosCallback(GLFWwindow* window, double x, double y) {
     auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
 
     Widget* const hit = hitTestChildren(self, x, y);
+    const Point windowPoint{static_cast<float>(x), static_cast<float>(y)};
 
     if (hit != self->m_hoveredWidget) {
         if (self->m_hoveredWidget) {
-            const Point local = self->m_hoveredWidget->mapFromWindow({static_cast<float>(x), static_cast<float>(y)});
-            MouseEvent leaveEvent{EventType::MouseLeave, local.x, local.y, MouseButton::Unknown, KeyModifier::None};
-            dispatchBubble(self->m_hoveredWidget, leaveEvent, &Widget::triggerMouseLeave);
+            MouseEvent leaveEvent{EventType::MouseLeave, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
+            dispatchMouseBubble(self->m_hoveredWidget, leaveEvent, windowPoint, &Widget::triggerMouseLeave);
         }
         if (hit) {
-            const Point local = hit->mapFromWindow({static_cast<float>(x), static_cast<float>(y)});
-            MouseEvent enterEvent{EventType::MouseEnter, local.x, local.y, MouseButton::Unknown, KeyModifier::None};
-            dispatchBubble(hit, enterEvent, &Widget::triggerMouseEnter);
+            MouseEvent enterEvent{EventType::MouseEnter, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
+            dispatchMouseBubble(hit, enterEvent, windowPoint, &Widget::triggerMouseEnter);
         }
         self->m_hoveredWidget = hit;
     }
 
     if (hit) {
-        const Point local = hit->mapFromWindow({static_cast<float>(x), static_cast<float>(y)});
-        MouseEvent moveEvent{EventType::MouseMove, local.x, local.y, MouseButton::Unknown, KeyModifier::None};
-        dispatchBubble(hit, moveEvent, &Widget::triggerMouseMove);
+        MouseEvent moveEvent{EventType::MouseMove, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
+        dispatchMouseBubble(hit, moveEvent, windowPoint, &Widget::triggerMouseMove);
     }
 }
 
