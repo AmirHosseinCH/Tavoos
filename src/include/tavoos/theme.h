@@ -5,6 +5,7 @@
 #include <tavoos/widget/style/checkboxstyle.h>
 #include <tavoos/widget/style/radiostyle.h>
 #include <tavoos/widget/style/progressbarstyle.h>
+#include <tavoos/widget/style/sliderstyle.h>
 #include <tavoos/widget/style/switchstyle.h>
 
 namespace Tavoos {
@@ -16,6 +17,7 @@ public:
     State<RadioStyle> radio{RadioStyle{}};
     State<SwitchStyle> switchControl{SwitchStyle{}};
     State<ProgressBarStyle> progressBar{ProgressBarStyle{}};
+    State<SliderStyle> slider{SliderStyle{}};
 };
 
 }
