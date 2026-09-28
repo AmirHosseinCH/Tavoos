@@ -42,17 +42,17 @@ SliderWidget::SliderWidget(Object* parent) : ButtonBase{parent} {
             .alignment(Alignment::CenterVertical)
             .radius(kTrackHeight / 2)
             .color(m_trackColorOut);
+
+        track.addChild<RectangleWidget>([this](RectangleWidget& fill) {
+            fill.fill(Fill::Height)
+                .alignment(Alignment::Left | Alignment::CenterVertical)
+                .width(m_fillWidth)
+                .radius(kTrackHeight / 2)
+                .color(m_fillColorOut);
+        });
     });
 
-    content<RectangleWidget>([this](RectangleWidget& fill) {
-        fill.alignment(Alignment::Left | Alignment::CenterVertical)
-            .height(kTrackHeight)
-            .width(m_fillWidth)
-            .radius(kTrackHeight / 2)
-            .color(m_fillColorOut);
-    });
-
-    addChild<RectangleWidget>([this](RectangleWidget& thumb) {
+    content<RectangleWidget>([this](RectangleWidget& thumb) {
         thumb.alignment(Alignment::CenterVertical)
             .width(kThumbSize)
             .height(kThumbSize)
