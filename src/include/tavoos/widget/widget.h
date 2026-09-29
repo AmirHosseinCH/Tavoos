@@ -330,6 +330,8 @@ public:
 
     bool visible() const { return m_visible; }
     bool focusable() const { return m_focusable; }
+    bool focused() const { return m_focused; }
+    State<bool>& focusedState() { return m_focused; }
     bool draggable() const { return m_draggable; }
     float dragThreshold() const { return m_dragThreshold; }
     DragAxis dragXAxis() const { return m_dragXAxis; }
@@ -409,8 +411,18 @@ protected:
     virtual void triggerKeyPress(KeyEvent& event)      { if (m_onKeyPress) m_onKeyPress(event); }
     virtual void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
     virtual void triggerTextInput(KeyEvent& event)     { if (m_onTextInput) m_onTextInput(event); }
-    virtual void triggerFocusIn(Event& event)          { if (m_onFocusIn) m_onFocusIn(event); }
-    virtual void triggerFocusOut(Event& event)         { if (m_onFocusOut) m_onFocusOut(event); }
+    virtual void triggerFocusIn(Event& event) {
+        if (!m_focused.get())
+            m_focused.set(true);
+        if (m_onFocusIn)
+            m_onFocusIn(event);
+    }
+    virtual void triggerFocusOut(Event& event) {
+        if (m_focused.get())
+            m_focused.set(false);
+        if (m_onFocusOut)
+            m_onFocusOut(event);
+    }
 
     virtual bool hasHandlerFor(EventType type);
 
@@ -489,6 +501,7 @@ private:
     SidedProperty<float> m_margin{0.0f};
     Property<bool> m_visible{true};
     Property<bool> m_focusable{false};
+    State<bool> m_focused{false};
     Property<bool> m_draggable{false};
     Property<float> m_dragThreshold{0.0f};
     Property<DragAxis> m_dragXAxis{DragAxis{}};
