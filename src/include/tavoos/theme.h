@@ -7,6 +7,7 @@
 #include <tavoos/widget/style/progressbarstyle.h>
 #include <tavoos/widget/style/sliderstyle.h>
 #include <tavoos/widget/style/switchstyle.h>
+#include <tavoos/widget/style/textfieldstyle.h>
 
 namespace Tavoos {
 
@@ -18,6 +19,7 @@ public:
     State<SwitchStyle> switchControl{SwitchStyle{}};
     State<ProgressBarStyle> progressBar{ProgressBarStyle{}};
     State<SliderStyle> slider{SliderStyle{}};
+    State<TextFieldStyle> textField{TextFieldStyle{}};
 };
 
 }
