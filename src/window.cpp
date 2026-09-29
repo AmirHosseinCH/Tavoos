@@ -173,6 +173,16 @@ static KeyModifier toKeyModifier(int mods) {
     return km;
 }
 
+static Widget* nearestFocusable(Widget* start) {
+    Widget* current = start;
+    while (current) {
+        if (current->focusable())
+            return current;
+        current = dynamic_cast<Widget*>(current->parent());
+    }
+    return nullptr;
+}
+
 void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
     double mx, my;
@@ -193,6 +203,9 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
         self->m_dragging = false;
         self->m_dragStartPoint = windowPoint;
         self->m_dragLastPoint = windowPoint;
+
+        if (Widget* const focusTarget = nearestFocusable(hit))
+            focusTarget->focus();
 
         if (hit) {
             MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
