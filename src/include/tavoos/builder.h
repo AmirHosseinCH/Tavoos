@@ -8,6 +8,7 @@
 #include <tavoos/widget/progressbarwidget.h>
 #include <tavoos/widget/radiowidget.h>
 #include <tavoos/widget/sliderwidget.h>
+#include <tavoos/widget/spinboxwidget.h>
 #include <tavoos/widget/switchwidget.h>
 #include <tavoos/widget/textfieldwidget.h>
 #include <tavoos/widget/widgets.h>
@@ -52,6 +53,7 @@ public:
     static void ProgressBar(std::function<void(ProgressBarWidget&)> body) { create<ProgressBarWidget>(std::move(body)); }
     static void Slider(std::function<void(SliderWidget&)> body)       { create<SliderWidget>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
+    static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
 
     template<typename T>
         requires std::derived_from<T, Widget>

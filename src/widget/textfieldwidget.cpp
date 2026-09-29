@@ -278,7 +278,7 @@ void TextFieldWidget::updateCaretAndScroll() {
         return;
 
     const float caretLocalX = m_textDisplay->xOffsetForByteIndex(m_cursorByteIndex);
-    const float visibleWidth = std::max(0.0f, static_cast<float>(width()) - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
+    const float visibleWidth = std::max(0.0f, displayedWidth() - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
     const float maxDisplayedCaretX = std::max(0.0f, visibleWidth - static_cast<float>(kCaretWidth));
 
     const float displayedCaretX = caretLocalX - static_cast<float>(m_scrollOffset);
