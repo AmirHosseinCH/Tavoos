@@ -77,6 +77,45 @@ Widget::Size TextWidget::computeIntrinsicSize() {
     };
 }
 
+float TextWidget::xOffsetForByteIndex(std::size_t byteIndex) {
+    FontFace* face = resolvedFace();
+    if (!face)
+        return 0.0f;
+
+    const std::string& content = m_text.get();
+    const float scale = m_fontSize.get() / FontFace::ReferencePixelSize;
+
+    float x = 0.0f;
+    std::size_t i = 0;
+    while (i < content.size() && i < byteIndex) {
+        const Utf8Decoded d = decodeUtf8At(content, i);
+        x += face->glyph(d.codepoint).advance * scale;
+        i += d.length;
+    }
+    return x;
+}
+
+std::size_t TextWidget::byteIndexForXOffset(float x) {
+    FontFace* face = resolvedFace();
+    if (!face)
+        return 0;
+
+    const std::string& content = m_text.get();
+    const float scale = m_fontSize.get() / FontFace::ReferencePixelSize;
+
+    float cursorX = 0.0f;
+    std::size_t i = 0;
+    while (i < content.size()) {
+        const Utf8Decoded d = decodeUtf8At(content, i);
+        const float advance = face->glyph(d.codepoint).advance * scale;
+        if (x < cursorX + advance * 0.5f)
+            return i;
+        cursorX += advance;
+        i += d.length;
+    }
+    return content.size();
+}
+
 void TextWidget::render(Renderer& r) {
     r.renderText(*this);
     renderChildren(r);
