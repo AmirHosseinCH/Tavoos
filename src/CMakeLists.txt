@@ -28,6 +28,7 @@ set(TAVOOS_SOURCES
     widget/progressbarwidget.cpp
     widget/sliderwidget.cpp
     widget/textfieldwidget.cpp
+    widget/spinboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
     text/fontface.cpp
@@ -72,6 +73,7 @@ target_sources(Tavoos
     include/tavoos/widget/progressbarwidget.h
     include/tavoos/widget/sliderwidget.h
     include/tavoos/widget/textfieldwidget.h
+    include/tavoos/widget/spinboxwidget.h
     include/tavoos/widget/style/buttonstyle.h
     include/tavoos/widget/style/checkboxstyle.h
     include/tavoos/widget/style/radiostyle.h
@@ -79,6 +81,7 @@ target_sources(Tavoos
     include/tavoos/widget/style/progressbarstyle.h
     include/tavoos/widget/style/sliderstyle.h
     include/tavoos/widget/style/textfieldstyle.h
+    include/tavoos/widget/style/spinboxstyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h

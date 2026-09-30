@@ -6,6 +6,7 @@
 #include <tavoos/widget/style/radiostyle.h>
 #include <tavoos/widget/style/progressbarstyle.h>
 #include <tavoos/widget/style/sliderstyle.h>
+#include <tavoos/widget/style/spinboxstyle.h>
 #include <tavoos/widget/style/switchstyle.h>
 #include <tavoos/widget/style/textfieldstyle.h>
 
@@ -20,6 +21,7 @@ public:
     State<ProgressBarStyle> progressBar{ProgressBarStyle{}};
     State<SliderStyle> slider{SliderStyle{}};
     State<TextFieldStyle> textField{TextFieldStyle{}};
+    State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
 };
 
 }
