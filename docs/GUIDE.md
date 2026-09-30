@@ -5,7 +5,7 @@ each concrete widget's own properties, types, animation, and resource embedding.
 looking to understand how Tavoos works *internally* instead, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-For a working, buildable starting point, see [examples/main.cpp](../examples/main.cpp) and the
+For a working, buildable starting point, check the [examples](../examples) folder and the
 quick-start example in [README.md](../README.md).
 
 ## Table of contents

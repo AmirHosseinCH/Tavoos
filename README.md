@@ -2,20 +2,21 @@
 
 A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builder API.
 
-> **Status: alpha.** Phase 1 is complete. APIs may still change. Developed and tested on Linux.
-
-![The Tavoos example app](examples/screenshot.png)
+> **Status: alpha, under active development.** APIs may still change. Developed and tested on Linux.
 
 ## Features
 
 - **Fluent, declarative builder API** - widget trees are built with chained setters (C++23 "deducing this"), not verbose imperative construction.
 - **Reactive properties** - `Property<T>`/`State<T>` bindings that propagate changes automatically.
 - **Layout system** - `Column`, `Row`, `Grid`, and `Flex`.
+- **Controls** - Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField, and SpinBox, each themeable via a shared `Theme` and stylable per-instance.
 - **Text, images, and SVG** - font loading with weight/family fallback, JPEG/PNG images, and SVG rendering, all through the same widget model.
 - **Resource embedding** - `tavoos_add_resources()` compiles assets (fonts, images) directly into the binary at build time, loaded via `resource:/` paths - no loose files to ship.
 - **Animation** - property transitions with easing.
 
-**Controls** (buttons, text fields, etc.) **and graphical effects are planned for phase 2.**
+A sample login form app built with Tavoos:
+
+![Tavoos example app](examples/loginForm/screenshot.png)
 
 ## Example
 
@@ -55,8 +56,6 @@ int main() {
     return app.run();
 }
 ```
-
-See [examples/main.cpp](examples/main.cpp) for a complete, buildable version.
 
 ## Documentation
 
