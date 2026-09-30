@@ -16,6 +16,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [`Property<T>`](#propertyt)
    - [`State<T>`](#statet)
    - [`PropertyArg<T>`](#propertyargt)
+   - [`BindableState<T>`](#bindablestatet)
    - [`SidedProperty<T>` / `CornerProperty<T>`](#sidedpropertyt--cornerpropertyt)
 5. [Layout system](#layout-system)
    - [Dirty-flag propagation](#dirty-flag-propagation)
@@ -35,13 +36,20 @@ document is where the "why" behind non-obvious code lives instead.
    - [Hit-testing](#hit-testing)
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
-9. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
-10. [Text rendering](#text-rendering)
+9. [Interaction state & control widgets](#interaction-state--control-widgets)
+   - [`SlotWidget` and `ButtonBase`](#slotwidget-and-buttonbase)
+   - [Click-to-focus](#click-to-focus)
+   - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
+   - [Dragging](#dragging)
+   - [Theme and style structs](#theme-and-style-structs)
+   - [The interaction-color pattern](#the-interaction-color-pattern)
+10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
+11. [Text rendering](#text-rendering)
     - [`FontFace` / `FontManager` / `GlyphAtlas`](#fontface--fontmanager--glyphatlas)
     - [Wrap, elide, and line-clamp](#wrap-elide-and-line-clamp)
-11. [Resource embedding](#resource-embedding)
-12. [Application & Window lifecycle](#application--window-lifecycle)
-13. [Adding a new widget type](#adding-a-new-widget-type)
+12. [Resource embedding](#resource-embedding)
+13. [Application & Window lifecycle](#application--window-lifecycle)
+14. [Adding a new widget type](#adding-a-new-widget-type)
 
 ## Design philosophy
 
@@ -343,6 +351,24 @@ public:
             if (std::find(m_observers.begin(), m_observers.end(), observer) != m_observers.end())
                 observer->notifyChange();
         }
+
+        const auto callbacksSnapshot = m_callbacks;
+        for (const auto& [id, callback] : callbacksSnapshot) {
+            const bool stillRegistered = std::any_of(m_callbacks.begin(), m_callbacks.end(),
+                                                     [id](const auto& entry) { return entry.first == id; });
+            if (stillRegistered)
+                callback(m_value);
+        }
+    }
+
+    std::size_t onChange(std::function<void(const T&)> callback) {
+        const std::size_t id = m_nextCallbackId++;
+        m_callbacks.emplace_back(id, std::move(callback));
+        return id;
+    }
+
+    void removeOnChange(std::size_t id) {
+        std::erase_if(m_callbacks, [id](const auto& entry) { return entry.first == id; });
     }
 
     void set(const T& value) {
@@ -355,6 +381,8 @@ public:
 private:
     T m_value{};
     std::vector<Property<T>*> m_observers;
+    std::vector<std::pair<std::size_t, std::function<void(const T&)>>> m_callbacks;
+    std::size_t m_nextCallbackId{1};
 
     void registerObserver(Property<T>* observer)   { m_observers.push_back(observer); }
     void unregisterObserver(Property<T>* observer) { std::erase(m_observers, observer); }
@@ -362,11 +390,16 @@ private:
 ```
 
 `notifyObservers()` snapshots the observer list *before* iterating, then checks each
-snapshotted pointer is still present in the *live* list before calling it. This matters
-because an observer's own `onChange` callback can legally unbind itself (or another
-observer) mid-notify - `Property::unbind()`, called from such a callback, removes the
-property from `m_observers` via `unregisterObserver`, which would otherwise be mutating the
-list while it's being iterated.
+snapshotted pointer is still present in the *live* list before calling it - the same
+snapshot-then-recheck happens for `m_callbacks` right after, for the same reason: an
+observer's own `onChange` callback (bound `Property`s or a direct `State::onChange`
+registration alike) can legally unbind itself (or another observer/callback) mid-notify -
+`Property::unbind()` or `State::removeOnChange()`, called from such a callback, would
+otherwise be mutating the list being iterated. `onChange`/`removeOnChange` are how a
+`State<T>` is observed *directly*, independent of any `Property` bound to it - every control's
+`*State()` getter (`checkedState()`, `valueState()`, `focusedState()`, ...) returns exactly
+this, so code outside the widget can react to a value changing without needing a `Property` of
+its own in between.
 
 ### `PropertyArg<T>`
 
@@ -410,6 +443,45 @@ doesn't go through `Paint`'s converting constructor the way a plain value would.
 `friend class State<T>;`, `state.h`: `friend class Property<T>;`) because C++ friendship
 isn't transitive or bidirectional - each class needs its own `friend` declaration to let the
 *other* reach into its private members.
+
+### `BindableState<T>`
+
+A `Property<T>` and a `State<T>` glued together (`bindablestate.h`), for a widget property
+that both accepts external input the normal way (a plain value or a `State<T>&`, via
+`PropertyArg<T>`) *and* needs to be read reactively by something else internally - typically a
+child slot binding to a parent control's own property:
+
+```cpp
+template <typename T>
+class BindableState {
+public:
+    explicit BindableState(const T& value) : m_input{value}, m_output{value} { connect(); }
+
+    void set(PropertyArg<T> value) { value.applyTo(m_input); }
+    const T& get() const noexcept { return m_output.get(); }
+    State<T>& state() noexcept { return m_output; }
+
+    std::size_t onChange(std::function<void(const T&)> callback) { return m_output.onChange(std::move(callback)); }
+
+private:
+    void connect() { m_input.onChange([this](const T& value) { m_output.set(value); }); }
+
+    Property<T> m_input;
+    State<T> m_output;
+};
+```
+
+`m_input` is what the widget's own setter writes to (via `set()`, called from the fluent
+setter the same way every other property does); `m_output` is what gets handed to a child via
+`.state()`, e.g. `box.radius(m_radius.state())` in a control's constructor. `connect()` wires
+`m_input`'s `onChange` straight into `m_output.set(...)`, so every value written to the input -
+whether a plain value or a live binding to an external `State<T>` - propagates through to the
+output automatically. A control reaches for `BindableState<T>` instead of a plain
+`Property<T>` whenever the property is a pure passthrough with no extra selection logic
+(`radius`, `borderWidth`, `iconSize`, `transition` on most controls); one with real
+state-dependent selection logic (idle/hover/pressed/disabled color, for example) uses a plain
+`Property<T>` input feeding an `AnimatedState<T>` output instead - see
+[The interaction-color pattern](#the-interaction-color-pattern).
 
 ### `SidedProperty<T>` / `CornerProperty<T>`
 
@@ -1120,6 +1192,16 @@ shimmer on the common case of an unrotated, unscaled clipped widget).
 `false`, so nested clipped widgets (a clipped child inside a clipped parent) don't clear the
 outer capture flag while it's still in progress.
 
+A clipped widget's own `render()` must draw something (a shape - fill, border, whatever) via
+the matching `Renderer::render*()` call *before* delegating to `renderChildren()`, since that
+draw call is what actually becomes the mask when `m_capturingMask` is true; `renderChildren()`
+itself no-ops during mask capture (see `ensureClipMask` above), so a widget whose `render()`
+is *only* `renderChildren(r)` - a bare layout wrapper with no visual of its own - has nothing
+to contribute to its own mask if `clip(true)` is set directly on it. To clip a composite's
+content, put `clip(true)` on an actual shaped primitive (typically a `RectangleWidget`, even a
+fully transparent one) and nest the content that needs bounding as *its* children, rather than
+clipping the composite wrapper itself.
+
 ## Animation system
 
 `src/include/tavoos/animation/`.
@@ -1228,6 +1310,15 @@ Requires `T` to satisfy `Interpolatable` (a `lerp(a, b, t) -> T` free function m
 gradient stops and interpolating the angle/center/radius fields together, falling back to a
 hard switch at `t=1` if the two `Paint`s aren't structurally compatible - different `kind` or
 stop count).
+
+`AnimatableBase` doesn't have to be inherited publicly the way `AnimatedState<T>` does it -
+`TextFieldWidget`'s blinking caret inherits it privately (`class TextFieldWidget : public
+ButtonBase, private AnimatableBase`), registering/unregistering itself with
+`AnimationManager::instance()` from its own member functions. The private inheritance is legal
+because the upcast to `AnimatableBase*` needed for `registerAnimation`/`unregisterAnimation`
+happens from inside `TextFieldWidget`'s own methods, and it keeps the animation machinery out
+of the class's public interface entirely - tighter encapsulation than `AnimatedState`'s public
+shape, useful whenever the animated thing isn't itself a value a consumer should bind to.
 
 ### `Widget::PairTween`
 
@@ -1430,6 +1521,280 @@ void Window::focusNext(bool reverse) {
 chain is recomputed from scratch on every Tab press rather than cached - simple, and cheap
 enough in practice for typical UI sizes.
 
+## Interaction state & control widgets
+
+### `SlotWidget` and `ButtonBase`
+
+Every concrete control (Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField,
+SpinBox) is built from two layers rather than starting from `Widget` directly.
+
+**`SlotWidget`** (`src/include/tavoos/widget/slotwidget.h`) gives a widget two replaceable
+children - `background` and `content` - instead of a single fixed visual:
+
+```cpp
+template<typename W = RectangleWidget>
+decltype(auto) background(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
+    self.template installBackground<W>(std::move(body));
+    return std::forward<decltype(self)>(self);
+}
+
+template<typename W = RectangleWidget>
+decltype(auto) content(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
+    self.template installContent<W>(std::move(body));
+    return std::forward<decltype(self)>(self);
+}
+```
+
+Each is a normal child widget (`RectangleWidget` by default for `background`,
+`RectangleWidget` for `content` too unless a different type is given explicitly, e.g.
+`.content<TextWidget>(...)`), installed via `addChild<W>` with `background` given `z(-1)` and
+`Fill::Both` so it always paints first and fills the control. Calling `background()`/
+`content()` again replaces the previous slot (`replaceSlot`, via deferred destruction - see
+[Removing widgets](#removing-widgets-two-phase-deferred-destruction)) and bumps
+`contentRevision()`, which a subclass that rebuilds its own default content (e.g. Button
+rebuilding an icon+label Row) checks against to avoid clobbering a slot the user has since
+replaced themselves.
+
+A `SlotWidget` with no interactivity of its own is a valid, complete control - `ProgressBarWidget`
+and `SpinBoxWidget` both derive it directly, wiring their own reactive properties straight into
+the slots' children.
+
+**`ButtonBase`** (`buttonbase.h`) derives `SlotWidget` and adds everything genuinely
+interactive: `enabled()`, `hovered()`, `pressed()`, keyboard activation, and click-swallowing:
+
+```cpp
+bool ButtonBase::hasHandlerFor(EventType type) {
+    switch (type) {
+    case EventType::MousePress: case EventType::MouseRelease: case EventType::MouseClick:
+    case EventType::MouseEnter: case EventType::MouseLeave:
+    case EventType::KeyPress:   case EventType::KeyRelease:
+        return true;
+    default:
+        return Widget::hasHandlerFor(type);
+    }
+}
+```
+
+Returning `true` unconditionally for these event types means a `ButtonBase` always accepts
+them at the bubble step it's reached at (see [Bubbling](#bubbling)) - so a control never
+silently lets a click fall through to something behind it. Space and Enter both route through
+one `sendClick`, so keyboard and mouse activation share exactly one code path:
+
+```cpp
+void ButtonBase::triggerKeyPress(KeyEvent& event) {
+    const int key = event.keyCode();
+    if (key == static_cast<int>(Key::Space)) { m_spaceDown = true; assign(m_pressed, true); }
+    else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter))
+        sendClickFromKeyboard(event.modifiers());
+    else event.ignore();
+    Widget::triggerKeyPress(event);
+}
+```
+
+`triggerClick` itself is a deliberate no-op on `ButtonBase` (`void ButtonBase::triggerClick(MouseEvent&) {}`)
+- clicks are driven entirely through `sendClick`/`handleClick` instead (called from
+`triggerRelease` for the mouse path, and `sendClickFromKeyboard` for Space/Enter), so a
+subclass overrides the `protected virtual handleClick(MouseEvent&)` hook to react to "a real
+click happened" regardless of input method, rather than overriding `triggerClick` (which
+`Window`'s own generic click dispatch also targets, and would double-fire).
+
+`hovered`/`pressed`/`enabled` live on `ButtonBase`, not `Widget` - a plain `RectangleWidget`
+has none of them. `focused()`/`focusedState()` are the one exception, promoted to `Widget`
+itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any
+widget, not just interactive controls.
+
+### Click-to-focus
+
+`Widget::triggerFocusIn`/`triggerFocusOut` update reactive state by default:
+
+```cpp
+virtual void triggerFocusIn(Event& event)  { assign(m_focused, true);  if (m_onFocusIn) m_onFocusIn(event); }
+virtual void triggerFocusOut(Event& event) { assign(m_focused, false); if (m_onFocusOut) m_onFocusOut(event); }
+```
+
+exposed as `bool focused() const` / `State<bool>& focusedState()`. A click focuses the
+nearest focusable ancestor of whatever was actually hit, mirroring how bubbling itself walks
+up looking for a handler:
+
+```cpp
+static Widget* nearestFocusable(Widget* start) {
+    Widget* current = start;
+    while (current) {
+        if (current->focusable()) return current;
+        current = dynamic_cast<Widget*>(current->parent());
+    }
+    return nullptr;
+}
+```
+
+called from `mouseButtonCallback`'s press handling, before dispatch: `if (Widget* const
+focusTarget = nearestFocusable(hit)) focusTarget->focus();`. This is why clicking a button's
+inner label still focuses the *button* - `hit` is often a non-focusable descendant (the label
+widget itself isn't `focusable()`), so the walk continues up to the nearest ancestor that is.
+`focus()` reuses the same `Window::setFocusedWidget` path Tab navigation already goes
+through, so both agree on exactly one focused widget at a time.
+
+### Coordinate mapping and mouse dispatch
+
+`Widget` exposes four coordinate-space conversions, each a thin wrapper around
+`localMatrix()`/`worldMatrix()` (see [Hit-testing](#hit-testing)) or their inverse:
+
+```cpp
+Point Widget::mapToParent(const Point& point) const {
+    const glm::vec4 p = localMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
+}
+Point Widget::mapFromParent(const Point& point) const {
+    const glm::vec4 p = glm::inverse(localMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    return { p.x, p.y };
+}
+// mapToWindow / mapFromWindow are the same shape, using worldMatrix() instead of localMatrix()
+```
+
+(`Point{float x, y}` - a plain pair type in `types.h`, kept out of the public API to avoid
+leaking `glm` types into widget-facing signatures.) Rule of thumb: apply the matrix to go
+*outward* (local space to parent/window space), its inverse to go *inward*.
+
+Every `MouseEvent` a widget's handler receives carries coordinates relative to *that widget*,
+not raw window coordinates - `Window::dispatchMouseBubble` recomputes the position at each
+step of the bubble, not once against the original hit target:
+
+```cpp
+Widget* Window::dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint,
+                                     void (Widget::*trigger)(MouseEvent&)) {
+    Widget* current = start;
+    while (current) {
+        if (current->hasHandlerFor(event.type())) {
+            event.setPosition(current->mapFromWindow(windowPoint));
+            event.accept();
+            (current->*trigger)(event);
+            if (event.isAccepted()) return current;
+        }
+        current = dynamic_cast<Widget*>(current->parent());
+    }
+    return nullptr;
+}
+```
+
+This matters because the widget that's actually *hit* (deepest match) is often not the widget
+that ends up *handling* the event (the nearest ancestor with a handler, per
+[Bubbling](#bubbling)) - recomputing per-step means a handler always sees coordinates
+relative to itself, never relative to whatever leaf happened to be hit. `dispatchMouseBubble`
+is used for every positional mouse event (press/release/click/double-click/enter/leave/move);
+the generic `dispatchBubble` (no position) still handles Wheel/KeyPress/KeyRelease/TextInput.
+
+### Dragging
+
+`draggable(bool)`, `dragThreshold(float)`, and `dragXAxis`/`dragYAxis(DragAxis{enabled, min,
+max})` on `Widget` itself - opt in on any widget, not just controls. `DragAxis` is a plain
+aggregate (`types.h`), so `dragXAxis`/`dragYAxis` take it directly (with a `State<DragAxis>&`
+overload for binding) rather than the generic `PropertyArg<T>` every scalar setter uses -
+`PropertyArg<DragAxis>` would reject `.dragXAxis({.enabled = true, .min = 0, .max = 300})`,
+since a designated-initializer braced-list needs two implicit conversions (braced-list to
+`DragAxis`, then `DragAxis` to `PropertyArg<DragAxis>`) and C++ only allows one. See
+[Theme and style structs](#theme-and-style-structs) below for the same fix applied to every
+`*Style` struct.
+
+`DragEvent` carries both the incremental delta and the cumulative total since the drag
+started:
+
+```cpp
+class DragEvent : public Event {
+public:
+    float dx() const; float dy() const;         // since the last move
+    float totalDx() const; float totalDy() const; // since drag start
+};
+```
+
+`Widget::triggerDragMove`'s default body only moves the widget itself when `draggable(true)`
+was set, clamping to each enabled axis's `min`/`max`:
+
+```cpp
+virtual void triggerDragMove(DragEvent& event) {
+    if (m_draggable) {
+        const DragAxis& xAxis = m_dragXAxis.get();
+        const DragAxis& yAxis = m_dragYAxis.get();
+        if (xAxis.enabled) {
+            const int newX = x() + static_cast<int>(std::lround(event.dx()));
+            x(std::clamp(newX, xAxis.min, xAxis.max));
+        }
+        if (yAxis.enabled) {
+            const int newY = y() + static_cast<int>(std::lround(event.dy()));
+            y(std::clamp(newY, yAxis.min, yAxis.max));
+        }
+    }
+    if (m_onDragMove)
+        m_onDragMove(event);
+}
+```
+
+The `m_onDragMove` callback always runs, independent of the `m_draggable` guard - so a widget
+can hook `onDragStart`/`onDragMove` *without* ever calling `draggable(true)`, receiving drag
+events but computing its own constrained position instead of the free-translate default. This
+is how Slider's thumb works: it never sets `draggable(true)`, only hooks the callbacks and
+derives a clamped value from `event.totalDx()` against the value held at drag start.
+
+### Theme and style structs
+
+Each control has a plain aggregate `*Style` struct (`widget/style/*.h` - `ButtonStyle`,
+`CheckboxStyle`, `TextFieldStyle`, ...) holding every themeable value with a sensible default,
+and a matching `State<XStyle>` member on `Theme` (`theme.h`), owned by `Application` and
+reached via `Application::instance()->theme()`. Every control exposes the same two-overload
+setter:
+
+```cpp
+decltype(auto) style(this auto&& self, const ButtonStyle& style) {
+    self.m_style.set(style);
+    return std::forward<decltype(self)>(self);
+}
+
+decltype(auto) style(this auto&& self, State<ButtonStyle>& style) {
+    self.m_style.set(style);
+    return std::forward<decltype(self)>(self);
+}
+```
+
+Two overloads for the same reason `dragXAxis`/`dragYAxis` above don't take a generic
+`PropertyArg<XStyle>`: a struct-valued property meant to be constructed with designated
+initializers at the call site needs its parameter to accept that struct type directly, not a
+wrapper requiring a second implicit conversion. Every control binds to its theme's style by
+default in its own constructor, then reacts to it via `onChange` calling a private
+`applyStyle(const XStyle&)` that forwards each field to the matching individual setter - so a
+live `theme().button.set(...)` restyles every existing (and future) `ButtonWidget` at once,
+while an individual widget's own explicit setter call after `.style(...)` still overrides just
+that one field on just that one instance.
+
+A style struct can nest another control's style struct for a composite control -
+`SpinBoxStyle` holds a `TextFieldStyle field` and a `ButtonStyle stepperButton` alongside its
+own background/border fields, so `Theme::spinBox` styles the whole composite (background,
+text, and buttons) from one struct; `SpinBoxWidget::applyStyle` forwards `value.field` to the
+inner `TextFieldWidget`'s own `style()` and `value.stepperButton` to both inner buttons'.
+
+### The interaction-color pattern
+
+Every control with state-dependent color (idle/hover/pressed/disabled) follows the same
+shape: plain `Property<Paint>` inputs, one `AnimatedState<Paint>` output bound to the actual
+drawn slot, and a private `updateColor(bool animate)` re-evaluated on every input or state
+change:
+
+```cpp
+void ButtonWidget::updateColor(bool animate) {
+    const Paint& target = !enabled() ? m_disabledColor.get()
+                         : pressed() ? m_pressedColor.get()
+                         : hovered() ? m_hoverColor.get()
+                         : m_idleColor.get();
+    m_color.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
+}
+```
+
+`m_settled` (set `true` on a control's first `render()`) gates the *duration* only, not the
+color itself: `updateColor` runs from the constructor too (so a control built already-disabled
+resolves its correct color immediately), but `animate && m_settled` is false at that point, so
+`animateTo` snaps instead of easing - a control never visibly animates into its starting state
+on the very first frame it's shown. The same shape recurs for border color (`TextFieldWidget`,
+`SpinBoxWidget`) and any other state-dependent `Paint`, just with a different priority chain
+(TextField and SpinBox also check `focused()` for a highlighted border).
+
 ## Image & SVG rendering and caching
 
 `ImageWidget` and `SVGWidget` each go through their own two-part caching scheme keyed by
@@ -1565,6 +1930,20 @@ ParsedPath parseResourcePath(const std::string& uri) {
 
 A `resource:/...` path is looked up via `ResourceRegistry::find`; everything else (a `file:`
 prefix or a bare path) is read from the filesystem at runtime.
+
+A third scheme, `data:`, embeds raw content (typically an inline SVG string) directly in
+source rather than referencing a separate asset - `parseResourcePath` strips the prefix and
+hands the rest through as-is:
+
+```cpp
+if (uri.rfind("data:", 0) == 0) return { PathScheme::Data, uri.substr(5) };
+```
+
+`SVGWidget::source("data:" + svgString)` parses it immediately (no lifetime concern - lunasvg
+copies what it needs). Fonts are different: FreeType keeps a live pointer into the font bytes
+for the `FT_Face`'s entire lifetime, so `FontFace` owns a persistent `m_ownedFontData` buffer
+for `data:`-sourced fonts (`fontface.cpp`), rather than parsing-and-discarding like the SVG
+case.
 
 ## Application & Window lifecycle
 
