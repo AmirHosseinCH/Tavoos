@@ -22,9 +22,20 @@ quick-start example in [README.md](../README.md).
    - [`ColumnWidget` / `RowWidget`](#columnwidget--rowwidget)
    - [`GridWidget`](#gridwidget)
    - [`FlexWidget`](#flexwidget)
-5. [Animation](#animation)
-6. [Resource embedding](#resource-embedding)
-7. [Keyboard & focus](#keyboard--focus)
+5. [Controls](#controls)
+   - [`ButtonWidget`](#buttonwidget)
+   - [`CheckboxWidget`](#checkboxwidget)
+   - [`RadioWidget` / `RadioGroup`](#radiowidget--radiogroup)
+   - [`SwitchWidget`](#switchwidget)
+   - [`ProgressBarWidget`](#progressbarwidget)
+   - [`SliderWidget`](#sliderwidget)
+   - [`TextFieldWidget`](#textfieldwidget)
+   - [`SpinBoxWidget`](#spinboxwidget)
+6. [Theme & styling](#theme--styling)
+7. [Dragging](#dragging)
+8. [Animation](#animation)
+9. [Resource embedding](#resource-embedding)
+10. [Keyboard & focus](#keyboard--focus)
 
 ## Core concepts
 
@@ -86,6 +97,16 @@ you need to update it later from outside the widget (a click handler, a timer, a
 widget's callback) and want every bound widget to pick up the change automatically. A
 `State<T>` can be shared across multiple widgets/properties at once.
 
+A `State<T>` can also be observed directly, independent of any bound `Property`:
+
+```cpp
+checkbox.checkedState().onChange([](const bool& checked) { /* ... */ });
+```
+
+Useful for reacting to a control's value from outside it - every control's `*State()` getter
+(`checkedState()`, `valueState()`, `focusedState()`, ...) returns a `State<T>&` for exactly
+this.
+
 For value transitions (not just instant swaps), see [Animation](#animation).
 
 ## Common `Widget` properties
@@ -112,8 +133,9 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 
 Plus, on every widget:
 
-- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)).
+- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window.
 - **`focus()`** - programmatically focuses this widget.
+- **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
 
 ### Dynamic children
 
@@ -156,6 +178,16 @@ r.color(Tavoos::linearGradient({
 `CenterHorizontal`, `CenterVertical`, `Center` (= both centers).
 
 **`Fill`** (bit flags): `Width`, `Height`, `Both`.
+
+**`Font`** - a plain bundle of `family` (`std::string`), `size` (`float`), `weight`
+(`FontWeight`), and `style` (`FontStyle`), for controls whose `font()` setter takes the whole
+group at once instead of the four separate `TextWidget` properties:
+
+```cpp
+b.font(Tavoos::Font{"Inter", 16.0f, Tavoos::FontWeight::Medium});
+```
+
+Same two-overload shape as every `style()` setter (a plain `Font` or a bound `State<Font>&`).
 
 ## Per-widget reference
 
@@ -256,6 +288,258 @@ Direction/wrap/justify/align - not grow/shrink/basis/order.
 | `alignContent()` | `FlexAlign` - `Start`/`Center`/`End`/`Stretch`/`SpaceBetween`/`SpaceAround`/`SpaceEvenly`, distribution of *lines* when wrapped. |
 | `rowGap()`, `columnGap()`, `gap()` | `float` - `gap()` sets both. |
 
+## Controls
+
+Each control below derives either `SlotWidget` (background/content slots, no interactivity of
+its own - just `ProgressBarWidget`) or `ButtonBase` (adds interaction on top of the same
+slots - everything else). See [ARCHITECTURE.md](ARCHITECTURE.md#slotwidget-and-buttonbase) for
+how the slot mechanism works internally; from the outside, every `ButtonBase`-derived control
+additionally has:
+
+| Property | Type | Notes |
+|---|---|---|
+| `enabled()` | `bool` | Disables interaction (also dims via each control's own `disabledColor`-style properties below). |
+| `hovered()`, `pressed()` | `bool` (read-only) | Live pointer state, for a custom subclass to react to. |
+| `enabledState()`, `hoveredState()`, `pressedState()` | `State<bool>&` | Reactive access to the above. |
+| `background<W>(body)`, `content<W>(body)` | - | Replace either slot with your own widget - defaults to `RectangleWidget` for both unless a type is given, e.g. `.content<TextWidget>(...)`. |
+
+All controls also support `focus()`/`focused()`/`focusedState()` (from `Widget` itself - see
+[Keyboard & focus](#keyboard--focus)) and a `style()`/`Theme` pair - see
+[Theme & styling](#theme--styling).
+
+### `ButtonWidget`
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("Save").variant(Tavoos::ButtonVariant::Filled).onClick([](Tavoos::MouseEvent&) { /* ... */ });
+});
+```
+
+| Property | Type | Notes |
+|---|---|---|
+| `text()` | `std::string` |
+| `font()` | `Font` |
+| `variant()` | `ButtonVariant` - `Filled`/`Outlined`/`Text`. Sets idle/hover/pressed/disabled colors, border width, and text color as a preset - call `variant()` *before* any individual color override, since it unbinds them. |
+| `icon()` | `std::string` - an SVG source (`resource:/`, `file:`, `data:`, or bare path). |
+| `iconSize()` | `int` |
+| `iconPosition()` | `ButtonIconPosition` - `Left`/`Right`. |
+| `iconSpacing()` | `float` |
+| `display()` | `ButtonDisplay` - `TextAndIcon`/`TextOnly`/`IconOnly`. |
+| `radius()` | `int` |
+| `idleColor()`, `hoverColor()`, `pressedColor()`, `disabledColor()` | `Paint` |
+| `textColor()`, `disabledTextColor()` | `Paint` |
+| `borderWidth()`, `borderColor()`, `disabledBorderColor()` | `float` / `Paint` |
+| `transition()` | `float` - seconds, for color transitions between interaction states. |
+
+Subclass `ButtonBase` (not `ButtonWidget`) directly for a custom control with its own
+interaction states but no built-in color/variant system - react to `hoveredState()`/
+`pressedState()`/`enabledState()` yourself.
+
+### `CheckboxWidget`
+
+```cpp
+TB::Checkbox([](Tavoos::CheckboxWidget& c) { c.checked(true); });
+```
+
+A box that toggles `checked()` on click/Space/Enter - build your own label alongside it
+(`TB::Row { Checkbox, Text }`), it isn't built in.
+
+| Property | Type | Notes |
+|---|---|---|
+| `checked()` | `bool` |
+| `checkedState()` | `State<bool>&` |
+| `uncheckedColor()`, `checkedColor()`, `disabledColor()` | `Paint` - box fill. |
+| `uncheckedBorderColor()`, `checkedBorderColor()`, `disabledBorderColor()` | `Paint` |
+| `checkColor()`, `disabledCheckColor()` | `Paint` - the checkmark itself. |
+| `radius()` | `int` |
+| `transition()` | `float` |
+
+### `RadioWidget` / `RadioGroup`
+
+Same shape as `CheckboxWidget` (a selectable dot instead of a checkmark, `selected()` instead
+of `checked()`), plus explicit grouping - nothing is auto-grouped by proximity:
+
+```cpp
+Tavoos::RadioGroup group;
+
+TB::Column([&](Tavoos::ColumnWidget& col) {
+    TB::Radio([&](Tavoos::RadioWidget& r) { r.group(group).selected(true); });
+    TB::Radio([&](Tavoos::RadioWidget& r) { r.group(group); });
+});
+```
+
+| Property | Type | Notes |
+|---|---|---|
+| `selected()` | `bool` |
+| `selectedState()` | `State<bool>&` |
+| `group(RadioGroup&)` | - | Joins this group - clicking selects this button and deselects every other member. |
+| `unselectedColor()`, `selectedColor()`, `disabledColor()` | `Paint` |
+| `unselectedBorderColor()`, `selectedBorderColor()`, `disabledBorderColor()` | `Paint` |
+| `radius()` | `int` - defaults to a perfect circle (`size/2`), tracked automatically across resizes until you call `radius()` explicitly. |
+| `transition()` | `float` |
+
+`RadioGroup::selected()` returns the currently-selected `RadioWidget*` (or `nullptr`); it's
+not itself a widget, just a plain coordinator object you keep alive alongside the radios.
+
+### `SwitchWidget`
+
+```cpp
+TB::Switch([](Tavoos::SwitchWidget& s) { s.checked(false); });
+```
+
+| Property | Type | Notes |
+|---|---|---|
+| `checked()` | `bool` |
+| `checkedState()` | `State<bool>&` |
+| `uncheckedColor()`, `checkedColor()`, `disabledColor()` | `Paint` - track. |
+| `thumbColor()`, `checkedThumbColor()`, `disabledThumbColor()` | `Paint` |
+| `transition()` | `float` |
+
+Always a pill shape (track radius = height/2) and a circular thumb - no radius override, since
+being a pill is the whole visual identity of a switch.
+
+### `ProgressBarWidget`
+
+```cpp
+TB::ProgressBar([](Tavoos::ProgressBarWidget& p) { p.minValue(0).maxValue(100).value(40); });
+```
+
+Determinate only, and the one control here that derives `SlotWidget` directly (not
+`ButtonBase`) - no hover/press/focus, purely a display.
+
+| Property | Type | Notes |
+|---|---|---|
+| `value()`, `minValue()`, `maxValue()` | `int` | Default range `0`-`100`. |
+| `valueState()` | `State<int>&` |
+| `trackColor()`, `fillColor()` | `Paint` |
+| `radius()` | `int` |
+| `transition()` | `float` |
+
+### `SliderWidget`
+
+```cpp
+TB::Slider([](Tavoos::SliderWidget& s) { s.minValue(0).maxValue(100).value(50); });
+```
+
+Both drag-to-set and tap-to-set work out of the box.
+
+| Property | Type | Notes |
+|---|---|---|
+| `value()`, `minValue()`, `maxValue()` | `int` |
+| `valueState()` | `State<int>&` |
+| `trackColor()`, `fillColor()`, `thumbColor()` | `Paint` |
+| `disabledColor()`, `disabledThumbColor()` | `Paint` |
+| `transition()` | `float` |
+
+### `TextFieldWidget`
+
+```cpp
+TB::TextField([](Tavoos::TextFieldWidget& f) {
+    f.placeholder("Type here...").onSubmit([](const std::string& text) { /* Enter pressed */ });
+});
+```
+
+Single-line text entry - no selection/clipboard yet.
+
+| Property | Type | Notes |
+|---|---|---|
+| `text()` | `std::string` |
+| `textState()` | `State<std::string>&` |
+| `placeholder()` | `std::string` - shown (in `placeholderColor()`) whenever `text()` is empty. |
+| `font()` | `Font` |
+| `backgroundColor()`, `borderColor()`, `focusedBorderColor()` | `Paint` |
+| `disabledColor()`, `disabledBorderColor()` | `Paint` |
+| `textColor()`, `placeholderColor()`, `caretColor()` | `Paint` |
+| `radius()`, `borderWidth()` | `int` / `float` |
+| `innerPadding()`, `innerPaddingLeft/Top/Right/Bottom()` | `float` - gap between the border and the text/caret. |
+| `transition()` | `float` |
+| `onSubmit(fn)` | `std::function<void(const std::string&)>` | Fires on Enter. |
+
+Backspace/Delete/Left/Right/Home/End all work; typed text scrolls horizontally to keep the
+caret in view, clipped to stay inside the padded interior regardless of scroll position.
+
+### `SpinBoxWidget`
+
+```cpp
+TB::SpinBox([](Tavoos::SpinBoxWidget& s) { s.minValue(0).maxValue(10).step(1); });
+```
+
+A `TextFieldWidget` plus up/down stepper buttons, sharing one background.
+
+| Property | Type | Notes |
+|---|---|---|
+| `value()`, `minValue()`, `maxValue()`, `step()` | `int` | `value` is stored as-is and only clamped for display/on commit. |
+| `valueState()` | `State<int>&` |
+| `enabled()` | `bool` | Cascades to the internal field and both buttons. |
+| `onValueChange(fn)` | `std::function<void(int)>` |
+| `backgroundColor()`, `borderColor()`, `focusedBorderColor()` | `Paint` |
+| `disabledColor()`, `disabledBorderColor()` | `Paint` |
+| `radius()`, `borderWidth()` | `int` / `float` |
+| `transition()` | `float` |
+
+Typing a value commits on Enter (clamped to `[minValue, maxValue]`) or reverts to the current
+value if what you typed doesn't parse as an integer; the up/down buttons commit immediately.
+
+## Theme & styling
+
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle` - one plain struct
+per control in `tavoos/widget/style/`) has a matching entry on the app-wide theme:
+
+```cpp
+Tavoos::Application::instance()->theme().button.set(Tavoos::ButtonStyle{
+    .idleColor = Tavoos::Color::rgba(20, 20, 30),
+    .radius = 12,
+});
+```
+
+Every control binds to its theme entry by default, so this restyles every `ButtonWidget` in
+the app immediately, including ones created afterward. Two ways to override per-instance,
+either works the same on every control:
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.style(Tavoos::ButtonStyle{ .idleColor = Tavoos::Color::Red });   // whole struct at once
+    b.radius(4);                                                       // or one field
+});
+```
+
+A later call always wins over an earlier one, whether it's `.style(...)` or an individual
+setter - except `ButtonWidget::variant()`, which is special-cased to always win once called,
+even over a *later* `.style(...)` or a live retheme, so picking `Filled`/`Outlined`/`Text`
+sticks until you explicitly call `variant()` again.
+
+## Dragging
+
+Any widget, not just a control, can opt into dragging:
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& r) {
+    r.draggable(true).dragXAxis(Tavoos::DragAxis{.enabled = true, .min = 0, .max = 300});
+});
+```
+
+| Property | Type | Notes |
+|---|---|---|
+| `draggable()` | `bool` | When `true`, dragging moves the widget itself via `x()`/`y()`. |
+| `dragThreshold()` | `float` | Pixels of movement before a drag starts (default `0`). |
+| `dragXAxis()`, `dragYAxis()` | `DragAxis{enabled, min, max}` | Locks and/or clamps movement along that axis. |
+
+To build something that *computes* its position from a drag instead of free-translating (a
+slider thumb, a custom control), hook the callbacks without setting `draggable(true)` - they
+still fire either way:
+
+```cpp
+int startValue = 0;
+thumb.onDragStart([&](Tavoos::DragEvent&) { startValue = currentValue; });
+thumb.onDragMove([&](Tavoos::DragEvent& e) {
+    setValue(startValue + static_cast<int>(e.totalDx()) / pixelsPerUnit);
+});
+```
+
+`DragEvent::dx()`/`dy()` are the delta since the last move; `totalDx()`/`totalDy()` are the
+cumulative delta since the drag started - prefer `total*` for computing an absolute value (no
+incremental rounding drift), `dx`/`dy` for a pure follow-the-cursor translate.
+
 ## Animation
 
 **`AnimatedState<T>`** - a `State<T>` that can ease toward a new value over time instead of
@@ -304,14 +588,31 @@ app.registerFont("Inter", "resource:/assets/fonts/Inter-Regular.ttf");
 
 A plain path (or an explicit `file:` prefix) loads from the filesystem at runtime instead.
 
+A third scheme, `data:`, embeds content directly instead of referencing a file - mainly for a
+small inline SVG icon:
+
+```cpp
+constexpr const char* kStarSvg = R"svg(<svg ...>...</svg>)svg";
+icon.source(std::string("data:") + kStarSvg);
+```
+
+Same idea works for `Application::registerFont(name, "data:" + fontBytes)` if you have font
+data in memory rather than as a file.
+
 ## Keyboard & focus
 
-Set `.focusable(true)` on any widget to make it part of the Tab order. Tab/Shift+Tab cycle
-forward/backward through all focusable, visible widgets in the tree (depth-first order),
-wrapping at the ends. The currently-focused widget receives:
+Set `.focusable(true)` on any widget to make it focusable - via Tab/Shift+Tab (cycling
+forward/backward through all focusable, visible widgets in the tree, depth-first order,
+wrapping at the ends) or by clicking it, or any of its descendants (the nearest focusable
+ancestor of whatever was actually clicked receives focus). Every `ButtonBase`-derived control
+(see [Controls](#controls)) is `focusable(true)` by default. The currently-focused widget
+receives:
 
 - `onKeyPress` / `onKeyRelease` - `KeyEvent::keyCode()` compares against the `Key` enum (`Tavoos::Key::Enter`, `Tavoos::Key::A`, etc., matching GLFW key codes) and `.modifiers()` (`KeyModifier::Shift/Control/Alt/Super`, combine with `|`).
 - `onTextInput` - fires per Unicode codepoint typed (for building text-entry widgets).
 - `onFocusIn` / `onFocusOut` - fired when focus moves onto/off of this widget, including on window activation/deactivation if it was already focused.
+- **`focused()`**, **`focusedState()`** - reactive read of whether this widget currently has
+  focus, for anything beyond just handling `onFocusIn`/`onFocusOut` directly (e.g. driving a
+  border-color `AnimatedState`).
 
 Call `.focus()` on a widget to focus it programmatically instead of waiting for Tab.
