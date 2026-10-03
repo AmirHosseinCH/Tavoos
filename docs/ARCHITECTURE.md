@@ -690,6 +690,30 @@ size and margins (`effX + f * (effWidth - ownWidth)`), so 0 is the leading edge,
 edge, and 0.5 centered; they apply when no alignment flag is set on that axis and take priority
 over an explicit `x()`/`y()`.
 
+A widget that needs a value derived from its final size - a circular radius, an icon sized to its
+box - can't read `width()`/`height()`, which are only the properties and ignore `fill()`,
+fractions, and layout. `Widget::onResolvedSizeChanged()` is the hook for this: `Widget::layout()`
+calls it as soon as the resolved size is known, and only when it differs from the last size it
+announced:
+
+```cpp
+void Widget::notifyResolvedSizeIfChanged() {
+    if (m_resolvedWidth == m_notifiedWidth && m_resolvedHeight == m_notifiedHeight)
+        return;
+    m_notifiedWidth = m_resolvedWidth;
+    m_notifiedHeight = m_resolvedHeight;
+    onResolvedSizeChanged();
+}
+```
+
+It runs before this widget's children are laid out, so properties it sets on them are used in the
+same pass - no extra pass, no frame of stale values. The first layout always announces (the
+notified size starts unset), so a control's pre-layout defaults are replaced by values from its
+real size. `RadioWidget`, `CheckboxWidget`, and `SwitchWidget` use it to derive their radius,
+checkmark size, and thumb size from `resolvedWidth()`/`resolvedHeight()`. It's called from the
+base `Widget::layout()`, so a layouter (Row, Column, Grid, Flex), which overrides `layout()`,
+doesn't announce.
+
 `intrinsicSize()` caches `computeIntrinsicSize()`:
 
 ```cpp

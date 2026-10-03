@@ -648,6 +648,31 @@ public:
 };
 ```
 
+**Values that depend on the final size.** `width()` and `height()` are only the properties you
+set; they don't reflect `fill()`, fractions, or a layout. To derive something from the actual
+size - a circular radius, say - override `onResolvedSizeChanged()` and read
+`resolvedWidth()`/`resolvedHeight()`:
+
+```cpp
+class RoundBadge : public Tavoos::ButtonBase {
+public:
+    RoundBadge(Tavoos::Object* parent) : ButtonBase{parent} {
+        background([this](Tavoos::RectangleWidget& disc) { disc.radius(m_radius).color(Tavoos::Color::Blue); });
+    }
+
+protected:
+    void onResolvedSizeChanged() override {
+        m_radius.set(static_cast<int>(std::min(resolvedWidth(), resolvedHeight()) / 2));
+    }
+
+private:
+    Tavoos::State<int> m_radius{0};
+};
+```
+
+The hook runs when the size is first known and whenever it changes, before the children are laid
+out, so what it sets takes effect in the same pass.
+
 ## Dragging
 
 Any widget, not just a control, can opt into dragging:
