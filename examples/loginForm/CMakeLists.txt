@@ -1,6 +1,6 @@
-add_executable(tavoos_example main.cpp)
-target_link_libraries(tavoos_example PRIVATE Tavoos)
-tavoos_add_resources(tavoos_example
+add_executable(loginForm main.cpp)
+target_link_libraries(loginForm PRIVATE Tavoos)
+tavoos_add_resources(loginForm
 	assets/fonts/Inter-Regular.ttf
 )
-tavoos_enable_warnings(tavoos_example)
+tavoos_enable_warnings(loginForm)
