@@ -42,12 +42,10 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
     });
     focusable(true);
 
-    widthProperty().onChange([this](const int&) { updateCaretAndScroll(); });
     m_innerPaddingLeft.onChange([this](const float&) { updateCaretAndScroll(); });
     m_innerPaddingRight.onChange([this](const float&) { updateCaretAndScroll(); });
 
     content<RectangleWidget>([this](RectangleWidget& viewport) {
-        m_viewport = &viewport;
         viewport.fill(Fill::Both)
             .marginLeft(m_innerPaddingLeft.state())
             .marginTop(m_innerPaddingTop.state())
@@ -248,12 +246,17 @@ void TextFieldBase::updateDisplayedText() {
     }
 }
 
+void TextFieldBase::onResolvedSizeChanged() {
+    updateCaretAndScroll();
+}
+
 void TextFieldBase::updateCaretAndScroll() {
-    if (!m_textDisplay || !m_viewport)
+    if (!m_textDisplay)
         return;
 
     const float caretLocalX = m_textDisplay->xOffsetForByteIndex(m_cursorByteIndex);
-    const float visibleWidth = std::max(0.0f, m_viewport->displayedWidth());
+    const float visibleWidth = std::max(0.0f, resolvedWidth() - paddingLeft() - paddingRight()
+                                                 - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
     const float maxDisplayedCaretX = std::max(0.0f, visibleWidth - static_cast<float>(kCaretWidth));
 
     const float displayedCaretX = caretLocalX - static_cast<float>(m_scrollOffset);
@@ -261,7 +264,9 @@ void TextFieldBase::updateCaretAndScroll() {
         m_scrollOffset = static_cast<int>(std::round(caretLocalX));
     else if (displayedCaretX > maxDisplayedCaretX)
         m_scrollOffset = static_cast<int>(std::round(caretLocalX - maxDisplayedCaretX));
-    m_scrollOffset = std::max(0, m_scrollOffset);
+    const float textEndX = m_textDisplay->xOffsetForByteIndex(m_text.get().size());
+    const int maxScroll = std::max(0, static_cast<int>(std::round(textEndX + static_cast<float>(kCaretWidth) - visibleWidth)));
+    m_scrollOffset = std::clamp(m_scrollOffset, 0, maxScroll);
 
     m_contentX.set(-m_scrollOffset);
     m_caretX.set(static_cast<int>(std::round(caretLocalX)));

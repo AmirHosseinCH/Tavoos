@@ -113,6 +113,7 @@ protected:
     void triggerKeyPress(KeyEvent& event) override;
     void triggerKeyRelease(KeyEvent& event) override;
     void triggerTextInput(KeyEvent& event) override;
+    void onResolvedSizeChanged() override;
 
 private:
     using Control::content;
@@ -143,7 +144,6 @@ private:
 
     std::function<void(const std::string&)> m_onSubmit;
 
-    Widget* m_viewport{nullptr};
     TextWidget* m_textDisplay{nullptr};
     TextWidget* m_placeholderDisplay{nullptr};
     State<int> m_contentX{0};
