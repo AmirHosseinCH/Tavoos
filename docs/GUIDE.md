@@ -116,7 +116,8 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | Property | Type | Notes |
 |---|---|---|
 | `x()`, `y()` | `int` | Explicit position; ignored if `alignment()` sets a flag on that axis. |
-| `width()`, `height()` | `int` | Explicit size; ignored if `fill()` sets a flag on that axis, or (for containers/text) if the widget has an intrinsic size and this is left at `0`. |
+| `width()`, `height()` | `int` | Explicit size; ignored if `fill()` or `widthFraction()`/`heightFraction()` sets that axis, or (for containers/text) if the widget has an intrinsic size and this is left at `0`. |
+| `widthFraction()`, `heightFraction()` | `float` | Size as a fraction (`0`-`1`) of the parent's available area on that axis, resolved in the same layout pass - e.g. `widthFraction(0.5f)` is always half the parent's width, at any size. Unset (the default) means ignored. Priority is `fill()`, then fraction, then `width()`/`height()`. Like `alignment()`, only applies under a non-container parent (not inside Row/Column/Grid/Flex). |
 | `alignment()` | `Alignment` | `Left`/`Right`/`CenterHorizontal` and `Top`/`Bottom`/`CenterVertical` (combine with `\|`), or `Center` for both. Positions the widget within its available area instead of using `x()`/`y()`. |
 | `fill()` | `Fill` | `Width`/`Height`/`Both`. Stretches the widget to fill available space on that axis instead of using `width()`/`height()`. Inside Row/Column/Flex, a filled item shares leftover space evenly with other filled siblings; inside Grid, it stretches to its cell. |
 | `padding()`, `paddingLeft/Top/Right/Bottom()` | `float` | Inset applied to *this* widget's children's available area (only meaningful if this widget has children). |

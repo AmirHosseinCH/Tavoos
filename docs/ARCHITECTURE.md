@@ -581,14 +581,15 @@ void Widget::requestRelayout() {
 
 ```cpp
 bool Widget::isSizeBoundary() const {
-    const bool widthFixed  = hasFlag(m_fill.get(), Fill::Width)  || m_width.get()  > 0;
-    const bool heightFixed = hasFlag(m_fill.get(), Fill::Height) || m_height.get() > 0;
+    const bool widthFixed  = hasFlag(m_fill.get(), Fill::Width)  || m_width.get()  > 0 || m_widthFraction.get()  >= 0.0f;
+    const bool heightFixed = hasFlag(m_fill.get(), Fill::Height) || m_height.get() > 0 || m_heightFraction.get() >= 0.0f;
     return widthFixed && heightFixed;
 }
 ```
 
 A "size boundary" is a widget whose own resolved size doesn't depend on its children (it's
-either `fill()`-driven from its parent, or has an explicit `width()`/`height()`) - so a
+either `fill()`-driven from its parent, has an explicit `width()`/`height()`, or is sized by
+`widthFraction()`/`heightFraction()`) - so a
 child's size change can't ripple through it, and the walk stops there. If the container's own
 size is intrinsic (sized to its content), the change genuinely could grow/shrink the
 container itself, so the walk has to continue upward.
@@ -649,9 +650,10 @@ void Widget::layout(bool force) {
     const float effHeight = area.height - marginTop()  - marginBottom();
 
     m_resolvedWidth = hasFlag(m_fill.get(), Fill::Width)
-        ? effWidth : (m_width.get() > 0) ? static_cast<float>(m_width.get()) : natural.width;
-    m_resolvedHeight = hasFlag(m_fill.get(), Fill::Height)
-        ? effHeight : (m_height.get() > 0) ? static_cast<float>(m_height.get()) : natural.height;
+        ? effWidth
+        : (m_widthFraction.get() >= 0.0f) ? std::clamp(m_widthFraction.get(), 0.0f, 1.0f) * effWidth
+        : (m_width.get() > 0) ? static_cast<float>(m_width.get()) : natural.width;
+    // m_resolvedHeight: same, with heightFraction / effHeight
 
     const Alignment align = m_alignment.get();
     if (hasFlag(align, Alignment::Left))                  m_resolvedX = effX;
@@ -673,8 +675,15 @@ Two branches worth noticing: `parentIsLayouter()` short-circuits entirely - if a
 parent already called `item->setResolved(...)` on this widget (all four containers do this
 for every child they place), there's nothing left to compute; this widget just needs to push
 its world matrix down and recurse. The `else` branch is the "top-level or non-container
-parent" case: resolve size from `fill()`/explicit size/intrinsic size, then position from
-`alignment()` flags or explicit `x()`/`y()`.
+parent" case: resolve size from `fill()`/fraction/explicit size/intrinsic size, then position
+from `alignment()` flags or explicit `x()`/`y()`.
+
+`widthFraction()`/`heightFraction()` resolve here too, as a fraction of `effWidth`/`effHeight`
+(the parent's content area minus this widget's margins), so a control can express "this
+child is N% of me" declaratively - `ProgressBarWidget` binds its fill's `widthFraction` to a
+normalized position state - instead of computing pixels from a value. Because they live in
+this branch they're ignored under a layouter parent, which sets the child's geometry
+directly via `setResolved()`, and a layouter widget doesn't read them for its own size.
 
 `intrinsicSize()` caches `computeIntrinsicSize()`:
 
