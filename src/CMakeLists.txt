@@ -25,6 +25,7 @@ set(TAVOOS_SOURCES
     widget/buttongroup.cpp
     widget/radiowidget.cpp
     widget/switchwidget.cpp
+    widget/progressbarbase.cpp
     widget/progressbarwidget.cpp
     widget/sliderwidget.cpp
     widget/textfieldwidget.cpp
@@ -70,6 +71,7 @@ target_sources(Tavoos
     include/tavoos/widget/buttongroup.h
     include/tavoos/widget/radiowidget.h
     include/tavoos/widget/switchwidget.h
+    include/tavoos/widget/progressbarbase.h
     include/tavoos/widget/progressbarwidget.h
     include/tavoos/widget/sliderwidget.h
     include/tavoos/widget/textfieldwidget.h
