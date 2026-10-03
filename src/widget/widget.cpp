@@ -21,7 +21,7 @@ Widget::Widget(Object* parent) : Object{parent} {
     else if (auto* window = dynamic_cast<Window*>(parent))
         m_ownerWindow = window;
 
-    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_alignment, m_fill,
+    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_xFraction, m_yFraction, m_alignment, m_fill,
                          m_padding.leftProperty(), m_padding.topProperty(),
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
@@ -212,6 +212,7 @@ void Widget::layout(bool force) {
     }
 
     if (parentIsLayouter()) {
+        notifyResolvedSizeIfChanged();
         syncDisplayedGeometry();
         updateWorldMatrix();
         for (auto& child : children()) {
@@ -246,6 +247,8 @@ void Widget::layout(bool force) {
         m_resolvedX = effX + effWidth - m_resolvedWidth;
     else if (hasFlag(align, Alignment::CenterHorizontal))
         m_resolvedX = effX + (effWidth - m_resolvedWidth) * 0.5f;
+    else if (m_xFraction.get() >= 0.0f)
+        m_resolvedX = effX + std::clamp(m_xFraction.get(), 0.0f, 1.0f) * (effWidth - m_resolvedWidth);
     else
         m_resolvedX = effX + static_cast<float>(m_x.get());
 
@@ -255,9 +258,12 @@ void Widget::layout(bool force) {
         m_resolvedY = effY + effHeight - m_resolvedHeight;
     else if (hasFlag(align, Alignment::CenterVertical))
         m_resolvedY = effY + (effHeight - m_resolvedHeight) * 0.5f;
+    else if (m_yFraction.get() >= 0.0f)
+        m_resolvedY = effY + std::clamp(m_yFraction.get(), 0.0f, 1.0f) * (effHeight - m_resolvedHeight);
     else
         m_resolvedY = effY + static_cast<float>(m_y.get());
 
+    notifyResolvedSizeIfChanged();
     syncDisplayedGeometry();
     updateWorldMatrix();
 
@@ -265,6 +271,14 @@ void Widget::layout(bool force) {
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
             widget->layout(true);
     }
+}
+
+void Widget::notifyResolvedSizeIfChanged() {
+    if (m_resolvedWidth == m_notifiedWidth && m_resolvedHeight == m_notifiedHeight)
+        return;
+    m_notifiedWidth = m_resolvedWidth;
+    m_notifiedHeight = m_resolvedHeight;
+    onResolvedSizeChanged();
 }
 
 void Widget::setResolved(float x, float y, float width, float height) {

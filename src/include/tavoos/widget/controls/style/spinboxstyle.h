@@ -1,8 +1,8 @@
 #pragma once
 
 #include <tavoos/types.h>
-#include <tavoos/widget/style/buttonstyle.h>
-#include <tavoos/widget/style/textfieldstyle.h>
+#include <tavoos/widget/controls/style/buttonstyle.h>
+#include <tavoos/widget/controls/style/textfieldstyle.h>
 
 namespace Tavoos {
 

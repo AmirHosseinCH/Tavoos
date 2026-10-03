@@ -4,19 +4,14 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
-#include <tavoos/widget/buttonbase.h>
-#include <tavoos/widget/style/switchstyle.h>
+#include <tavoos/widget/templates/buttonbase.h>
+#include <tavoos/widget/controls/style/switchstyle.h>
 
 namespace Tavoos {
 
 class TAVOOS_EXPORT SwitchWidget : public ButtonBase {
 public:
     SwitchWidget(Object* parent);
-
-    decltype(auto) checked(this auto&& self, PropertyArg<bool> checked) {
-        checked.applyTo(self.m_checked);
-        return std::forward<decltype(self)>(self);
-    }
 
     decltype(auto) uncheckedColor(this auto&& self, PropertyArg<Paint> color) {
         color.applyTo(self.m_uncheckedColor);
@@ -63,8 +58,6 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    bool checked() const { return m_checked; }
-    State<bool>& checkedState() { return m_checkedState; }
     Paint uncheckedColor() const { return m_uncheckedColor; }
     Paint checkedColor() const { return m_checkedColor; }
     Paint disabledColor() const { return m_disabledColor; }
@@ -80,7 +73,7 @@ public:
 
 protected:
     void render(Renderer& renderer) override;
-    void handleClick(MouseEvent& event) override;
+    void onResolvedSizeChanged() override;
 
 private:
     void updateColor(bool animate);
@@ -88,8 +81,6 @@ private:
     void updateGeometry();
     void applyStyle(const SwitchStyle& style);
 
-    Property<bool> m_checked{false};
-    State<bool> m_checkedState{false};
     Property<Paint> m_uncheckedColor{Color::rgba(234, 237, 253)};
     Property<Paint> m_checkedColor{Color::rgba(187, 198, 249)};
     Property<Paint> m_disabledColor{Color::rgba(228, 229, 235)};

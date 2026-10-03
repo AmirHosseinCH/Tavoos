@@ -37,7 +37,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
 9. [Interaction state & control widgets](#interaction-state--control-widgets)
-   - [`SlotWidget` and `ButtonBase`](#slotwidget-and-buttonbase)
+   - [`Control` and the behavior bases](#control-and-the-behavior-bases)
    - [Click-to-focus](#click-to-focus)
    - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
    - [Dragging](#dragging)
@@ -685,6 +685,35 @@ normalized position state - instead of computing pixels from a value. Because th
 this branch they're ignored under a layouter parent, which sets the child's geometry
 directly via `setResolved()`, and a layouter widget doesn't read them for its own size.
 
+`xFraction()`/`yFraction()` position a widget at a fraction of the free space left after its own
+size and margins (`effX + f * (effWidth - ownWidth)`), so 0 is the leading edge, 1 the trailing
+edge, and 0.5 centered; they apply when no alignment flag is set on that axis and take priority
+over an explicit `x()`/`y()`.
+
+A widget that needs a value derived from its final size - a circular radius, an icon sized to its
+box - can't read `width()`/`height()`, which are only the properties and ignore `fill()`,
+fractions, and layout. `Widget::onResolvedSizeChanged()` is the hook for this: `Widget::layout()`
+calls it as soon as the resolved size is known, and only when it differs from the last size it
+announced:
+
+```cpp
+void Widget::notifyResolvedSizeIfChanged() {
+    if (m_resolvedWidth == m_notifiedWidth && m_resolvedHeight == m_notifiedHeight)
+        return;
+    m_notifiedWidth = m_resolvedWidth;
+    m_notifiedHeight = m_resolvedHeight;
+    onResolvedSizeChanged();
+}
+```
+
+It runs before this widget's children are laid out, so properties it sets on them are used in the
+same pass - no extra pass, no frame of stale values. The first layout always announces (the
+notified size starts unset), so a control's pre-layout defaults are replaced by values from its
+real size. `RadioWidget`, `CheckboxWidget`, and `SwitchWidget` use it to derive their radius,
+checkmark size, and thumb size from `resolvedWidth()`/`resolvedHeight()`. It's called from the
+base `Widget::layout()`, so a layouter (Row, Column, Grid, Flex), which overrides `layout()`,
+doesn't announce.
+
 `intrinsicSize()` caches `computeIntrinsicSize()`:
 
 ```cpp
@@ -1321,11 +1350,11 @@ hard switch at `t=1` if the two `Paint`s aren't structurally compatible - differ
 stop count).
 
 `AnimatableBase` doesn't have to be inherited publicly the way `AnimatedState<T>` does it -
-`TextFieldWidget`'s blinking caret inherits it privately (`class TextFieldWidget : public
-ButtonBase, private AnimatableBase`), registering/unregistering itself with
+`TextFieldBase`'s blinking caret inherits it privately (`class TextFieldBase : public
+Control, private AnimatableBase`), registering/unregistering itself with
 `AnimationManager::instance()` from its own member functions. The private inheritance is legal
 because the upcast to `AnimatableBase*` needed for `registerAnimation`/`unregisterAnimation`
-happens from inside `TextFieldWidget`'s own methods, and it keeps the animation machinery out
+happens from inside `TextFieldBase`'s own methods, and it keeps the animation machinery out
 of the class's public interface entirely - tighter encapsulation than `AnimatedState`'s public
 shape, useful whenever the animated thing isn't itself a value a consumer should bind to.
 
@@ -1532,13 +1561,18 @@ enough in practice for typical UI sizes.
 
 ## Interaction state & control widgets
 
-### `SlotWidget` and `ButtonBase`
+### `Control` and the behavior bases
 
 Every concrete control (Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField,
-SpinBox) is built from two layers rather than starting from `Widget` directly.
+SpinBox) is built in two layers: a **behavior base** that owns the state and interaction logic,
+and a **concrete widget** that supplies only visuals and style. A custom control derives the
+base and fills in slots - it never reimplements toggling, dragging, stepping, or editing.
+Slot bodies decide their own layout; no base imposes alignment or position on what it's given.
+The bases live in `widget/templates/` (`templates/templates.h` includes them all) and the concrete
+widgets in `widget/controls/`, with their style structs in `widget/controls/style/`.
 
-**`SlotWidget`** (`src/include/tavoos/widget/slotwidget.h`) gives a widget two replaceable
-children - `background` and `content` - instead of a single fixed visual:
+**`Control`** (`src/include/tavoos/widget/templates/control.h`) is the common root. It gives a widget two
+replaceable children - `background` and `content` - plus `enabled()` and `hovered()`:
 
 ```cpp
 template<typename W = RectangleWidget>
@@ -1554,40 +1588,54 @@ decltype(auto) content(this auto&& self, std::type_identity_t<std::function<void
 }
 ```
 
-Each is a normal child widget (`RectangleWidget` by default for `background`,
-`RectangleWidget` for `content` too unless a different type is given explicitly, e.g.
-`.content<TextWidget>(...)`), installed via `addChild<W>` with `background` given `z(-1)` and
-`Fill::Both` so it always paints first and fills the control. Calling `background()`/
-`content()` again replaces the previous slot (`replaceSlot`, via deferred destruction - see
+Each slot is a normal child widget (`RectangleWidget` unless another type is given, e.g.
+`.content<TextWidget>(...)`), installed via `addChild<W>`; `background` additionally gets
+`z(-1)` and `Fill::Both` so it paints first and fills the control, while `content` gets no
+layout at all - its body decides. Calling a slot again replaces the previous one (`replaceSlot`,
+via deferred destruction - see
 [Removing widgets](#removing-widgets-two-phase-deferred-destruction)) and bumps
 `contentRevision()`, which a subclass that rebuilds its own default content (e.g. Button
-rebuilding an icon+label Row) checks against to avoid clobbering a slot the user has since
-replaced themselves.
+rebuilding an icon+label Row) checks to avoid clobbering a slot the user has replaced.
 
-A `SlotWidget` with no interactivity of its own is a valid, complete control - `ProgressBarWidget`
-and `SpinBoxWidget` both derive it directly, wiring their own reactive properties straight into
-the slots' children.
+`Control` claims `MouseEnter`/`MouseLeave` in `hasHandlerFor` and keeps `hovered()` in step, and
+`enabled()` is a `Property<bool>` mirrored into `enabledState()`. It deliberately does not make
+itself focusable: only bases that are interactive set `focusable(true)`, and keep it in step
+with `enabled()` themselves (a ProgressBar or a composite's container must not become a Tab
+stop just because it was re-enabled).
 
-**`ButtonBase`** (`buttonbase.h`) derives `SlotWidget` and adds everything genuinely
-interactive: `enabled()`, `hovered()`, `pressed()`, keyboard activation, and click-swallowing:
+**`ButtonBase`** (`templates/buttonbase.h`) adds `pressed()`, click and keyboard activation, and the
+toggle state: `checkable()` (default `false`), `checked()`, `exclusive()`, and `group()`:
 
 ```cpp
-bool ButtonBase::hasHandlerFor(EventType type) {
-    switch (type) {
-    case EventType::MousePress: case EventType::MouseRelease: case EventType::MouseClick:
-    case EventType::MouseEnter: case EventType::MouseLeave:
-    case EventType::KeyPress:   case EventType::KeyRelease:
-        return true;
-    default:
-        return Widget::hasHandlerFor(type);
+void ButtonBase::handleClick(MouseEvent& event) {
+    if (m_checkable && enabled()) {
+        if (m_group || m_exclusive) {
+            if (!m_checked.get()) {
+                if (m_group)
+                    m_group->select(this);
+                else
+                    m_checked.set(true);
+            }
+        } else {
+            m_checked.set(!m_checked.get());
+        }
     }
+    Widget::triggerClick(event);
 }
 ```
 
-Returning `true` unconditionally for these event types means a `ButtonBase` always accepts
-them at the bubble step it's reached at (see [Bubbling](#bubbling)) - so a control never
-silently lets a click fall through to something behind it. Space and Enter both route through
-one `sendClick`, so keyboard and mouse activation share exactly one code path:
+Checkbox and Switch are `checkable(true)`; Radio is `checkable(true).exclusive(true)`; a plain
+Button is neither. In a `ButtonGroup` (or when `exclusive`) a click only ever checks, and
+`ButtonGroup::select` unchecks every other member - so any checkable button, not just a Radio,
+can be part of a mutually exclusive set (a segmented control is just checkable Buttons in a
+group). A group tracks its members' `checkedState()` to expose `checked()`, the current pick, and
+keeps no dangling pointers: a button removes itself from its group when it is destroyed or moved to
+another group, and a destroyed group detaches its remaining members, which simply become ungrouped.
+
+`hasHandlerFor` claims press, release, click, and key events unconditionally, so a button always
+accepts them at the bubble step it's reached at (see [Bubbling](#bubbling)) and never lets a click
+fall through to something behind it. Space and Enter both route through one `sendClick`, so
+keyboard and mouse activation share one code path:
 
 ```cpp
 void ButtonBase::triggerKeyPress(KeyEvent& event) {
@@ -1600,17 +1648,63 @@ void ButtonBase::triggerKeyPress(KeyEvent& event) {
 }
 ```
 
-`triggerClick` itself is a deliberate no-op on `ButtonBase` (`void ButtonBase::triggerClick(MouseEvent&) {}`)
-- clicks are driven entirely through `sendClick`/`handleClick` instead (called from
-`triggerRelease` for the mouse path, and `sendClickFromKeyboard` for Space/Enter), so a
-subclass overrides the `protected virtual handleClick(MouseEvent&)` hook to react to "a real
-click happened" regardless of input method, rather than overriding `triggerClick` (which
-`Window`'s own generic click dispatch also targets, and would double-fire).
+`triggerClick` itself is a deliberate no-op on `ButtonBase`; clicks are driven through
+`sendClick`/`handleClick` (called from `triggerRelease` for the mouse path and
+`sendClickFromKeyboard` for Space/Enter), so a subclass overrides the `protected virtual
+handleClick(MouseEvent&)` hook to react to "a real click happened" regardless of input method,
+rather than `triggerClick` (which `Window`'s own click dispatch also targets and would
+double-fire).
 
-`hovered`/`pressed`/`enabled` live on `ButtonBase`, not `Widget` - a plain `RectangleWidget`
-has none of them. `focused()`/`focusedState()` are the one exception, promoted to `Widget`
-itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any
-widget, not just interactive controls.
+**`ProgressBarBase`** (`templates/progressbarbase.h`) owns `value`/`minValue`/`maxValue` and a normalized
+`position` (0-1) published as `positionState()`. It has no visuals; a concrete bar binds its fill
+to the position, e.g. `fill.widthFraction(positionState())`, and layout does the pixel math
+(see [`Widget::layout()`](#widgetlayout---the-non-layouter-default)).
+
+**`SliderBase`** (`templates/sliderbase.h`) owns the same range plus `position`, `pressed`, and a `handle`
+slot. Interaction lives entirely in the base: press, release, and drag events bubble up from
+whichever child was hit (the handle or the track), and the base claims them in `hasHandlerFor`,
+so no child needs a callback. Pressing the track sets the value, pressing the handle does not
+jump, and a drag continues from the value held when it started:
+
+```cpp
+void SliderBase::triggerDragMove(DragEvent& event) {
+    if (!enabled())
+        return;
+
+    const int minV = m_minValue.get();
+    const int maxV = std::max(minV + 1, m_maxValue.get());
+    const float valuePerPixel = static_cast<float>(maxV - minV) / travel();
+    const int newValue = m_dragStartValue + static_cast<int>(std::lround(event.totalDx() * valuePerPixel));
+    m_value.set(std::clamp(newValue, minV, maxV));
+    Widget::triggerDragMove(event);
+}
+```
+
+`travel()` is the displayed width minus the registered handle's displayed width, read at event
+time. The `handle` slot only registers the widget (so the base knows its size and bounds); the
+concrete slider positions it, binding `xFraction(positionState())` so the handle tracks the
+value.
+
+**`SpinBoxBase`** (`templates/spinboxbase.h`) owns `value`/`minValue`/`maxValue`/`step`, `increase()`/
+`decrease()`, and `commitText(string)`, which parses typed input, clamps it, and commits it - an
+unparseable entry re-notifies `valueTextState()` with the current text so the display reverts.
+It has `up` and `down` slots; the base attaches the click handler that adjusts the value to
+whatever widget is installed (a button swallows clicks, so a position test on bubbled events
+would never see them). The content item, typically a text field, binds to `valueTextState()` and
+calls `commitText`; the base knows nothing about `TextField`.
+
+**`TextFieldBase`** (`templates/textfieldbase.h`) follows the QML `TextField` model instead of exposing
+slots: the user supplies only a `background`, and the base builds its own clipped viewport, text
+item, placeholder, and caret internally, owning all editing - insert, delete, cursor movement,
+click-to-position, horizontal scrolling, and the caret blink (see the note on private
+`AnimatableBase` inheritance under [Animation](#animation-system)). Everything about how the
+text looks is a property of the base (`textColor`, `placeholderColor`, `caretColor`, `font`,
+`innerPadding*`, applied as margins on the internal viewport), never a user-supplied visual, and
+`content()` is hidden so the internals can't be replaced. The viewport clips to its own rect, so
+the text and caret can never draw outside the padded interior.
+
+`focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
+itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
 
 ### Click-to-focus
 
@@ -1740,12 +1834,13 @@ virtual void triggerDragMove(DragEvent& event) {
 The `m_onDragMove` callback always runs, independent of the `m_draggable` guard - so a widget
 can hook `onDragStart`/`onDragMove` *without* ever calling `draggable(true)`, receiving drag
 events but computing its own constrained position instead of the free-translate default. This
-is how Slider's thumb works: it never sets `draggable(true)`, only hooks the callbacks and
-derives a clamped value from `event.totalDx()` against the value held at drag start.
+is how `SliderBase` is built: drag events bubble from the handle or the track to the slider,
+whose own `triggerDragMove` derives a clamped value from `event.totalDx()` against the value
+held at drag start - nothing sets `draggable(true)`.
 
 ### Theme and style structs
 
-Each control has a plain aggregate `*Style` struct (`widget/style/*.h` - `ButtonStyle`,
+Each control has a plain aggregate `*Style` struct (`widget/controls/style/*.h` - `ButtonStyle`,
 `CheckboxStyle`, `TextFieldStyle`, ...) holding every themeable value with a sensible default,
 and a matching `State<XStyle>` member on `Theme` (`theme.h`), owned by `Application` and
 reached via `Application::instance()->theme()`. Every control exposes the same two-overload

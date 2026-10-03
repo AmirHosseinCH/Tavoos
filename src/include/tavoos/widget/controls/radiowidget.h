@@ -4,26 +4,14 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
-#include <tavoos/widget/buttonbase.h>
-#include <tavoos/widget/radiogroup.h>
-#include <tavoos/widget/style/radiostyle.h>
+#include <tavoos/widget/templates/buttonbase.h>
+#include <tavoos/widget/controls/style/radiostyle.h>
 
 namespace Tavoos {
 
 class TAVOOS_EXPORT RadioWidget : public ButtonBase {
 public:
     RadioWidget(Object* parent);
-
-    decltype(auto) selected(this auto&& self, PropertyArg<bool> selected) {
-        selected.applyTo(self.m_selected);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) group(this auto&& self, RadioGroup& group) {
-        self.m_group = &group;
-        group.add(&self);
-        return std::forward<decltype(self)>(self);
-    }
 
     decltype(auto) unselectedColor(this auto&& self, PropertyArg<Paint> color) {
         color.applyTo(self.m_unselectedColor);
@@ -76,8 +64,6 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    bool selected() const { return m_selected; }
-    State<bool>& selectedState() { return m_selectedState; }
     Paint unselectedColor() const { return m_unselectedColor; }
     Paint selectedColor() const { return m_selectedColor; }
     Paint disabledColor() const { return m_disabledColor; }
@@ -94,15 +80,13 @@ public:
 
 protected:
     void render(Renderer& renderer) override;
-    void handleClick(MouseEvent& event) override;
+    void onResolvedSizeChanged() override;
 
 private:
     void updateColor(bool animate);
     void updateGeometry();
     void applyStyle(const RadioStyle& style);
 
-    Property<bool> m_selected{false};
-    State<bool> m_selectedState{false};
     Property<Paint> m_unselectedColor{Color::Transparent};
     Property<Paint> m_selectedColor{Color::rgba(85, 112, 241)};
     Property<Paint> m_disabledColor{Color::rgba(228, 229, 235)};
@@ -113,7 +97,6 @@ private:
     bool m_radiusOverridden{false};
     Property<float> m_transition{0.12f};
     BindableState<RadioStyle> m_style;
-    RadioGroup* m_group{nullptr};
 
     AnimatedState<Paint> m_backgroundColorOut;
     AnimatedState<Paint> m_contentColorOut;

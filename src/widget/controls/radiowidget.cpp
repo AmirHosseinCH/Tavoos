@@ -1,8 +1,9 @@
-#include <tavoos/widget/radiowidget.h>
+#include <tavoos/widget/controls/radiowidget.h>
 
 #include <tavoos/application.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Tavoos {
 
@@ -17,11 +18,9 @@ RadioWidget::RadioWidget(Object* parent) : ButtonBase{parent} {
     m_contentColorOut.set(m_selectedColor.get());
     m_borderColorOut.set(m_unselectedBorderColor.get());
 
-    m_selected.onChange([this](const bool& selected) {
-        if (m_selectedState.get() != selected)
-            m_selectedState.set(selected);
-        updateColor(true);
-    });
+    checkable(true);
+    exclusive(true);
+    checkedState().onChange([this](const bool&) { updateColor(true); });
     enabledState().onChange([this](const bool&) { updateColor(true); });
 
     m_unselectedColor.onChange([this](const Paint&) { updateColor(false); });
@@ -32,8 +31,6 @@ RadioWidget::RadioWidget(Object* parent) : ButtonBase{parent} {
     m_disabledBorderColor.onChange([this](const Paint&) { updateColor(false); });
 
     m_radius.onChange([this](const int&) { updateGeometry(); });
-    widthProperty().onChange([this](const int&) { updateGeometry(); });
-    heightProperty().onChange([this](const int&) { updateGeometry(); });
 
     width(20).height(20);
 
@@ -56,18 +53,8 @@ void RadioWidget::render(Renderer& renderer) {
     ButtonBase::render(renderer);
 }
 
-void RadioWidget::handleClick(MouseEvent& event) {
-    if (enabled() && !m_selected.get()) {
-        if (m_group)
-            m_group->select(this);
-        else
-            m_selected.set(true);
-    }
-    ButtonBase::handleClick(event);
-}
-
 void RadioWidget::updateColor(bool animate) {
-    const bool isSelected = m_selected.get();
+    const bool isSelected = checked();
     const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 
@@ -79,8 +66,14 @@ void RadioWidget::updateColor(bool animate) {
     m_contentOpacity.animateTo(isSelected ? 1.0f : 0.0f, duration);
 }
 
+void RadioWidget::onResolvedSizeChanged() {
+    updateGeometry();
+}
+
 void RadioWidget::updateGeometry() {
-    const int size = std::min(width(), height());
+    if (resolvedWidth() <= 0.0f || resolvedHeight() <= 0.0f)
+        return;
+    const int size = static_cast<int>(std::lround(std::min(resolvedWidth(), resolvedHeight())));
     if (!m_radiusOverridden) {
         const int autoRadius = size / 2;
         if (m_radius.get() != autoRadius)

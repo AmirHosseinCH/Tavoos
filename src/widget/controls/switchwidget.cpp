@@ -1,8 +1,9 @@
-#include <tavoos/widget/switchwidget.h>
+#include <tavoos/widget/controls/switchwidget.h>
 
 #include <tavoos/application.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Tavoos {
 
@@ -16,9 +17,8 @@ SwitchWidget::SwitchWidget(Object* parent) : ButtonBase{parent} {
     m_trackColorOut.set(m_uncheckedColor.get());
     m_thumbColorOut.set(m_thumbColor.get());
 
-    m_checked.onChange([this](const bool& checked) {
-        if (m_checkedState.get() != checked)
-            m_checkedState.set(checked);
+    checkable(true);
+    checkedState().onChange([this](const bool&) {
         updateColor(true);
         updateThumbPosition();
     });
@@ -30,7 +30,6 @@ SwitchWidget::SwitchWidget(Object* parent) : ButtonBase{parent} {
     m_checkedThumbColor.onChange([this](const Paint&) { updateColor(false); });
     m_disabledThumbColor.onChange([this](const Paint&) { updateColor(false); });
 
-    heightProperty().onChange([this](const int&) { updateGeometry(); });
 
     width(36).height(20);
     updateGeometry();
@@ -60,14 +59,8 @@ void SwitchWidget::render(Renderer& renderer) {
     ButtonBase::render(renderer);
 }
 
-void SwitchWidget::handleClick(MouseEvent& event) {
-    if (enabled())
-        m_checked.set(!m_checked.get());
-    ButtonBase::handleClick(event);
-}
-
 void SwitchWidget::updateColor(bool animate) {
-    const bool isChecked = m_checked.get();
+    const bool isChecked = checked();
     const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 
@@ -79,11 +72,17 @@ void SwitchWidget::updateColor(bool animate) {
 }
 
 void SwitchWidget::updateThumbPosition() {
-    m_thumbAlignment.set(Alignment::CenterVertical | (m_checked.get() ? Alignment::Right : Alignment::Left));
+    m_thumbAlignment.set(Alignment::CenterVertical | (checked() ? Alignment::Right : Alignment::Left));
+}
+
+void SwitchWidget::onResolvedSizeChanged() {
+    updateGeometry();
 }
 
 void SwitchWidget::updateGeometry() {
-    const int h = height();
+    if (resolvedHeight() <= 0.0f)
+        return;
+    const int h = static_cast<int>(std::lround(resolvedHeight()));
     const int trackRadius = h / 2;
     if (m_trackRadius.get() != trackRadius)
         m_trackRadius.set(trackRadius);

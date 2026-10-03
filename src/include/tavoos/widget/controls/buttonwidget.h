@@ -5,8 +5,8 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/text/font.h>
 #include <tavoos/types.h>
-#include <tavoos/widget/buttonbase.h>
-#include <tavoos/widget/style/buttonstyle.h>
+#include <tavoos/widget/templates/buttonbase.h>
+#include <tavoos/widget/controls/style/buttonstyle.h>
 
 #include <string>
 

@@ -1,4 +1,4 @@
-#include <tavoos/widget/buttonbase.h>
+#include <tavoos/widget/templates/buttonbase.h>
 
 namespace Tavoos {
 
@@ -11,16 +11,19 @@ void assign(State<bool>& state, bool value) {
 
 }
 
-ButtonBase::ButtonBase(Object* parent) : SlotWidget{parent} {
-    m_enabled.onChange([this](const bool& enabled) {
-        assign(m_enabledState, enabled);
-        focusable(enabled);
-    });
+ButtonBase::ButtonBase(Object* parent) : Control{parent} {
+    enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
+    m_checked.onChange([this](const bool& checked) { assign(m_checkedState, checked); });
     focusable(true);
 }
 
+ButtonBase::~ButtonBase() {
+    if (m_group)
+        m_group->remove(this);
+}
+
 void ButtonBase::onSlotReplaced() {
-    assign(m_hovered, false);
+    Control::onSlotReplaced();
     assign(m_pressed, false);
 }
 
@@ -29,13 +32,11 @@ bool ButtonBase::hasHandlerFor(EventType type) {
     case EventType::MousePress:
     case EventType::MouseRelease:
     case EventType::MouseClick:
-    case EventType::MouseEnter:
-    case EventType::MouseLeave:
     case EventType::KeyPress:
     case EventType::KeyRelease:
         return true;
     default:
-        return Widget::hasHandlerFor(type);
+        return Control::hasHandlerFor(type);
     }
 }
 
@@ -43,32 +44,38 @@ void ButtonBase::triggerClick(MouseEvent&) {
 }
 
 void ButtonBase::handleClick(MouseEvent& event) {
+    if (m_checkable && enabled()) {
+        if (m_group || m_exclusive) {
+            if (!m_checked.get()) {
+                if (m_group)
+                    m_group->select(this);
+                else
+                    m_checked.set(true);
+            }
+        } else {
+            m_checked.set(!m_checked.get());
+        }
+    }
     Widget::triggerClick(event);
 }
 
-void ButtonBase::triggerMouseEnter(MouseEvent& event) {
-    assign(m_hovered, true);
-    Widget::triggerMouseEnter(event);
-}
-
 void ButtonBase::triggerMouseLeave(MouseEvent& event) {
-    assign(m_hovered, false);
     assign(m_pressed, false);
-    Widget::triggerMouseLeave(event);
+    Control::triggerMouseLeave(event);
 }
 
 void ButtonBase::triggerPress(MouseEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
-    assign(m_hovered, true);
+    assign(hoveredState(), true);
     if (event.button() == MouseButton::Left)
         assign(m_pressed, true);
     Widget::triggerPress(event);
 }
 
 void ButtonBase::triggerRelease(MouseEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     Widget::triggerRelease(event);
@@ -76,12 +83,12 @@ void ButtonBase::triggerRelease(MouseEvent& event) {
     if (event.button() == MouseButton::Left)
         assign(m_pressed, false);
 
-    if (m_hovered && event.button() == MouseButton::Left)
+    if (hovered() && event.button() == MouseButton::Left)
         sendClick(event.x(), event.y(), event.modifiers());
 }
 
 void ButtonBase::triggerKeyPress(KeyEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     const int key = event.keyCode();
@@ -97,7 +104,7 @@ void ButtonBase::triggerKeyPress(KeyEvent& event) {
 }
 
 void ButtonBase::triggerKeyRelease(KeyEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     if (event.keyCode() != static_cast<int>(Key::Space) || !m_spaceDown) {

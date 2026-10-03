@@ -10,9 +10,20 @@
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT SlotWidget : public Widget {
+class TAVOOS_EXPORT Control : public Widget {
 public:
-    SlotWidget(Object* parent);
+    Control(Object* parent);
+
+    decltype(auto) enabled(this auto&& self, PropertyArg<bool> enabled) {
+        enabled.applyTo(self.m_enabled);
+        return std::forward<decltype(self)>(self);
+    }
+
+    bool enabled() const { return m_enabled; }
+    bool hovered() const { return m_hovered; }
+
+    State<bool>& enabledState() { return m_enabledState; }
+    State<bool>& hoveredState() { return m_hovered; }
 
     template<typename W = RectangleWidget>
     decltype(auto) background(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
@@ -31,6 +42,10 @@ public:
 protected:
     void render(Renderer& renderer) override;
     Size computeIntrinsicSize() override;
+
+    bool hasHandlerFor(EventType type) override;
+    void triggerMouseEnter(MouseEvent& event) override;
+    void triggerMouseLeave(MouseEvent& event) override;
 
     virtual void onSlotReplaced();
 
@@ -51,7 +66,6 @@ private:
         if (m_content)
             replaceSlot(m_content);
         m_content = addChild<W>([&body](W& slot) {
-            slot.alignment(Alignment::Center);
             if (body)
                 body(slot);
         });
@@ -64,6 +78,10 @@ private:
     Widget* m_background{nullptr};
     Widget* m_content{nullptr};
     unsigned m_contentRevision{0};
+
+    Property<bool> m_enabled{true};
+    State<bool> m_enabledState{true};
+    State<bool> m_hovered{false};
 };
 
 }
