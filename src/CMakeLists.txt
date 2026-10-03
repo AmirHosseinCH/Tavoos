@@ -27,6 +27,7 @@ set(TAVOOS_SOURCES
     widget/switchwidget.cpp
     widget/progressbarbase.cpp
     widget/progressbarwidget.cpp
+    widget/sliderbase.cpp
     widget/sliderwidget.cpp
     widget/textfieldwidget.cpp
     widget/spinboxwidget.cpp
@@ -73,6 +74,7 @@ target_sources(Tavoos
     include/tavoos/widget/switchwidget.h
     include/tavoos/widget/progressbarbase.h
     include/tavoos/widget/progressbarwidget.h
+    include/tavoos/widget/sliderbase.h
     include/tavoos/widget/sliderwidget.h
     include/tavoos/widget/textfieldwidget.h
     include/tavoos/widget/spinboxwidget.h
