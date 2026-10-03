@@ -4,7 +4,7 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/buttonwidget.h>
-#include <tavoos/widget/control.h>
+#include <tavoos/widget/spinboxbase.h>
 #include <tavoos/widget/style/spinboxstyle.h>
 #include <tavoos/widget/textfieldwidget.h>
 
@@ -13,29 +13,9 @@
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT SpinBoxWidget : public Control {
+class TAVOOS_EXPORT SpinBoxWidget : public SpinBoxBase {
 public:
     SpinBoxWidget(Object* parent);
-
-    decltype(auto) value(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_value);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) minValue(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_minValue);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) maxValue(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_maxValue);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) step(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_step);
-        return std::forward<decltype(self)>(self);
-    }
 
     decltype(auto) backgroundColor(this auto&& self, PropertyArg<Paint> color) {
         color.applyTo(self.m_backgroundColor);
@@ -87,16 +67,6 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) onValueChange(this auto&& self, std::function<void(int)> callback) {
-        self.m_onValueChange = std::move(callback);
-        return std::forward<decltype(self)>(self);
-    }
-
-    int value() const { return m_value; }
-    State<int>& valueState() { return m_valueState; }
-    int minValue() const { return m_minValue; }
-    int maxValue() const { return m_maxValue; }
-    int step() const { return m_step; }
     Paint backgroundColor() const { return m_backgroundColor; }
     Paint borderColor() const { return m_borderColor; }
     Paint focusedBorderColor() const { return m_focusedBorderColor; }
@@ -117,19 +87,9 @@ protected:
     void render(Renderer& renderer) override;
 
 private:
-    void setValue(int newValue);
-    void adjustValue(int delta);
-    void commitTypedValue(const std::string& text);
-    void updateDisplayedValue();
     void updateEnabled();
     void updateColor(bool animate);
     void applyStyle(const SpinBoxStyle& style);
-
-    Property<int> m_value{0};
-    State<int> m_valueState{0};
-    Property<int> m_minValue{0};
-    Property<int> m_maxValue{100};
-    Property<int> m_step{1};
 
     Property<Paint> m_backgroundColor{Color::White};
     Property<Paint> m_borderColor{Color::rgba(205, 208, 218)};
@@ -143,8 +103,6 @@ private:
 
     AnimatedState<Paint> m_backgroundColorOut;
     AnimatedState<Paint> m_borderColorOut;
-
-    std::function<void(int)> m_onValueChange;
 
     TextFieldWidget* m_field{nullptr};
     ButtonWidget* m_upButton{nullptr};

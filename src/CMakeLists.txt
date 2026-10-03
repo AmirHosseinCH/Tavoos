@@ -30,6 +30,7 @@ set(TAVOOS_SOURCES
     widget/sliderbase.cpp
     widget/sliderwidget.cpp
     widget/textfieldwidget.cpp
+    widget/spinboxbase.cpp
     widget/spinboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
@@ -77,6 +78,7 @@ target_sources(Tavoos
     include/tavoos/widget/sliderbase.h
     include/tavoos/widget/sliderwidget.h
     include/tavoos/widget/textfieldwidget.h
+    include/tavoos/widget/spinboxbase.h
     include/tavoos/widget/spinboxwidget.h
     include/tavoos/widget/style/buttonstyle.h
     include/tavoos/widget/style/checkboxstyle.h
