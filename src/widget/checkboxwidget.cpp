@@ -21,11 +21,8 @@ CheckboxWidget::CheckboxWidget(Object* parent) : ButtonBase{parent} {
     m_borderColorOut.set(m_uncheckedBorderColor.get());
     m_checkColorOut.set(m_checkColor.get());
 
-    m_checked.onChange([this](const bool& checked) {
-        if (m_checkedState.get() != checked)
-            m_checkedState.set(checked);
-        updateColor(true);
-    });
+    checkable(true);
+    checkedState().onChange([this](const bool&) { updateColor(true); });
     enabledState().onChange([this](const bool&) { updateColor(true); });
 
     m_uncheckedColor.onChange([this](const Paint&) { updateColor(false); });
@@ -79,14 +76,8 @@ void CheckboxWidget::render(Renderer& renderer) {
     ButtonBase::render(renderer);
 }
 
-void CheckboxWidget::handleClick(MouseEvent& event) {
-    if (enabled())
-        m_checked.set(!m_checked.get());
-    ButtonBase::handleClick(event);
-}
-
 void CheckboxWidget::updateColor(bool animate) {
-    const bool isChecked = m_checked.get();
+    const bool isChecked = checked();
     const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 
