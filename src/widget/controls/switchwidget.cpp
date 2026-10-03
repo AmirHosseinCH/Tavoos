@@ -3,6 +3,7 @@
 #include <tavoos/application.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Tavoos {
 
@@ -29,7 +30,6 @@ SwitchWidget::SwitchWidget(Object* parent) : ButtonBase{parent} {
     m_checkedThumbColor.onChange([this](const Paint&) { updateColor(false); });
     m_disabledThumbColor.onChange([this](const Paint&) { updateColor(false); });
 
-    heightProperty().onChange([this](const int&) { updateGeometry(); });
 
     width(36).height(20);
     updateGeometry();
@@ -75,8 +75,14 @@ void SwitchWidget::updateThumbPosition() {
     m_thumbAlignment.set(Alignment::CenterVertical | (checked() ? Alignment::Right : Alignment::Left));
 }
 
+void SwitchWidget::onResolvedSizeChanged() {
+    updateGeometry();
+}
+
 void SwitchWidget::updateGeometry() {
-    const int h = height();
+    if (resolvedHeight() <= 0.0f)
+        return;
+    const int h = static_cast<int>(std::lround(resolvedHeight()));
     const int trackRadius = h / 2;
     if (m_trackRadius.get() != trackRadius)
         m_trackRadius.set(trackRadius);

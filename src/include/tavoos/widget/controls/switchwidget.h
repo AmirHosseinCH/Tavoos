@@ -73,6 +73,7 @@ public:
 
 protected:
     void render(Renderer& renderer) override;
+    void onResolvedSizeChanged() override;
 
 private:
     void updateColor(bool animate);

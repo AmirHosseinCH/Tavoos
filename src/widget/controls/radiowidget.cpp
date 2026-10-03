@@ -3,6 +3,7 @@
 #include <tavoos/application.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace Tavoos {
 
@@ -30,8 +31,6 @@ RadioWidget::RadioWidget(Object* parent) : ButtonBase{parent} {
     m_disabledBorderColor.onChange([this](const Paint&) { updateColor(false); });
 
     m_radius.onChange([this](const int&) { updateGeometry(); });
-    widthProperty().onChange([this](const int&) { updateGeometry(); });
-    heightProperty().onChange([this](const int&) { updateGeometry(); });
 
     width(20).height(20);
 
@@ -67,8 +66,14 @@ void RadioWidget::updateColor(bool animate) {
     m_contentOpacity.animateTo(isSelected ? 1.0f : 0.0f, duration);
 }
 
+void RadioWidget::onResolvedSizeChanged() {
+    updateGeometry();
+}
+
 void RadioWidget::updateGeometry() {
-    const int size = std::min(width(), height());
+    if (resolvedWidth() <= 0.0f || resolvedHeight() <= 0.0f)
+        return;
+    const int size = static_cast<int>(std::lround(std::min(resolvedWidth(), resolvedHeight())));
     if (!m_radiusOverridden) {
         const int autoRadius = size / 2;
         if (m_radius.get() != autoRadius)

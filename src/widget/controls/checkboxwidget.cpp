@@ -4,6 +4,7 @@
 #include <tavoos/widget/svg.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 namespace Tavoos {
@@ -35,8 +36,6 @@ CheckboxWidget::CheckboxWidget(Object* parent) : ButtonBase{parent} {
     m_disabledCheckColor.onChange([this](const Paint&) { updateColor(false); });
 
     m_radius.onChange([this](const int&) { updateGeometry(); });
-    widthProperty().onChange([this](const int&) { updateGeometry(); });
-    heightProperty().onChange([this](const int&) { updateGeometry(); });
 
     width(20).height(20);
 
@@ -90,8 +89,14 @@ void CheckboxWidget::updateColor(bool animate) {
     m_contentOpacity.animateTo(isChecked ? 1.0f : 0.0f, duration);
 }
 
+void CheckboxWidget::onResolvedSizeChanged() {
+    updateGeometry();
+}
+
 void CheckboxWidget::updateGeometry() {
-    const int size = std::min(width(), height());
+    if (resolvedWidth() <= 0.0f || resolvedHeight() <= 0.0f)
+        return;
+    const int size = static_cast<int>(std::lround(std::min(resolvedWidth(), resolvedHeight())));
     m_contentRadius.set(std::max(0, m_radius.get() - kContentMargin));
     m_iconSize.set(std::max(4, static_cast<int>((size - 2 * kContentMargin) * 0.7f)));
 }

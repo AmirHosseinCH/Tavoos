@@ -455,6 +455,7 @@ protected:
     virtual void render(Renderer&) = 0;
     void renderChildren(Renderer&);
     virtual Size computeIntrinsicSize();
+    virtual void onResolvedSizeChanged() {}
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
@@ -465,6 +466,7 @@ protected:
     void markLayoutDirty();
     bool consumeLayoutDirty();
     void syncDisplayedGeometry();
+    void notifyResolvedSizeIfChanged();
     void requestRepaint();
     void detachAndDefer(Widget* child);
     template<typename... Props>
@@ -544,6 +546,8 @@ private:
     float m_resolvedY{0.0f};
     float m_resolvedWidth{0.0f};
     float m_resolvedHeight{0.0f};
+    float m_notifiedWidth{-1.0f};
+    float m_notifiedHeight{-1.0f};
 
     float m_displayedX{0.0f};
     float m_displayedY{0.0f};

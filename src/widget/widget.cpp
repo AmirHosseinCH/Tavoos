@@ -212,6 +212,7 @@ void Widget::layout(bool force) {
     }
 
     if (parentIsLayouter()) {
+        notifyResolvedSizeIfChanged();
         syncDisplayedGeometry();
         updateWorldMatrix();
         for (auto& child : children()) {
@@ -262,6 +263,7 @@ void Widget::layout(bool force) {
     else
         m_resolvedY = effY + static_cast<float>(m_y.get());
 
+    notifyResolvedSizeIfChanged();
     syncDisplayedGeometry();
     updateWorldMatrix();
 
@@ -269,6 +271,14 @@ void Widget::layout(bool force) {
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
             widget->layout(true);
     }
+}
+
+void Widget::notifyResolvedSizeIfChanged() {
+    if (m_resolvedWidth == m_notifiedWidth && m_resolvedHeight == m_notifiedHeight)
+        return;
+    m_notifiedWidth = m_resolvedWidth;
+    m_notifiedHeight = m_resolvedHeight;
+    onResolvedSizeChanged();
 }
 
 void Widget::setResolved(float x, float y, float width, float height) {
