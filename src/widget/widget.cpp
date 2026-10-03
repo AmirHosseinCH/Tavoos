@@ -21,7 +21,7 @@ Widget::Widget(Object* parent) : Object{parent} {
     else if (auto* window = dynamic_cast<Window*>(parent))
         m_ownerWindow = window;
 
-    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_alignment, m_fill,
+    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_alignment, m_fill,
                          m_padding.leftProperty(), m_padding.topProperty(),
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
@@ -158,8 +158,8 @@ void Widget::removeChild(Widget* child) {
 }
 
 bool Widget::isSizeBoundary() const {
-    const bool widthFixed  = hasFlag(m_fill.get(), Fill::Width)  || m_width.get()  > 0;
-    const bool heightFixed = hasFlag(m_fill.get(), Fill::Height) || m_height.get() > 0;
+    const bool widthFixed  = hasFlag(m_fill.get(), Fill::Width)  || m_width.get()  > 0 || m_widthFraction.get()  >= 0.0f;
+    const bool heightFixed = hasFlag(m_fill.get(), Fill::Height) || m_height.get() > 0 || m_heightFraction.get() >= 0.0f;
     return widthFixed && heightFixed;
 }
 
@@ -231,10 +231,12 @@ void Widget::layout(bool force) {
 
     m_resolvedWidth = hasFlag(m_fill.get(), Fill::Width)
                           ? effWidth
+                          : (m_widthFraction.get() >= 0.0f) ? std::clamp(m_widthFraction.get(), 0.0f, 1.0f) * effWidth
                           : (m_width.get() > 0) ? static_cast<float>(m_width.get()) : natural.width;
 
     m_resolvedHeight = hasFlag(m_fill.get(), Fill::Height)
                            ? effHeight
+                           : (m_heightFraction.get() >= 0.0f) ? std::clamp(m_heightFraction.get(), 0.0f, 1.0f) * effHeight
                            : (m_height.get() > 0) ? static_cast<float>(m_height.get()) : natural.height;
 
     const Alignment align = m_alignment.get();

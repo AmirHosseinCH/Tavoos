@@ -55,6 +55,16 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) widthFraction(this auto&& self, PropertyArg<float> fraction) {
+        fraction.applyTo(self.m_widthFraction);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) heightFraction(this auto&& self, PropertyArg<float> fraction) {
+        fraction.applyTo(self.m_heightFraction);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) rotation(this auto&& self, PropertyArg<float> rotation) {
         rotation.applyTo(self.m_rotation);
         return std::forward<decltype(self)>(self);
@@ -306,6 +316,8 @@ public:
 
     int width() const { return m_width; }
     int height() const { return m_height; }
+    float widthFraction() const { return m_widthFraction; }
+    float heightFraction() const { return m_heightFraction; }
 
     float rotation() const { return m_rotation; }
     float scale() const { return m_scale; }
@@ -488,6 +500,8 @@ private:
 
     Property<int> m_x, m_y;
     Property<int> m_width, m_height;
+    Property<float> m_widthFraction{-1.0f};
+    Property<float> m_heightFraction{-1.0f};
     Property<float> m_rotation{0.0f};
     Property<float> m_scale{1.0f};
     Property<Alignment> m_alignment{Alignment::None};

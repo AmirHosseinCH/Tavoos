@@ -3,7 +3,6 @@
 #include <tavoos/application.h>
 
 #include <algorithm>
-#include <cmath>
 
 namespace Tavoos {
 
@@ -11,14 +10,13 @@ ProgressBarWidget::ProgressBarWidget(Object* parent) : SlotWidget{parent} {
     m_value.onChange([this](const int& value) {
         if (m_valueState.get() != value)
             m_valueState.set(value);
-        updateGeometry();
+        updatePosition();
     });
-    m_minValue.onChange([this](const int&) { updateGeometry(); });
-    m_maxValue.onChange([this](const int&) { updateGeometry(); });
-    widthProperty().onChange([this](const int&) { updateGeometry(); });
+    m_minValue.onChange([this](const int&) { updatePosition(); });
+    m_maxValue.onChange([this](const int&) { updatePosition(); });
 
     width(200).height(8);
-    updateGeometry();
+    updatePosition();
 
     background([this](RectangleWidget& box) {
         box.radius(m_radius.state()).color(m_trackColor.state());
@@ -27,7 +25,7 @@ ProgressBarWidget::ProgressBarWidget(Object* parent) : SlotWidget{parent} {
     content<RectangleWidget>([this](RectangleWidget& fill) {
         fill.fill(Fill::Height)
             .alignment(Alignment::Left | Alignment::CenterVertical)
-            .width(m_fillWidth)
+            .widthFraction(m_position)
             .radius(m_radius.state())
             .color(m_fillColor.state())
             .fillAnimation(true, m_transition.state());
@@ -37,15 +35,14 @@ ProgressBarWidget::ProgressBarWidget(Object* parent) : SlotWidget{parent} {
     style(Application::instance()->theme().progressBar);
 }
 
-void ProgressBarWidget::updateGeometry() {
+void ProgressBarWidget::updatePosition() {
     const int minV = m_minValue.get();
     const int maxV = std::max(minV + 1, m_maxValue.get());
     const int val = std::clamp(m_value.get(), minV, maxV);
     const float fraction = static_cast<float>(val - minV) / static_cast<float>(maxV - minV);
 
-    const int fillW = static_cast<int>(std::round(fraction * static_cast<float>(width())));
-    if (m_fillWidth.get() != fillW)
-        m_fillWidth.set(fillW);
+    if (m_position.get() != fraction)
+        m_position.set(fraction);
 }
 
 void ProgressBarWidget::applyStyle(const ProgressBarStyle& value) {

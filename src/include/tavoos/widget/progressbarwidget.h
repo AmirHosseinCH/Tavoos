@@ -70,7 +70,7 @@ public:
     }
 
 private:
-    void updateGeometry();
+    void updatePosition();
     void applyStyle(const ProgressBarStyle& style);
 
     Property<int> m_value{0};
@@ -83,7 +83,7 @@ private:
     BindableState<float> m_transition{0.15f};
     BindableState<ProgressBarStyle> m_style;
 
-    State<int> m_fillWidth{0};
+    State<float> m_position{0.0f};
 };
 
 }
