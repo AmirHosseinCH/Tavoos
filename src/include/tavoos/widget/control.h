@@ -66,7 +66,6 @@ private:
         if (m_content)
             replaceSlot(m_content);
         m_content = addChild<W>([&body](W& slot) {
-            slot.alignment(Alignment::Center);
             if (body)
                 body(slot);
         });

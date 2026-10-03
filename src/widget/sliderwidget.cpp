@@ -42,7 +42,9 @@ SliderWidget::SliderWidget(Object* parent) : SliderBase{parent} {
     });
 
     handle<RectangleWidget>([this](RectangleWidget& thumb) {
-        thumb.width(kThumbSize)
+        thumb.alignment(Alignment::CenterVertical)
+            .xFraction(positionState())
+            .width(kThumbSize)
             .height(kThumbSize)
             .radius(kThumbSize / 2)
             .color(m_thumbColorOut);

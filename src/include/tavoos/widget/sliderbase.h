@@ -56,8 +56,7 @@ private:
             removeChild(m_handle);
             m_handle = nullptr;
         }
-        m_handle = addChild<W>([this, &body](W& slot) {
-            slot.z(1).alignment(Alignment::CenterVertical).xFraction(m_position);
+        m_handle = addChild<W>([&body](W& slot) {
             if (body)
                 body(slot);
         });

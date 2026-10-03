@@ -95,7 +95,7 @@ void ButtonWidget::rebuildContent() {
     };
 
     content<RowWidget>([&](RowWidget& row) {
-        row.spacing(m_iconSpacing.state()).marginLeft(padding).marginRight(padding).marginTop(8).marginBottom(8);
+        row.alignment(Alignment::Center).spacing(m_iconSpacing.state()).marginLeft(padding).marginRight(padding).marginTop(8).marginBottom(8);
         if (showIcon && iconFirst)
             addIcon(row);
         if (showText)
