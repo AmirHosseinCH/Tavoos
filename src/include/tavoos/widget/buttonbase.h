@@ -11,9 +11,22 @@ class TAVOOS_EXPORT ButtonBase : public Control {
 public:
     ButtonBase(Object* parent);
 
+    decltype(auto) checkable(this auto&& self, PropertyArg<bool> checkable) {
+        checkable.applyTo(self.m_checkable);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) checked(this auto&& self, PropertyArg<bool> checked) {
+        checked.applyTo(self.m_checked);
+        return std::forward<decltype(self)>(self);
+    }
+
     bool pressed() const { return m_pressed; }
+    bool checkable() const { return m_checkable; }
+    bool checked() const { return m_checked; }
 
     State<bool>& pressedState() { return m_pressed; }
+    State<bool>& checkedState() { return m_checkedState; }
 
 protected:
     void onSlotReplaced() override;
@@ -33,6 +46,9 @@ private:
     void sendClickFromKeyboard(KeyModifier modifiers);
 
     State<bool> m_pressed{false};
+    Property<bool> m_checkable{false};
+    Property<bool> m_checked{false};
+    State<bool> m_checkedState{false};
     bool m_spaceDown{false};
 };
 

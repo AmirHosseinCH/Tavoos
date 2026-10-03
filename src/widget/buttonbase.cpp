@@ -13,6 +13,7 @@ void assign(State<bool>& state, bool value) {
 
 ButtonBase::ButtonBase(Object* parent) : Control{parent} {
     enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
+    m_checked.onChange([this](const bool& checked) { assign(m_checkedState, checked); });
     focusable(true);
 }
 
@@ -38,6 +39,8 @@ void ButtonBase::triggerClick(MouseEvent&) {
 }
 
 void ButtonBase::handleClick(MouseEvent& event) {
+    if (m_checkable && enabled())
+        m_checked.set(!m_checked.get());
     Widget::triggerClick(event);
 }
 
