@@ -26,6 +26,7 @@ set(TAVOOS_SOURCES
     widget/controls/radiowidget.cpp
     widget/controls/switchwidget.cpp
     widget/templates/progressbarbase.cpp
+    widget/templates/rangebase.cpp
     widget/controls/progressbarwidget.cpp
     widget/templates/sliderbase.cpp
     widget/controls/sliderwidget.cpp
@@ -76,6 +77,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/radiowidget.h
     include/tavoos/widget/controls/switchwidget.h
     include/tavoos/widget/templates/progressbarbase.h
+    include/tavoos/widget/templates/rangebase.h
     include/tavoos/widget/templates/rangemath.h
     include/tavoos/widget/controls/progressbarwidget.h
     include/tavoos/widget/templates/sliderbase.h

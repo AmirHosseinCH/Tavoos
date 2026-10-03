@@ -14,20 +14,20 @@ constexpr int kContentMargin = 3;
 }
 
 RadioWidget::RadioWidget(Object* parent) : ButtonBase{parent} {
-    m_backgroundColorOut.set(m_unselectedColor.get());
-    m_contentColorOut.set(m_selectedColor.get());
-    m_borderColorOut.set(m_unselectedBorderColor.get());
+    m_backgroundColorOut.set(m_uncheckedColor.get());
+    m_contentColorOut.set(m_checkedColor.get());
+    m_borderColorOut.set(m_uncheckedBorderColor.get());
 
     checkable(true);
     exclusive(true);
     checkedState().onChange([this](const bool&) { updateColor(true); });
     enabledState().onChange([this](const bool&) { updateColor(true); });
 
-    m_unselectedColor.onChange([this](const Paint&) { updateColor(false); });
-    m_selectedColor.onChange([this](const Paint&) { updateColor(false); });
+    m_uncheckedColor.onChange([this](const Paint&) { updateColor(false); });
+    m_checkedColor.onChange([this](const Paint&) { updateColor(false); });
     m_disabledColor.onChange([this](const Paint&) { updateColor(false); });
-    m_unselectedBorderColor.onChange([this](const Paint&) { updateColor(false); });
-    m_selectedBorderColor.onChange([this](const Paint&) { updateColor(false); });
+    m_uncheckedBorderColor.onChange([this](const Paint&) { updateColor(false); });
+    m_checkedBorderColor.onChange([this](const Paint&) { updateColor(false); });
     m_disabledBorderColor.onChange([this](const Paint&) { updateColor(false); });
 
     m_radius.onChange([this](const int&) { updateGeometry(); });
@@ -54,16 +54,16 @@ void RadioWidget::render(Renderer& renderer) {
 }
 
 void RadioWidget::updateColor(bool animate) {
-    const bool isSelected = checked();
+    const bool isChecked = checked();
     const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 
-    const Paint& border = !isEnabled ? m_disabledBorderColor.get() : (isSelected ? m_selectedBorderColor.get() : m_unselectedBorderColor.get());
+    const Paint& border = !isEnabled ? m_disabledBorderColor.get() : (isChecked ? m_checkedBorderColor.get() : m_uncheckedBorderColor.get());
 
-    m_backgroundColorOut.animateTo(!isEnabled ? m_disabledColor.get() : m_unselectedColor.get(), duration);
-    m_contentColorOut.animateTo(!isEnabled ? m_disabledColor.get() : m_selectedColor.get(), duration);
+    m_backgroundColorOut.animateTo(!isEnabled ? m_disabledColor.get() : m_uncheckedColor.get(), duration);
+    m_contentColorOut.animateTo(!isEnabled ? m_disabledColor.get() : m_checkedColor.get(), duration);
     m_borderColorOut.animateTo(border, duration);
-    m_contentOpacity.animateTo(isSelected ? 1.0f : 0.0f, duration);
+    m_contentOpacity.animateTo(isChecked ? 1.0f : 0.0f, duration);
 }
 
 void RadioWidget::onResolvedSizeChanged() {
@@ -83,11 +83,11 @@ void RadioWidget::updateGeometry() {
 }
 
 void RadioWidget::applyStyle(const RadioStyle& value) {
-    unselectedColor(value.unselectedColor);
-    selectedColor(value.selectedColor);
+    uncheckedColor(value.uncheckedColor);
+    checkedColor(value.checkedColor);
     disabledColor(value.disabledColor);
-    unselectedBorderColor(value.unselectedBorderColor);
-    selectedBorderColor(value.selectedBorderColor);
+    uncheckedBorderColor(value.uncheckedBorderColor);
+    checkedBorderColor(value.checkedBorderColor);
     disabledBorderColor(value.disabledBorderColor);
     if (value.radius >= 0)
         radius(value.radius);

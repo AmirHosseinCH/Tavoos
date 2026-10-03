@@ -27,8 +27,7 @@ std::size_t previousCodepointStart(const std::string& text, std::size_t i) {
 
 TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
     m_text.onChange([this](const std::string& value) {
-        if (m_textState.get() != value)
-            m_textState.set(value);
+        m_textState.setIfChanged(value);
         m_cursorByteIndex = std::min(m_cursorByteIndex, value.size());
         updateDisplayedText();
         updateCaretAndScroll();

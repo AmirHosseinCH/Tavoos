@@ -66,6 +66,11 @@ public:
         notifyObservers();
     }
 
+    void setIfChanged(const T& value) {
+        if (!(m_value == value))
+            set(value);
+    }
+
     const T& get() const noexcept { return m_value; }
     operator const T&() const noexcept { return m_value; }
 

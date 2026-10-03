@@ -388,8 +388,8 @@ private:
 | Property | Type | Notes |
 |---|---|---|
 | `checked()`, `checkedState()`, `group(ButtonGroup&)` | - | Inherited from `ButtonBase`. |
-| `unselectedColor()`, `selectedColor()`, `disabledColor()` | `Paint` |
-| `unselectedBorderColor()`, `selectedBorderColor()`, `disabledBorderColor()` | `Paint` |
+| `uncheckedColor()`, `checkedColor()`, `disabledColor()` | `Paint` |
+| `uncheckedBorderColor()`, `checkedBorderColor()`, `disabledBorderColor()` | `Paint` |
 | `radius()` | `int` - defaults to a perfect circle (`size/2`), tracked automatically across resizes until you call `radius()` explicitly. |
 | `transition()` | `float` |
 
@@ -541,9 +541,10 @@ what you give it.
 | Base | Owns | You provide |
 |---|---|---|
 | `ButtonBase` | `pressed`, click and Space/Enter, `checkable`/`checked`/`exclusive`/`group` | `background`, `content` |
-| `ProgressBarBase` | `value`/`minValue`/`maxValue`, `position` (0-1) | `background`, `content` bound to `positionState()` |
-| `SliderBase` | range, `position`, `pressed`, press/drag/tap handling | `background`, `content`, and a `handle` positioned with `xFraction(positionState())` |
-| `SpinBoxBase` | range, `step`, `commitText`, `valueText`, `increase`/`decrease` | `background`, `content`, `up`, `down` |
+| `RangeBase` | `value`/`minValue`/`maxValue`, `position` (0-1); the base of the three below | `background`, `content` |
+| `ProgressBarBase` | the range, nothing more | `background`, `content` bound to `positionState()` |
+| `SliderBase` | the range, `pressed`, press/drag/tap handling | `background`, `content`, and a `handle` positioned with `xFraction(positionState())` |
+| `SpinBoxBase` | the range, `step`, `commitText`, `valueText`, `increase`/`decrease` | `background`, `content`, `up`, `down` |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:

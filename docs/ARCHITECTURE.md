@@ -1640,7 +1640,7 @@ keyboard and mouse activation share one code path:
 ```cpp
 void ButtonBase::triggerKeyPress(KeyEvent& event) {
     const int key = event.keyCode();
-    if (key == static_cast<int>(Key::Space)) { m_spaceDown = true; assign(m_pressed, true); }
+    if (key == static_cast<int>(Key::Space)) { m_spaceDown = true; m_pressed.setIfChanged(true); }
     else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter))
         sendClickFromKeyboard(event.modifiers());
     else event.ignore();
@@ -1655,13 +1655,20 @@ handleClick(MouseEvent&)` hook to react to "a real click happened" regardless of
 rather than `triggerClick` (which `Window`'s own click dispatch also targets and would
 double-fire).
 
-**`ProgressBarBase`** (`templates/progressbarbase.h`) owns `value`/`minValue`/`maxValue` and a normalized
-`position` (0-1) published as `positionState()`. It has no visuals; a concrete bar binds its fill
-to the position, e.g. `fill.widthFraction(positionState())`, and layout does the pixel math
+**`RangeBase`** (`templates/rangebase.h`) is the shared base of the three range controls. It owns
+`value`/`minValue`/`maxValue`, `valueState()`, and a normalized `position` (0-1) published as
+`positionState()`. The protected `commitValue(long long)` clamps to the range and sets the value
+only if it changed, returning whether it did. The protected virtual `onRangeChanged()` runs after
+the value or either bound changes. `RangeBase` is itself a `Control`, so every range control has
+`enabled` and `hovered` too.
+
+**`ProgressBarBase`** (`templates/progressbarbase.h`) is `RangeBase` under its own name. It has no
+visuals; a concrete bar binds its fill to the position, e.g. `fill.widthFraction(positionState())`,
+and layout does the pixel math
 (see [`Widget::layout()`](#widgetlayout---the-non-layouter-default)).
 
-**`SliderBase`** (`templates/sliderbase.h`) owns the same range plus `position`, `pressed`, and a `handle`
-slot. Interaction lives entirely in the base: press, release, and drag events bubble up from
+**`SliderBase`** (`templates/sliderbase.h`) adds `pressed` and a `handle` slot to the range.
+Interaction lives entirely in the base: press, release, and drag events bubble up from
 whichever child was hit (the handle or the track), and the base claims them in `hasHandlerFor`,
 so no child needs a callback. Pressing the track sets the value, pressing the handle does not
 jump, and a drag continues from the value held when it started:
@@ -1671,11 +1678,10 @@ void SliderBase::triggerDragMove(DragEvent& event) {
     if (!enabled())
         return;
 
-    const int minV = m_minValue.get();
-    const int maxV = std::max(minV + 1, m_maxValue.get());
-    const float valuePerPixel = static_cast<float>(maxV - minV) / travel();
-    const int newValue = m_dragStartValue + static_cast<int>(std::lround(event.totalDx() * valuePerPixel));
-    m_value.set(std::clamp(newValue, minV, maxV));
+    const long long span = detail::spanOf(minValue(), maxValue());
+    const double valuePerPixel = static_cast<double>(span) / static_cast<double>(travel());
+    const long long newValue = static_cast<long long>(m_dragStartValue) + std::llround(event.totalDx() * valuePerPixel);
+    commitValue(newValue);
     Widget::triggerDragMove(event);
 }
 ```
@@ -1685,9 +1691,10 @@ time. The `handle` slot only registers the widget (so the base knows its size an
 concrete slider positions it, binding `xFraction(positionState())` so the handle tracks the
 value.
 
-**`SpinBoxBase`** (`templates/spinboxbase.h`) owns `value`/`minValue`/`maxValue`/`step`, `increase()`/
-`decrease()`, and `commitText(string)`, which parses typed input, clamps it, and commits it - an
+**`SpinBoxBase`** (`templates/spinboxbase.h`) adds `step`, `increase()`/`decrease()`, and
+`commitText(string)` to the range. `commitText` parses typed input, clamps it, and commits it - an
 unparseable entry re-notifies `valueTextState()` with the current text so the display reverts.
+It overrides `onRangeChanged()` to keep `valueTextState()` current.
 It has `up` and `down` slots; the base attaches the click handler that adjusts the value to
 whatever widget is installed (a button swallows clicks, so a position test on bubbled events
 would never see them). The content item, typically a text field, binds to `valueTextState()` and

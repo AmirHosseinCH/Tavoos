@@ -84,16 +84,13 @@ void SwitchWidget::updateGeometry() {
         return;
     const int h = static_cast<int>(std::lround(resolvedHeight()));
     const int trackRadius = h / 2;
-    if (m_trackRadius.get() != trackRadius)
-        m_trackRadius.set(trackRadius);
+    m_trackRadius.setIfChanged(trackRadius);
 
     const int thumbSize = std::max(4, h - 2 * kThumbMargin);
-    if (m_thumbSize.get() != thumbSize)
-        m_thumbSize.set(thumbSize);
+    m_thumbSize.setIfChanged(thumbSize);
 
     const int thumbRadius = thumbSize / 2;
-    if (m_thumbRadius.get() != thumbRadius)
-        m_thumbRadius.set(thumbRadius);
+    m_thumbRadius.setIfChanged(thumbRadius);
 }
 
 void SwitchWidget::applyStyle(const SwitchStyle& value) {

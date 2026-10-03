@@ -2,14 +2,14 @@
 
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
-#include <tavoos/widget/templates/control.h>
+#include <tavoos/widget/templates/rangebase.h>
 
 #include <functional>
 #include <string>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT SpinBoxBase : public Control {
+class TAVOOS_EXPORT SpinBoxBase : public RangeBase {
 public:
     SpinBoxBase(Object* parent);
 
@@ -25,21 +25,6 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) value(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_value);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) minValue(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_minValue);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) maxValue(this auto&& self, PropertyArg<int> value) {
-        value.applyTo(self.m_maxValue);
-        return std::forward<decltype(self)>(self);
-    }
-
     decltype(auto) step(this auto&& self, PropertyArg<int> value) {
         value.applyTo(self.m_step);
         return std::forward<decltype(self)>(self);
@@ -50,18 +35,17 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    int value() const { return m_value; }
-    int minValue() const { return m_minValue; }
-    int maxValue() const { return m_maxValue; }
     int step() const { return m_step; }
     const std::string& valueText() const { return m_valueText.get(); }
 
-    State<int>& valueState() { return m_valueState; }
     State<std::string>& valueTextState() { return m_valueText; }
 
     void increase();
     void decrease();
     void commitText(const std::string& text);
+
+protected:
+    void onRangeChanged() override;
 
 private:
     template<typename W>
@@ -91,13 +75,9 @@ private:
     }
 
     void setValue(long long newValue);
-    void syncValue();
+    void refreshValueText();
 
-    Property<int> m_value{0};
-    State<int> m_valueState{0};
     State<std::string> m_valueText{"0"};
-    Property<int> m_minValue{0};
-    Property<int> m_maxValue{100};
     Property<int> m_step{1};
 
     std::function<void(int)> m_onValueChange;
