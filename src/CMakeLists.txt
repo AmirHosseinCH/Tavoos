@@ -10,7 +10,7 @@ set(TAVOOS_SOURCES
     gfx/svgdocumentcache.cpp
     gfx/svgtexturecache.cpp
     widget/widget.cpp
-    widget/control.cpp
+    widget/templates/control.cpp
     widget/rectangle.cpp
     widget/row.cpp
     widget/column.cpp
@@ -19,20 +19,20 @@ set(TAVOOS_SOURCES
     widget/image.cpp
     widget/svg.cpp
     widget/text.cpp
-    widget/buttonbase.cpp
-    widget/buttonwidget.cpp
-    widget/checkboxwidget.cpp
-    widget/buttongroup.cpp
-    widget/radiowidget.cpp
-    widget/switchwidget.cpp
-    widget/progressbarbase.cpp
-    widget/progressbarwidget.cpp
-    widget/sliderbase.cpp
-    widget/sliderwidget.cpp
-    widget/textfieldbase.cpp
-    widget/textfieldwidget.cpp
-    widget/spinboxbase.cpp
-    widget/spinboxwidget.cpp
+    widget/templates/buttonbase.cpp
+    widget/controls/buttonwidget.cpp
+    widget/controls/checkboxwidget.cpp
+    widget/templates/buttongroup.cpp
+    widget/controls/radiowidget.cpp
+    widget/controls/switchwidget.cpp
+    widget/templates/progressbarbase.cpp
+    widget/controls/progressbarwidget.cpp
+    widget/templates/sliderbase.cpp
+    widget/controls/sliderwidget.cpp
+    widget/templates/textfieldbase.cpp
+    widget/controls/textfieldwidget.cpp
+    widget/templates/spinboxbase.cpp
+    widget/controls/spinboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
     text/fontface.cpp
@@ -59,7 +59,8 @@ target_sources(Tavoos
     include/tavoos/builder.h
     include/tavoos/types.h
     include/tavoos/widget/widget.h
-    include/tavoos/widget/control.h
+    include/tavoos/widget/templates/templates.h
+    include/tavoos/widget/templates/control.h
     include/tavoos/widget/rectangle.h
     include/tavoos/widget/row.h
     include/tavoos/widget/column.h
@@ -68,28 +69,28 @@ target_sources(Tavoos
     include/tavoos/widget/image.h
     include/tavoos/widget/svg.h
     include/tavoos/widget/text.h
-    include/tavoos/widget/buttonbase.h
-    include/tavoos/widget/buttonwidget.h
-    include/tavoos/widget/checkboxwidget.h
-    include/tavoos/widget/buttongroup.h
-    include/tavoos/widget/radiowidget.h
-    include/tavoos/widget/switchwidget.h
-    include/tavoos/widget/progressbarbase.h
-    include/tavoos/widget/progressbarwidget.h
-    include/tavoos/widget/sliderbase.h
-    include/tavoos/widget/sliderwidget.h
-    include/tavoos/widget/textfieldbase.h
-    include/tavoos/widget/textfieldwidget.h
-    include/tavoos/widget/spinboxbase.h
-    include/tavoos/widget/spinboxwidget.h
-    include/tavoos/widget/style/buttonstyle.h
-    include/tavoos/widget/style/checkboxstyle.h
-    include/tavoos/widget/style/radiostyle.h
-    include/tavoos/widget/style/switchstyle.h
-    include/tavoos/widget/style/progressbarstyle.h
-    include/tavoos/widget/style/sliderstyle.h
-    include/tavoos/widget/style/textfieldstyle.h
-    include/tavoos/widget/style/spinboxstyle.h
+    include/tavoos/widget/templates/buttonbase.h
+    include/tavoos/widget/controls/buttonwidget.h
+    include/tavoos/widget/controls/checkboxwidget.h
+    include/tavoos/widget/templates/buttongroup.h
+    include/tavoos/widget/controls/radiowidget.h
+    include/tavoos/widget/controls/switchwidget.h
+    include/tavoos/widget/templates/progressbarbase.h
+    include/tavoos/widget/controls/progressbarwidget.h
+    include/tavoos/widget/templates/sliderbase.h
+    include/tavoos/widget/controls/sliderwidget.h
+    include/tavoos/widget/templates/textfieldbase.h
+    include/tavoos/widget/controls/textfieldwidget.h
+    include/tavoos/widget/templates/spinboxbase.h
+    include/tavoos/widget/controls/spinboxwidget.h
+    include/tavoos/widget/controls/style/buttonstyle.h
+    include/tavoos/widget/controls/style/checkboxstyle.h
+    include/tavoos/widget/controls/style/radiostyle.h
+    include/tavoos/widget/controls/style/switchstyle.h
+    include/tavoos/widget/controls/style/progressbarstyle.h
+    include/tavoos/widget/controls/style/sliderstyle.h
+    include/tavoos/widget/controls/style/textfieldstyle.h
+    include/tavoos/widget/controls/style/spinboxstyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h

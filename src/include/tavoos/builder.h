@@ -3,14 +3,14 @@
 #include <tavoos/application.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
-#include <tavoos/widget/buttonwidget.h>
-#include <tavoos/widget/checkboxwidget.h>
-#include <tavoos/widget/progressbarwidget.h>
-#include <tavoos/widget/radiowidget.h>
-#include <tavoos/widget/sliderwidget.h>
-#include <tavoos/widget/spinboxwidget.h>
-#include <tavoos/widget/switchwidget.h>
-#include <tavoos/widget/textfieldwidget.h>
+#include <tavoos/widget/controls/buttonwidget.h>
+#include <tavoos/widget/controls/checkboxwidget.h>
+#include <tavoos/widget/controls/progressbarwidget.h>
+#include <tavoos/widget/controls/radiowidget.h>
+#include <tavoos/widget/controls/sliderwidget.h>
+#include <tavoos/widget/controls/spinboxwidget.h>
+#include <tavoos/widget/controls/switchwidget.h>
+#include <tavoos/widget/controls/textfieldwidget.h>
 #include <tavoos/widget/widgets.h>
 #include <tavoos/window.h>
 

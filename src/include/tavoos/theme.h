@@ -1,14 +1,14 @@
 #pragma once
 
 #include <tavoos/reactive/reactive.h>
-#include <tavoos/widget/style/buttonstyle.h>
-#include <tavoos/widget/style/checkboxstyle.h>
-#include <tavoos/widget/style/radiostyle.h>
-#include <tavoos/widget/style/progressbarstyle.h>
-#include <tavoos/widget/style/sliderstyle.h>
-#include <tavoos/widget/style/spinboxstyle.h>
-#include <tavoos/widget/style/switchstyle.h>
-#include <tavoos/widget/style/textfieldstyle.h>
+#include <tavoos/widget/controls/style/buttonstyle.h>
+#include <tavoos/widget/controls/style/checkboxstyle.h>
+#include <tavoos/widget/controls/style/radiostyle.h>
+#include <tavoos/widget/controls/style/progressbarstyle.h>
+#include <tavoos/widget/controls/style/sliderstyle.h>
+#include <tavoos/widget/controls/style/spinboxstyle.h>
+#include <tavoos/widget/controls/style/switchstyle.h>
+#include <tavoos/widget/controls/style/textfieldstyle.h>
 
 namespace Tavoos {
 
