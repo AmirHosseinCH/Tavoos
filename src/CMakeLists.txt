@@ -10,7 +10,7 @@ set(TAVOOS_SOURCES
     gfx/svgdocumentcache.cpp
     gfx/svgtexturecache.cpp
     widget/widget.cpp
-    widget/slotwidget.cpp
+    widget/control.cpp
     widget/rectangle.cpp
     widget/row.cpp
     widget/column.cpp
@@ -55,7 +55,7 @@ target_sources(Tavoos
     include/tavoos/builder.h
     include/tavoos/types.h
     include/tavoos/widget/widget.h
-    include/tavoos/widget/slotwidget.h
+    include/tavoos/widget/control.h
     include/tavoos/widget/rectangle.h
     include/tavoos/widget/row.h
     include/tavoos/widget/column.h

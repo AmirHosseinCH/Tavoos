@@ -11,16 +11,13 @@ void assign(State<bool>& state, bool value) {
 
 }
 
-ButtonBase::ButtonBase(Object* parent) : SlotWidget{parent} {
-    m_enabled.onChange([this](const bool& enabled) {
-        assign(m_enabledState, enabled);
-        focusable(enabled);
-    });
+ButtonBase::ButtonBase(Object* parent) : Control{parent} {
+    enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
     focusable(true);
 }
 
 void ButtonBase::onSlotReplaced() {
-    assign(m_hovered, false);
+    Control::onSlotReplaced();
     assign(m_pressed, false);
 }
 
@@ -29,13 +26,11 @@ bool ButtonBase::hasHandlerFor(EventType type) {
     case EventType::MousePress:
     case EventType::MouseRelease:
     case EventType::MouseClick:
-    case EventType::MouseEnter:
-    case EventType::MouseLeave:
     case EventType::KeyPress:
     case EventType::KeyRelease:
         return true;
     default:
-        return Widget::hasHandlerFor(type);
+        return Control::hasHandlerFor(type);
     }
 }
 
@@ -46,29 +41,23 @@ void ButtonBase::handleClick(MouseEvent& event) {
     Widget::triggerClick(event);
 }
 
-void ButtonBase::triggerMouseEnter(MouseEvent& event) {
-    assign(m_hovered, true);
-    Widget::triggerMouseEnter(event);
-}
-
 void ButtonBase::triggerMouseLeave(MouseEvent& event) {
-    assign(m_hovered, false);
     assign(m_pressed, false);
-    Widget::triggerMouseLeave(event);
+    Control::triggerMouseLeave(event);
 }
 
 void ButtonBase::triggerPress(MouseEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
-    assign(m_hovered, true);
+    assign(hoveredState(), true);
     if (event.button() == MouseButton::Left)
         assign(m_pressed, true);
     Widget::triggerPress(event);
 }
 
 void ButtonBase::triggerRelease(MouseEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     Widget::triggerRelease(event);
@@ -76,12 +65,12 @@ void ButtonBase::triggerRelease(MouseEvent& event) {
     if (event.button() == MouseButton::Left)
         assign(m_pressed, false);
 
-    if (m_hovered && event.button() == MouseButton::Left)
+    if (hovered() && event.button() == MouseButton::Left)
         sendClick(event.x(), event.y(), event.modifiers());
 }
 
 void ButtonBase::triggerKeyPress(KeyEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     const int key = event.keyCode();
@@ -97,7 +86,7 @@ void ButtonBase::triggerKeyPress(KeyEvent& event) {
 }
 
 void ButtonBase::triggerKeyRelease(KeyEvent& event) {
-    if (!m_enabled)
+    if (!enabled())
         return;
 
     if (event.keyCode() != static_cast<int>(Key::Space) || !m_spaceDown) {

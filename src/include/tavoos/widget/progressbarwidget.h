@@ -3,12 +3,12 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
-#include <tavoos/widget/slotwidget.h>
+#include <tavoos/widget/control.h>
 #include <tavoos/widget/style/progressbarstyle.h>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT ProgressBarWidget : public SlotWidget {
+class TAVOOS_EXPORT ProgressBarWidget : public Control {
 public:
     ProgressBarWidget(Object* parent);
 

@@ -6,7 +6,7 @@
 
 namespace Tavoos {
 
-ProgressBarWidget::ProgressBarWidget(Object* parent) : SlotWidget{parent} {
+ProgressBarWidget::ProgressBarWidget(Object* parent) : Control{parent} {
     m_value.onChange([this](const int& value) {
         if (m_valueState.get() != value)
             m_valueState.set(value);

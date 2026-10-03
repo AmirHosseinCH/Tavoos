@@ -17,7 +17,7 @@ constexpr const char* kDownChevronSvg = R"svg(<svg xmlns="http://www.w3.org/2000
 
 }
 
-SpinBoxWidget::SpinBoxWidget(Object* parent) : SlotWidget{parent} {
+SpinBoxWidget::SpinBoxWidget(Object* parent) : Control{parent} {
     width(140).height(40);
 
     m_backgroundColorOut.set(m_backgroundColor.get());
@@ -26,7 +26,7 @@ SpinBoxWidget::SpinBoxWidget(Object* parent) : SlotWidget{parent} {
     m_value.onChange([this](const int&) { updateDisplayedValue(); });
     m_minValue.onChange([this](const int&) { updateDisplayedValue(); });
     m_maxValue.onChange([this](const int&) { updateDisplayedValue(); });
-    m_enabled.onChange([this](const bool&) {
+    enabledState().onChange([this](const bool&) {
         updateEnabled();
         updateColor(true);
     });
@@ -85,7 +85,7 @@ SpinBoxWidget::SpinBoxWidget(Object* parent) : SlotWidget{parent} {
 
 void SpinBoxWidget::render(Renderer& renderer) {
     m_settled = true;
-    SlotWidget::render(renderer);
+    Control::render(renderer);
 }
 
 void SpinBoxWidget::setValue(int newValue) {
@@ -101,7 +101,7 @@ void SpinBoxWidget::setValue(int newValue) {
 }
 
 void SpinBoxWidget::adjustValue(int delta) {
-    if (!m_enabled.get())
+    if (!enabled())
         return;
     setValue(m_value.get() + delta);
 }
@@ -123,7 +123,7 @@ void SpinBoxWidget::updateDisplayedValue() {
 }
 
 void SpinBoxWidget::updateEnabled() {
-    const bool value = m_enabled.get();
+    const bool value = enabled();
     if (m_field)
         m_field->enabled(value);
     if (m_upButton)
@@ -133,7 +133,7 @@ void SpinBoxWidget::updateEnabled() {
 }
 
 void SpinBoxWidget::updateColor(bool animate) {
-    const bool isEnabled = m_enabled.get();
+    const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 
     const Paint& border = !isEnabled ? m_disabledBorderColor.get()

@@ -3,25 +3,16 @@
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
-#include <tavoos/widget/slotwidget.h>
+#include <tavoos/widget/control.h>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT ButtonBase : public SlotWidget {
+class TAVOOS_EXPORT ButtonBase : public Control {
 public:
     ButtonBase(Object* parent);
 
-    decltype(auto) enabled(this auto&& self, PropertyArg<bool> enabled) {
-        enabled.applyTo(self.m_enabled);
-        return std::forward<decltype(self)>(self);
-    }
-
-    bool enabled() const { return m_enabled; }
-    bool hovered() const { return m_hovered; }
     bool pressed() const { return m_pressed; }
 
-    State<bool>& enabledState() { return m_enabledState; }
-    State<bool>& hoveredState() { return m_hovered; }
     State<bool>& pressedState() { return m_pressed; }
 
 protected:
@@ -32,7 +23,6 @@ protected:
     virtual void handleClick(MouseEvent& event);
     void triggerPress(MouseEvent& event) override;
     void triggerRelease(MouseEvent& event) override;
-    void triggerMouseEnter(MouseEvent& event) override;
     void triggerMouseLeave(MouseEvent& event) override;
     void triggerKeyPress(KeyEvent& event) override;
     void triggerKeyRelease(KeyEvent& event) override;
@@ -42,9 +32,6 @@ private:
     void sendClick(float x, float y, KeyModifier modifiers);
     void sendClickFromKeyboard(KeyModifier modifiers);
 
-    Property<bool> m_enabled{true};
-    State<bool> m_enabledState{true};
-    State<bool> m_hovered{false};
     State<bool> m_pressed{false};
     bool m_spaceDown{false};
 };

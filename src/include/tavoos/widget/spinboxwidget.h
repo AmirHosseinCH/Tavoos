@@ -4,7 +4,7 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/buttonwidget.h>
-#include <tavoos/widget/slotwidget.h>
+#include <tavoos/widget/control.h>
 #include <tavoos/widget/style/spinboxstyle.h>
 #include <tavoos/widget/textfieldwidget.h>
 
@@ -13,7 +13,7 @@
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT SpinBoxWidget : public SlotWidget {
+class TAVOOS_EXPORT SpinBoxWidget : public Control {
 public:
     SpinBoxWidget(Object* parent);
 
@@ -34,11 +34,6 @@ public:
 
     decltype(auto) step(this auto&& self, PropertyArg<int> value) {
         value.applyTo(self.m_step);
-        return std::forward<decltype(self)>(self);
-    }
-
-    decltype(auto) enabled(this auto&& self, PropertyArg<bool> value) {
-        value.applyTo(self.m_enabled);
         return std::forward<decltype(self)>(self);
     }
 
@@ -102,7 +97,6 @@ public:
     int minValue() const { return m_minValue; }
     int maxValue() const { return m_maxValue; }
     int step() const { return m_step; }
-    bool enabled() const { return m_enabled; }
     Paint backgroundColor() const { return m_backgroundColor; }
     Paint borderColor() const { return m_borderColor; }
     Paint focusedBorderColor() const { return m_focusedBorderColor; }
@@ -136,7 +130,6 @@ private:
     Property<int> m_minValue{0};
     Property<int> m_maxValue{100};
     Property<int> m_step{1};
-    Property<bool> m_enabled{true};
 
     Property<Paint> m_backgroundColor{Color::White};
     Property<Paint> m_borderColor{Color::rgba(205, 208, 218)};
