@@ -65,6 +65,18 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) xFraction(this auto&& self, PropertyArg<float> fraction) {
+        fraction.applyTo(self.m_xFraction);
+        self.m_alignment.set(withoutFlag(self.m_alignment.get(), HorizontalAlignment));
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) yFraction(this auto&& self, PropertyArg<float> fraction) {
+        fraction.applyTo(self.m_yFraction);
+        self.m_alignment.set(withoutFlag(self.m_alignment.get(), VerticalAlignment));
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) rotation(this auto&& self, PropertyArg<float> rotation) {
         rotation.applyTo(self.m_rotation);
         return std::forward<decltype(self)>(self);
@@ -318,6 +330,8 @@ public:
     int height() const { return m_height; }
     float widthFraction() const { return m_widthFraction; }
     float heightFraction() const { return m_heightFraction; }
+    float xFraction() const { return m_xFraction; }
+    float yFraction() const { return m_yFraction; }
 
     float rotation() const { return m_rotation; }
     float scale() const { return m_scale; }
@@ -502,6 +516,8 @@ private:
     Property<int> m_width, m_height;
     Property<float> m_widthFraction{-1.0f};
     Property<float> m_heightFraction{-1.0f};
+    Property<float> m_xFraction{-1.0f};
+    Property<float> m_yFraction{-1.0f};
     Property<float> m_rotation{0.0f};
     Property<float> m_scale{1.0f};
     Property<Alignment> m_alignment{Alignment::None};
