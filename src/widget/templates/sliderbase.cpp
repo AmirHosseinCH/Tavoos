@@ -7,20 +7,9 @@
 
 namespace Tavoos {
 
-namespace {
-
-}
-
-SliderBase::SliderBase(Object* parent) : Control{parent} {
-    m_value.onChange([this](const int& value) {
-        m_valueState.setIfChanged(value);
-        updatePosition();
-    });
-    m_minValue.onChange([this](const int&) { updatePosition(); });
-    m_maxValue.onChange([this](const int&) { updatePosition(); });
+SliderBase::SliderBase(Object* parent) : RangeBase{parent} {
     enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
     focusable(true);
-    updatePosition();
 }
 
 bool SliderBase::hasHandlerFor(EventType type) {
@@ -43,7 +32,7 @@ void SliderBase::triggerPress(MouseEvent& event) {
     if (event.button() == MouseButton::Left) {
         m_pressed.setIfChanged(true);
         if (!pointOnHandle(event.x()))
-            m_value.set(valueFromPosition(event.x()));
+            commitValue(valueFromPosition(event.x()));
     }
     Widget::triggerPress(event);
 }
@@ -59,7 +48,7 @@ void SliderBase::triggerRelease(MouseEvent& event) {
 
 void SliderBase::triggerDragStart(DragEvent& event) {
     if (enabled())
-        m_dragStartValue = m_value.get();
+        m_dragStartValue = value();
     Widget::triggerDragStart(event);
 }
 
@@ -67,10 +56,10 @@ void SliderBase::triggerDragMove(DragEvent& event) {
     if (!enabled())
         return;
 
-    const long long span = detail::spanOf(m_minValue.get(), m_maxValue.get());
+    const long long span = detail::spanOf(minValue(), maxValue());
     const double valuePerPixel = static_cast<double>(span) / static_cast<double>(travel());
     const long long newValue = static_cast<long long>(m_dragStartValue) + std::llround(event.totalDx() * valuePerPixel);
-    m_value.set(static_cast<int>(detail::clampToRange(newValue, m_minValue.get(), m_maxValue.get())));
+    commitValue(newValue);
     Widget::triggerDragMove(event);
 }
 
@@ -85,21 +74,15 @@ float SliderBase::travel() const {
 }
 
 int SliderBase::valueFromPosition(float x) const {
-    const long long minV = m_minValue.get();
-    const long long span = detail::spanOf(minV, m_maxValue.get());
+    const long long minV = minValue();
+    const long long span = detail::spanOf(minV, maxValue());
     const float handleWidth = m_handle ? m_handle->displayedWidth() : 0.0f;
     const double fraction = std::clamp((x - handleWidth * 0.5f) / travel(), 0.0f, 1.0f);
-    return static_cast<int>(detail::clampToRange(minV + std::llround(fraction * static_cast<double>(span)), minV, m_maxValue.get()));
+    return static_cast<int>(detail::clampToRange(minV + std::llround(fraction * static_cast<double>(span)), minV, maxValue()));
 }
 
 bool SliderBase::pointOnHandle(float x) const {
     return m_handle && x >= m_handle->resolvedX() && x <= m_handle->resolvedX() + m_handle->displayedWidth();
-}
-
-void SliderBase::updatePosition() {
-    const float fraction = detail::fractionInRange(m_value.get(), m_minValue.get(), m_maxValue.get());
-
-    m_position.setIfChanged(fraction);
 }
 
 }

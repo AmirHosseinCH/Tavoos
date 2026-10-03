@@ -6,21 +6,18 @@
 
 namespace Tavoos {
 
-SpinBoxBase::SpinBoxBase(Object* parent) : Control{parent} {
-    m_value.onChange([this](const int&) { syncValue(); });
-    m_minValue.onChange([this](const int&) { syncValue(); });
-    m_maxValue.onChange([this](const int&) { syncValue(); });
-    syncValue();
+SpinBoxBase::SpinBoxBase(Object* parent) : RangeBase{parent} {
+    refreshValueText();
 }
 
 void SpinBoxBase::increase() {
     if (enabled())
-        setValue(static_cast<long long>(m_value.get()) + m_step.get());
+        setValue(static_cast<long long>(value()) + m_step.get());
 }
 
 void SpinBoxBase::decrease() {
     if (enabled())
-        setValue(static_cast<long long>(m_value.get()) - m_step.get());
+        setValue(static_cast<long long>(value()) - m_step.get());
 }
 
 void SpinBoxBase::commitText(const std::string& text) {
@@ -28,26 +25,27 @@ void SpinBoxBase::commitText(const std::string& text) {
     const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed);
     const bool valid = result.ec == std::errc{} && result.ptr == text.data() + text.size();
     if (!valid) {
-        syncValue();
+        refreshValueText();
         return;
     }
     setValue(parsed);
 }
 
 void SpinBoxBase::setValue(long long newValue) {
-    const int clamped = static_cast<int>(detail::clampToRange(newValue, m_minValue.get(), m_maxValue.get()));
-    if (clamped == m_value.get()) {
-        syncValue();
+    if (!commitValue(newValue)) {
+        refreshValueText();
         return;
     }
-    m_value.set(clamped);
     if (m_onValueChange)
-        m_onValueChange(clamped);
+        m_onValueChange(value());
 }
 
-void SpinBoxBase::syncValue() {
-    m_valueState.setIfChanged(m_value.get());
-    m_valueText.set(std::to_string(detail::clampToRange(m_value.get(), m_minValue.get(), m_maxValue.get())));
+void SpinBoxBase::onRangeChanged() {
+    refreshValueText();
+}
+
+void SpinBoxBase::refreshValueText() {
+    m_valueText.set(std::to_string(detail::clampToRange(value(), minValue(), maxValue())));
 }
 
 }
