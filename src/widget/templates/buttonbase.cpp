@@ -2,18 +2,9 @@
 
 namespace Tavoos {
 
-namespace {
-
-void assign(State<bool>& state, bool value) {
-    if (state.get() != value)
-        state.set(value);
-}
-
-}
-
 ButtonBase::ButtonBase(Object* parent) : Control{parent} {
     enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
-    m_checked.onChange([this](const bool& checked) { assign(m_checkedState, checked); });
+    m_checked.onChange([this](const bool& checked) { m_checkedState.setIfChanged(checked); });
     focusable(true);
 }
 
@@ -24,7 +15,7 @@ ButtonBase::~ButtonBase() {
 
 void ButtonBase::onSlotReplaced() {
     Control::onSlotReplaced();
-    assign(m_pressed, false);
+    m_pressed.setIfChanged(false);
 }
 
 bool ButtonBase::hasHandlerFor(EventType type) {
@@ -60,7 +51,7 @@ void ButtonBase::handleClick(MouseEvent& event) {
 }
 
 void ButtonBase::triggerMouseLeave(MouseEvent& event) {
-    assign(m_pressed, false);
+    m_pressed.setIfChanged(false);
     Control::triggerMouseLeave(event);
 }
 
@@ -68,9 +59,9 @@ void ButtonBase::triggerPress(MouseEvent& event) {
     if (!enabled())
         return;
 
-    assign(hoveredState(), true);
+    hoveredState().setIfChanged(true);
     if (event.button() == MouseButton::Left)
-        assign(m_pressed, true);
+        m_pressed.setIfChanged(true);
     Widget::triggerPress(event);
 }
 
@@ -81,7 +72,7 @@ void ButtonBase::triggerRelease(MouseEvent& event) {
     Widget::triggerRelease(event);
 
     if (event.button() == MouseButton::Left)
-        assign(m_pressed, false);
+        m_pressed.setIfChanged(false);
 
     if (hovered() && event.button() == MouseButton::Left)
         sendClick(event.x(), event.y(), event.modifiers());
@@ -94,7 +85,7 @@ void ButtonBase::triggerKeyPress(KeyEvent& event) {
     const int key = event.keyCode();
     if (key == static_cast<int>(Key::Space)) {
         m_spaceDown = true;
-        assign(m_pressed, true);
+        m_pressed.setIfChanged(true);
     } else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter)) {
         sendClickFromKeyboard(event.modifiers());
     } else {
@@ -114,14 +105,14 @@ void ButtonBase::triggerKeyRelease(KeyEvent& event) {
     }
 
     m_spaceDown = false;
-    assign(m_pressed, false);
+    m_pressed.setIfChanged(false);
     Widget::triggerKeyRelease(event);
     sendClickFromKeyboard(event.modifiers());
 }
 
 void ButtonBase::triggerFocusOut(Event& event) {
     m_spaceDown = false;
-    assign(m_pressed, false);
+    m_pressed.setIfChanged(false);
     Widget::triggerFocusOut(event);
 }
 

@@ -9,17 +9,11 @@ namespace Tavoos {
 
 namespace {
 
-void assign(State<bool>& state, bool value) {
-    if (state.get() != value)
-        state.set(value);
-}
-
 }
 
 SliderBase::SliderBase(Object* parent) : Control{parent} {
     m_value.onChange([this](const int& value) {
-        if (m_valueState.get() != value)
-            m_valueState.set(value);
+        m_valueState.setIfChanged(value);
         updatePosition();
     });
     m_minValue.onChange([this](const int&) { updatePosition(); });
@@ -47,7 +41,7 @@ void SliderBase::triggerPress(MouseEvent& event) {
         return;
 
     if (event.button() == MouseButton::Left) {
-        assign(m_pressed, true);
+        m_pressed.setIfChanged(true);
         if (!pointOnHandle(event.x()))
             m_value.set(valueFromPosition(event.x()));
     }
@@ -59,7 +53,7 @@ void SliderBase::triggerRelease(MouseEvent& event) {
         return;
 
     if (event.button() == MouseButton::Left)
-        assign(m_pressed, false);
+        m_pressed.setIfChanged(false);
     Widget::triggerRelease(event);
 }
 
@@ -81,7 +75,7 @@ void SliderBase::triggerDragMove(DragEvent& event) {
 }
 
 void SliderBase::triggerDragEnd(DragEvent& event) {
-    assign(m_pressed, false);
+    m_pressed.setIfChanged(false);
     Widget::triggerDragEnd(event);
 }
 
@@ -105,8 +99,7 @@ bool SliderBase::pointOnHandle(float x) const {
 void SliderBase::updatePosition() {
     const float fraction = detail::fractionInRange(m_value.get(), m_minValue.get(), m_maxValue.get());
 
-    if (m_position.get() != fraction)
-        m_position.set(fraction);
+    m_position.setIfChanged(fraction);
 }
 
 }

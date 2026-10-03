@@ -2,17 +2,8 @@
 
 namespace Tavoos {
 
-namespace {
-
-void assign(State<bool>& state, bool value) {
-    if (state.get() != value)
-        state.set(value);
-}
-
-}
-
 Control::Control(Object* parent) : Widget{parent} {
-    m_enabled.onChange([this](const bool& enabled) { assign(m_enabledState, enabled); });
+    m_enabled.onChange([this](const bool& enabled) { m_enabledState.setIfChanged(enabled); });
 }
 
 void Control::render(Renderer& renderer) {
@@ -42,17 +33,17 @@ bool Control::hasHandlerFor(EventType type) {
 }
 
 void Control::triggerMouseEnter(MouseEvent& event) {
-    assign(m_hovered, true);
+    m_hovered.setIfChanged(true);
     Widget::triggerMouseEnter(event);
 }
 
 void Control::triggerMouseLeave(MouseEvent& event) {
-    assign(m_hovered, false);
+    m_hovered.setIfChanged(false);
     Widget::triggerMouseLeave(event);
 }
 
 void Control::onSlotReplaced() {
-    assign(m_hovered, false);
+    m_hovered.setIfChanged(false);
 }
 
 void Control::replaceSlot(Widget*& slot) {

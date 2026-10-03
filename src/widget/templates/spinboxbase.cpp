@@ -46,8 +46,7 @@ void SpinBoxBase::setValue(long long newValue) {
 }
 
 void SpinBoxBase::syncValue() {
-    if (m_valueState.get() != m_value.get())
-        m_valueState.set(m_value.get());
+    m_valueState.setIfChanged(m_value.get());
     m_valueText.set(std::to_string(detail::clampToRange(m_value.get(), m_minValue.get(), m_maxValue.get())));
 }
 
