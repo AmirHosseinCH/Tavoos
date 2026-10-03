@@ -1718,8 +1718,8 @@ itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful 
 `Widget::triggerFocusIn`/`triggerFocusOut` update reactive state by default:
 
 ```cpp
-virtual void triggerFocusIn(Event& event)  { assign(m_focused, true);  if (m_onFocusIn) m_onFocusIn(event); }
-virtual void triggerFocusOut(Event& event) { assign(m_focused, false); if (m_onFocusOut) m_onFocusOut(event); }
+virtual void triggerFocusIn(Event& event)  { m_focused.setIfChanged(true);  if (m_onFocusIn) m_onFocusIn(event); }
+virtual void triggerFocusOut(Event& event) { m_focused.setIfChanged(false); if (m_onFocusOut) m_onFocusOut(event); }
 ```
 
 exposed as `bool focused() const` / `State<bool>& focusedState()`. A click focuses the

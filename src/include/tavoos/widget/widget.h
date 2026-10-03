@@ -438,14 +438,12 @@ protected:
     virtual void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
     virtual void triggerTextInput(KeyEvent& event)     { if (m_onTextInput) m_onTextInput(event); }
     virtual void triggerFocusIn(Event& event) {
-        if (!m_focused.get())
-            m_focused.set(true);
+        m_focused.setIfChanged(true);
         if (m_onFocusIn)
             m_onFocusIn(event);
     }
     virtual void triggerFocusOut(Event& event) {
-        if (m_focused.get())
-            m_focused.set(false);
+        m_focused.setIfChanged(false);
         if (m_onFocusOut)
             m_onFocusOut(event);
     }
