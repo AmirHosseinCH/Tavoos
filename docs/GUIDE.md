@@ -497,7 +497,7 @@ value if what you typed doesn't parse as an integer; the up/down buttons commit 
 ## Theme & styling
 
 Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle` - one plain struct
-per control in `tavoos/widget/style/`) has a matching entry on the app-wide theme:
+per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
 Tavoos::Application::instance()->theme().button.set(Tavoos::ButtonStyle{
@@ -525,7 +525,8 @@ sticks until you explicitly call `variant()` again.
 ## Custom controls
 
 Each behavior base owns the logic and exposes state; you supply the visuals as slot bodies that
-bind to it. Slot bodies position their own widgets - no base imposes alignment or layout on
+bind to it. The bases are in `tavoos/widget/templates/`; include
+`<tavoos/widget/templates/templates.h>` to get all of them. Slot bodies position their own widgets - no base imposes alignment or layout on
 what you give it.
 
 | Base | Owns | You provide |

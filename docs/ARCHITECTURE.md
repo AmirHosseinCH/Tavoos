@@ -1544,8 +1544,10 @@ SpinBox) is built in two layers: a **behavior base** that owns the state and int
 and a **concrete widget** that supplies only visuals and style. A custom control derives the
 base and fills in slots - it never reimplements toggling, dragging, stepping, or editing.
 Slot bodies decide their own layout; no base imposes alignment or position on what it's given.
+The bases live in `widget/templates/` (`templates/templates.h` includes them all) and the concrete
+widgets in `widget/controls/`, with their style structs in `widget/controls/style/`.
 
-**`Control`** (`src/include/tavoos/widget/control.h`) is the common root. It gives a widget two
+**`Control`** (`src/include/tavoos/widget/templates/control.h`) is the common root. It gives a widget two
 replaceable children - `background` and `content` - plus `enabled()` and `hovered()`:
 
 ```cpp
@@ -1577,7 +1579,7 @@ itself focusable: only bases that are interactive set `focusable(true)`, and kee
 with `enabled()` themselves (a ProgressBar or a composite's container must not become a Tab
 stop just because it was re-enabled).
 
-**`ButtonBase`** (`buttonbase.h`) adds `pressed()`, click and keyboard activation, and the
+**`ButtonBase`** (`templates/buttonbase.h`) adds `pressed()`, click and keyboard activation, and the
 toggle state: `checkable()` (default `false`), `checked()`, `exclusive()`, and `group()`:
 
 ```cpp
@@ -1627,12 +1629,12 @@ handleClick(MouseEvent&)` hook to react to "a real click happened" regardless of
 rather than `triggerClick` (which `Window`'s own click dispatch also targets and would
 double-fire).
 
-**`ProgressBarBase`** (`progressbarbase.h`) owns `value`/`minValue`/`maxValue` and a normalized
+**`ProgressBarBase`** (`templates/progressbarbase.h`) owns `value`/`minValue`/`maxValue` and a normalized
 `position` (0-1) published as `positionState()`. It has no visuals; a concrete bar binds its fill
 to the position, e.g. `fill.widthFraction(positionState())`, and layout does the pixel math
 (see [`Widget::layout()`](#widgetlayout---the-non-layouter-default)).
 
-**`SliderBase`** (`sliderbase.h`) owns the same range plus `position`, `pressed`, and a `handle`
+**`SliderBase`** (`templates/sliderbase.h`) owns the same range plus `position`, `pressed`, and a `handle`
 slot. Interaction lives entirely in the base: press, release, and drag events bubble up from
 whichever child was hit (the handle or the track), and the base claims them in `hasHandlerFor`,
 so no child needs a callback. Pressing the track sets the value, pressing the handle does not
@@ -1657,7 +1659,7 @@ time. The `handle` slot only registers the widget (so the base knows its size an
 concrete slider positions it, binding `xFraction(positionState())` so the handle tracks the
 value.
 
-**`SpinBoxBase`** (`spinboxbase.h`) owns `value`/`minValue`/`maxValue`/`step`, `increase()`/
+**`SpinBoxBase`** (`templates/spinboxbase.h`) owns `value`/`minValue`/`maxValue`/`step`, `increase()`/
 `decrease()`, and `commitText(string)`, which parses typed input, clamps it, and commits it - an
 unparseable entry re-notifies `valueTextState()` with the current text so the display reverts.
 It has `up` and `down` slots; the base attaches the click handler that adjusts the value to
@@ -1665,7 +1667,7 @@ whatever widget is installed (a button swallows clicks, so a position test on bu
 would never see them). The content item, typically a text field, binds to `valueTextState()` and
 calls `commitText`; the base knows nothing about `TextField`.
 
-**`TextFieldBase`** (`textfieldbase.h`) follows the QML `TextField` model instead of exposing
+**`TextFieldBase`** (`templates/textfieldbase.h`) follows the QML `TextField` model instead of exposing
 slots: the user supplies only a `background`, and the base builds its own clipped viewport, text
 item, placeholder, and caret internally, owning all editing - insert, delete, cursor movement,
 click-to-position, horizontal scrolling, and the caret blink (see the note on private
@@ -1812,7 +1814,7 @@ held at drag start - nothing sets `draggable(true)`.
 
 ### Theme and style structs
 
-Each control has a plain aggregate `*Style` struct (`widget/style/*.h` - `ButtonStyle`,
+Each control has a plain aggregate `*Style` struct (`widget/controls/style/*.h` - `ButtonStyle`,
 `CheckboxStyle`, `TextFieldStyle`, ...) holding every themeable value with a sensible default,
 and a matching `State<XStyle>` member on `Theme` (`theme.h`), owned by `Application` and
 reached via `Application::instance()->theme()`. Every control exposes the same two-overload
