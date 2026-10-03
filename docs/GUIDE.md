@@ -388,8 +388,8 @@ private:
 | Property | Type | Notes |
 |---|---|---|
 | `checked()`, `checkedState()`, `group(ButtonGroup&)` | - | Inherited from `ButtonBase`. |
-| `unselectedColor()`, `selectedColor()`, `disabledColor()` | `Paint` |
-| `unselectedBorderColor()`, `selectedBorderColor()`, `disabledBorderColor()` | `Paint` |
+| `uncheckedColor()`, `checkedColor()`, `disabledColor()` | `Paint` |
+| `uncheckedBorderColor()`, `checkedBorderColor()`, `disabledBorderColor()` | `Paint` |
 | `radius()` | `int` - defaults to a perfect circle (`size/2`), tracked automatically across resizes until you call `radius()` explicitly. |
 | `transition()` | `float` |
 

@@ -13,13 +13,13 @@ class TAVOOS_EXPORT RadioWidget : public ButtonBase {
 public:
     RadioWidget(Object* parent);
 
-    decltype(auto) unselectedColor(this auto&& self, PropertyArg<Paint> color) {
-        color.applyTo(self.m_unselectedColor);
+    decltype(auto) uncheckedColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_uncheckedColor);
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) selectedColor(this auto&& self, PropertyArg<Paint> color) {
-        color.applyTo(self.m_selectedColor);
+    decltype(auto) checkedColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_checkedColor);
         return std::forward<decltype(self)>(self);
     }
 
@@ -28,13 +28,13 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) unselectedBorderColor(this auto&& self, PropertyArg<Paint> color) {
-        color.applyTo(self.m_unselectedBorderColor);
+    decltype(auto) uncheckedBorderColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_uncheckedBorderColor);
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) selectedBorderColor(this auto&& self, PropertyArg<Paint> color) {
-        color.applyTo(self.m_selectedBorderColor);
+    decltype(auto) checkedBorderColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_checkedBorderColor);
         return std::forward<decltype(self)>(self);
     }
 
@@ -64,17 +64,17 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    Paint unselectedColor() const { return m_unselectedColor; }
-    Paint selectedColor() const { return m_selectedColor; }
+    Paint uncheckedColor() const { return m_uncheckedColor; }
+    Paint checkedColor() const { return m_checkedColor; }
     Paint disabledColor() const { return m_disabledColor; }
-    Paint unselectedBorderColor() const { return m_unselectedBorderColor; }
-    Paint selectedBorderColor() const { return m_selectedBorderColor; }
+    Paint uncheckedBorderColor() const { return m_uncheckedBorderColor; }
+    Paint checkedBorderColor() const { return m_checkedBorderColor; }
     Paint disabledBorderColor() const { return m_disabledBorderColor; }
     int radius() const { return m_radius; }
     float transition() const { return m_transition; }
     RadioStyle style() const {
-        return { m_unselectedColor.get(), m_selectedColor.get(), m_disabledColor.get(),
-                 m_unselectedBorderColor.get(), m_selectedBorderColor.get(), m_disabledBorderColor.get(),
+        return { m_uncheckedColor.get(), m_checkedColor.get(), m_disabledColor.get(),
+                 m_uncheckedBorderColor.get(), m_checkedBorderColor.get(), m_disabledBorderColor.get(),
                  m_radius.get(), m_transition.get() };
     }
 
@@ -87,11 +87,11 @@ private:
     void updateGeometry();
     void applyStyle(const RadioStyle& style);
 
-    Property<Paint> m_unselectedColor{Color::Transparent};
-    Property<Paint> m_selectedColor{Color::rgba(85, 112, 241)};
+    Property<Paint> m_uncheckedColor{Color::Transparent};
+    Property<Paint> m_checkedColor{Color::rgba(85, 112, 241)};
     Property<Paint> m_disabledColor{Color::rgba(228, 229, 235)};
-    Property<Paint> m_unselectedBorderColor{Color::rgba(205, 208, 218)};
-    Property<Paint> m_selectedBorderColor{Color::rgba(109, 125, 205)};
+    Property<Paint> m_uncheckedBorderColor{Color::rgba(205, 208, 218)};
+    Property<Paint> m_checkedBorderColor{Color::rgba(109, 125, 205)};
     Property<Paint> m_disabledBorderColor{Color::rgba(220, 222, 230)};
     BindableState<int> m_radius{10};
     bool m_radiusOverridden{false};
