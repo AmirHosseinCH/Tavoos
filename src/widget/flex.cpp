@@ -15,7 +15,7 @@ FlexWidget::FlexMetrics FlexWidget::computeMetrics(float availableMainSpace) con
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()))
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
             items.push_back(w);
 
     const bool horizontalMain = (m_direction.get() == FlexDirection::Row);

@@ -21,7 +21,7 @@ Widget::Widget(Object* parent) : Object{parent} {
     else if (auto* window = dynamic_cast<Window*>(parent))
         m_ownerWindow = window;
 
-    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_xFraction, m_yFraction, m_alignment, m_fill,
+    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_xFraction, m_yFraction, m_visible, m_alignment, m_fill,
                          m_padding.leftProperty(), m_padding.topProperty(),
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
