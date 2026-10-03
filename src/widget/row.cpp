@@ -18,7 +18,7 @@ void RowWidget::layout(bool force) {
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()))
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
             items.push_back(w);
 
     std::vector<Size> itemSizes;
@@ -116,7 +116,7 @@ Widget::Size RowWidget::computeIntrinsicSize() {
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()))
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
             items.push_back(w);
 
     float totalW = 0.0f, maxH = 0.0f;
