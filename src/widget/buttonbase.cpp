@@ -39,8 +39,18 @@ void ButtonBase::triggerClick(MouseEvent&) {
 }
 
 void ButtonBase::handleClick(MouseEvent& event) {
-    if (m_checkable && enabled())
-        m_checked.set(!m_checked.get());
+    if (m_checkable && enabled()) {
+        if (m_group || m_exclusive) {
+            if (!m_checked.get()) {
+                if (m_group)
+                    m_group->select(this);
+                else
+                    m_checked.set(true);
+            }
+        } else {
+            m_checked.set(!m_checked.get());
+        }
+    }
     Widget::triggerClick(event);
 }
 

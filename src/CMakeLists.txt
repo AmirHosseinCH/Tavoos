@@ -22,7 +22,7 @@ set(TAVOOS_SOURCES
     widget/buttonbase.cpp
     widget/buttonwidget.cpp
     widget/checkboxwidget.cpp
-    widget/radiogroup.cpp
+    widget/buttongroup.cpp
     widget/radiowidget.cpp
     widget/switchwidget.cpp
     widget/progressbarwidget.cpp
@@ -67,7 +67,7 @@ target_sources(Tavoos
     include/tavoos/widget/buttonbase.h
     include/tavoos/widget/buttonwidget.h
     include/tavoos/widget/checkboxwidget.h
-    include/tavoos/widget/radiogroup.h
+    include/tavoos/widget/buttongroup.h
     include/tavoos/widget/radiowidget.h
     include/tavoos/widget/switchwidget.h
     include/tavoos/widget/progressbarwidget.h

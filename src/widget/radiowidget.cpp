@@ -17,11 +17,9 @@ RadioWidget::RadioWidget(Object* parent) : ButtonBase{parent} {
     m_contentColorOut.set(m_selectedColor.get());
     m_borderColorOut.set(m_unselectedBorderColor.get());
 
-    m_selected.onChange([this](const bool& selected) {
-        if (m_selectedState.get() != selected)
-            m_selectedState.set(selected);
-        updateColor(true);
-    });
+    checkable(true);
+    exclusive(true);
+    checkedState().onChange([this](const bool&) { updateColor(true); });
     enabledState().onChange([this](const bool&) { updateColor(true); });
 
     m_unselectedColor.onChange([this](const Paint&) { updateColor(false); });
@@ -56,18 +54,8 @@ void RadioWidget::render(Renderer& renderer) {
     ButtonBase::render(renderer);
 }
 
-void RadioWidget::handleClick(MouseEvent& event) {
-    if (enabled() && !m_selected.get()) {
-        if (m_group)
-            m_group->select(this);
-        else
-            m_selected.set(true);
-    }
-    ButtonBase::handleClick(event);
-}
-
 void RadioWidget::updateColor(bool animate) {
-    const bool isSelected = m_selected.get();
+    const bool isSelected = checked();
     const bool isEnabled = enabled();
     const float duration = (animate && m_settled) ? m_transition.get() : 0.0f;
 

@@ -3,6 +3,7 @@
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
+#include <tavoos/widget/buttongroup.h>
 #include <tavoos/widget/control.h>
 
 namespace Tavoos {
@@ -16,6 +17,17 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) exclusive(this auto&& self, PropertyArg<bool> exclusive) {
+        exclusive.applyTo(self.m_exclusive);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) group(this auto&& self, ButtonGroup& group) {
+        self.m_group = &group;
+        group.add(&self);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) checked(this auto&& self, PropertyArg<bool> checked) {
         checked.applyTo(self.m_checked);
         return std::forward<decltype(self)>(self);
@@ -23,6 +35,7 @@ public:
 
     bool pressed() const { return m_pressed; }
     bool checkable() const { return m_checkable; }
+    bool exclusive() const { return m_exclusive; }
     bool checked() const { return m_checked; }
 
     State<bool>& pressedState() { return m_pressed; }
@@ -47,6 +60,8 @@ private:
 
     State<bool> m_pressed{false};
     Property<bool> m_checkable{false};
+    Property<bool> m_exclusive{false};
+    ButtonGroup* m_group{nullptr};
     Property<bool> m_checked{false};
     State<bool> m_checkedState{false};
     bool m_spaceDown{false};
