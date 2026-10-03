@@ -1,6 +1,6 @@
 #include <tavoos/widget/templates/progressbarbase.h>
 
-#include <algorithm>
+#include <tavoos/widget/templates/rangemath.h>
 
 namespace Tavoos {
 
@@ -16,10 +16,7 @@ ProgressBarBase::ProgressBarBase(Object* parent) : Control{parent} {
 }
 
 void ProgressBarBase::updatePosition() {
-    const int minV = m_minValue.get();
-    const int maxV = std::max(minV + 1, m_maxValue.get());
-    const int val = std::clamp(m_value.get(), minV, maxV);
-    const float fraction = static_cast<float>(val - minV) / static_cast<float>(maxV - minV);
+    const float fraction = detail::fractionInRange(m_value.get(), m_minValue.get(), m_maxValue.get());
 
     if (m_position.get() != fraction)
         m_position.set(fraction);

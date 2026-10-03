@@ -9,8 +9,11 @@
 namespace Tavoos {
 
 class TAVOOS_EXPORT ButtonBase : public Control {
+    friend class ButtonGroup;
+
 public:
     ButtonBase(Object* parent);
+    ~ButtonBase() override;
 
     decltype(auto) checkable(this auto&& self, PropertyArg<bool> checkable) {
         checkable.applyTo(self.m_checkable);
@@ -23,6 +26,8 @@ public:
     }
 
     decltype(auto) group(this auto&& self, ButtonGroup& group) {
+        if (self.m_group)
+            self.m_group->remove(&self);
         self.m_group = &group;
         group.add(&self);
         return std::forward<decltype(self)>(self);

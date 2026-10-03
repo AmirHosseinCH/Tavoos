@@ -1,5 +1,7 @@
 #include <tavoos/widget/templates/sliderbase.h>
 
+#include <tavoos/widget/templates/rangemath.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -71,11 +73,10 @@ void SliderBase::triggerDragMove(DragEvent& event) {
     if (!enabled())
         return;
 
-    const int minV = m_minValue.get();
-    const int maxV = std::max(minV + 1, m_maxValue.get());
-    const float valuePerPixel = static_cast<float>(maxV - minV) / travel();
-    const int newValue = m_dragStartValue + static_cast<int>(std::lround(event.totalDx() * valuePerPixel));
-    m_value.set(std::clamp(newValue, minV, maxV));
+    const long long span = detail::spanOf(m_minValue.get(), m_maxValue.get());
+    const double valuePerPixel = static_cast<double>(span) / static_cast<double>(travel());
+    const long long newValue = static_cast<long long>(m_dragStartValue) + std::llround(event.totalDx() * valuePerPixel);
+    m_value.set(static_cast<int>(detail::clampToRange(newValue, m_minValue.get(), m_maxValue.get())));
     Widget::triggerDragMove(event);
 }
 
@@ -90,11 +91,11 @@ float SliderBase::travel() const {
 }
 
 int SliderBase::valueFromPosition(float x) const {
-    const int minV = m_minValue.get();
-    const int maxV = std::max(minV + 1, m_maxValue.get());
+    const long long minV = m_minValue.get();
+    const long long span = detail::spanOf(minV, m_maxValue.get());
     const float handleWidth = m_handle ? m_handle->displayedWidth() : 0.0f;
-    const float fraction = std::clamp((x - handleWidth * 0.5f) / travel(), 0.0f, 1.0f);
-    return minV + static_cast<int>(std::lround(fraction * static_cast<float>(maxV - minV)));
+    const double fraction = std::clamp((x - handleWidth * 0.5f) / travel(), 0.0f, 1.0f);
+    return static_cast<int>(detail::clampToRange(minV + std::llround(fraction * static_cast<double>(span)), minV, m_maxValue.get()));
 }
 
 bool SliderBase::pointOnHandle(float x) const {
@@ -102,10 +103,7 @@ bool SliderBase::pointOnHandle(float x) const {
 }
 
 void SliderBase::updatePosition() {
-    const int minV = m_minValue.get();
-    const int maxV = std::max(minV + 1, m_maxValue.get());
-    const int val = std::clamp(m_value.get(), minV, maxV);
-    const float fraction = static_cast<float>(val - minV) / static_cast<float>(maxV - minV);
+    const float fraction = detail::fractionInRange(m_value.get(), m_minValue.get(), m_maxValue.get());
 
     if (m_position.get() != fraction)
         m_position.set(fraction);

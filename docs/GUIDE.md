@@ -371,12 +371,18 @@ A selectable dot: a `ButtonBase` that is `checkable` and `exclusive`, so a click
 checks it. Mutual exclusion is explicit - nothing is auto-grouped by proximity:
 
 ```cpp
-Tavoos::ButtonGroup group;
+class SettingsWindow : public Tavoos::Window {
+public:
+    void build() override {
+        TB::Column([this](Tavoos::ColumnWidget& col) {
+            TB::Radio([this](Tavoos::RadioWidget& r) { r.group(m_group).checked(true); });
+            TB::Radio([this](Tavoos::RadioWidget& r) { r.group(m_group); });
+        });
+    }
 
-TB::Column([&](Tavoos::ColumnWidget& col) {
-    TB::Radio([&](Tavoos::RadioWidget& r) { r.group(group).checked(true); });
-    TB::Radio([&](Tavoos::RadioWidget& r) { r.group(group); });
-});
+private:
+    Tavoos::ButtonGroup m_group;
+};
 ```
 
 | Property | Type | Notes |
@@ -389,7 +395,10 @@ TB::Column([&](Tavoos::ColumnWidget& col) {
 
 `ButtonGroup::checked()` returns the currently checked `ButtonBase*` (or `nullptr`). A group works
 with any checkable button, not just radios - checkable `ButtonWidget`s in one group make a
-segmented control. It isn't a widget, just a coordinator you keep alive alongside its buttons.
+segmented control. It isn't a widget, just a coordinator: keep it alive as long as its buttons are
+in use - as a member next to the widgets, not a local inside `build()`. A button that is destroyed
+leaves its group automatically, and if the group is destroyed first its buttons simply become
+ungrouped.
 
 ### `SwitchWidget`
 
@@ -633,7 +642,10 @@ public:
         width(120).height(32);
         background([](Tavoos::RectangleWidget& box) { box.radius(4).color(Tavoos::Color::rgba(245, 245, 245)); });
         content<Tavoos::TextFieldWidget>([this](Tavoos::TextFieldWidget& field) {
-            field.fill(Tavoos::Fill::Both).marginRight(34);
+            field.fill(Tavoos::Fill::Both).marginRight(34)
+                .backgroundColor(Tavoos::Color::Transparent)
+                .disabledColor(Tavoos::Color::Transparent)
+                .borderWidth(0.0f);
             field.onSubmit([this](const std::string& text) { commitText(text); });
             valueTextState().onChange([&field](const std::string& text) { field.text(text); });
             field.text(valueText());

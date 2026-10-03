@@ -90,7 +90,7 @@ private:
         });
     }
 
-    void setValue(int newValue);
+    void setValue(long long newValue);
     void syncValue();
 
     Property<int> m_value{0};

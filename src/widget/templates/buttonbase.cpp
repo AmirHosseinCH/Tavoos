@@ -17,6 +17,11 @@ ButtonBase::ButtonBase(Object* parent) : Control{parent} {
     focusable(true);
 }
 
+ButtonBase::~ButtonBase() {
+    if (m_group)
+        m_group->remove(this);
+}
+
 void ButtonBase::onSlotReplaced() {
     Control::onSlotReplaced();
     assign(m_pressed, false);

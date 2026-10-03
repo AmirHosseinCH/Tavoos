@@ -5,23 +5,53 @@
 
 namespace Tavoos {
 
+ButtonGroup::~ButtonGroup() {
+    for (const Member& member : m_members) {
+        member.button->checkedState().removeOnChange(member.callbackId);
+        member.button->m_group = nullptr;
+    }
+}
+
 void ButtonGroup::add(ButtonBase* button) {
-    if (std::find(m_buttons.begin(), m_buttons.end(), button) != m_buttons.end())
+    const auto existing = std::find_if(m_members.begin(), m_members.end(),
+                                       [button](const Member& member) { return member.button == button; });
+    if (existing != m_members.end())
         return;
 
-    m_buttons.push_back(button);
-    button->checkedState().onChange([this, button](const bool& isChecked) {
+    const std::size_t id = button->checkedState().onChange([this, button](const bool& isChecked) {
         if (isChecked)
             m_checked = button;
         else if (m_checked == button)
             m_checked = nullptr;
     });
+    m_members.push_back({button, id});
+
+    if (button->checked()) {
+        for (const Member& member : m_members) {
+            if (member.button != button)
+                member.button->checked(false);
+        }
+        m_checked = button;
+    }
+}
+
+void ButtonGroup::remove(ButtonBase* button) {
+    const auto member = std::find_if(m_members.begin(), m_members.end(),
+                                     [button](const Member& m) { return m.button == button; });
+    if (member == m_members.end())
+        return;
+
+    button->checkedState().removeOnChange(member->callbackId);
+    button->m_group = nullptr;
+    if (m_checked == button)
+        m_checked = nullptr;
+    m_members.erase(member);
 }
 
 void ButtonGroup::select(ButtonBase* button) {
-    for (ButtonBase* other : m_buttons) {
-        if (other != button)
-            other->checked(false);
+    for (const Member& member : m_members) {
+        if (member.button != button)
+            member.button->checked(false);
     }
     button->checked(true);
 }

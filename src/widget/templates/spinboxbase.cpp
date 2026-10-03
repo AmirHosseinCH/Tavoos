@@ -1,6 +1,7 @@
 #include <tavoos/widget/templates/spinboxbase.h>
 
-#include <algorithm>
+#include <tavoos/widget/templates/rangemath.h>
+
 #include <charconv>
 
 namespace Tavoos {
@@ -14,12 +15,12 @@ SpinBoxBase::SpinBoxBase(Object* parent) : Control{parent} {
 
 void SpinBoxBase::increase() {
     if (enabled())
-        setValue(m_value.get() + m_step.get());
+        setValue(static_cast<long long>(m_value.get()) + m_step.get());
 }
 
 void SpinBoxBase::decrease() {
     if (enabled())
-        setValue(m_value.get() - m_step.get());
+        setValue(static_cast<long long>(m_value.get()) - m_step.get());
 }
 
 void SpinBoxBase::commitText(const std::string& text) {
@@ -33,8 +34,8 @@ void SpinBoxBase::commitText(const std::string& text) {
     setValue(parsed);
 }
 
-void SpinBoxBase::setValue(int newValue) {
-    const int clamped = std::clamp(newValue, m_minValue.get(), m_maxValue.get());
+void SpinBoxBase::setValue(long long newValue) {
+    const int clamped = static_cast<int>(detail::clampToRange(newValue, m_minValue.get(), m_maxValue.get()));
     if (clamped == m_value.get()) {
         syncValue();
         return;
@@ -47,7 +48,7 @@ void SpinBoxBase::setValue(int newValue) {
 void SpinBoxBase::syncValue() {
     if (m_valueState.get() != m_value.get())
         m_valueState.set(m_value.get());
-    m_valueText.set(std::to_string(std::clamp(m_value.get(), m_minValue.get(), m_maxValue.get())));
+    m_valueText.set(std::to_string(detail::clampToRange(m_value.get(), m_minValue.get(), m_maxValue.get())));
 }
 
 }

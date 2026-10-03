@@ -1628,7 +1628,9 @@ Checkbox and Switch are `checkable(true)`; Radio is `checkable(true).exclusive(t
 Button is neither. In a `ButtonGroup` (or when `exclusive`) a click only ever checks, and
 `ButtonGroup::select` unchecks every other member - so any checkable button, not just a Radio,
 can be part of a mutually exclusive set (a segmented control is just checkable Buttons in a
-group). A group tracks its members' `checkedState()` to expose `checked()`, the current pick.
+group). A group tracks its members' `checkedState()` to expose `checked()`, the current pick, and
+keeps no dangling pointers: a button removes itself from its group when it is destroyed or moved to
+another group, and a destroyed group detaches its remaining members, which simply become ungrouped.
 
 `hasHandlerFor` claims press, release, click, and key events unconditionally, so a button always
 accepts them at the bubble step it's reached at (see [Bubbling](#bubbling)) and never lets a click
