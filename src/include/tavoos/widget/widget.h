@@ -461,6 +461,7 @@ protected:
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
     virtual ContentArea contentAreaFor(const Widget& child) const;
+    virtual void placeOverlay() {}
     bool parentIsLayouter() const;
     bool isSizeBoundary() const;
 

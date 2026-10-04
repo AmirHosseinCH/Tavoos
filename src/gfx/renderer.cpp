@@ -133,8 +133,10 @@ void Renderer::renderForWindow(Window& window) {
     }
 
     const std::vector<Widget*> overlays = window.overlays();
-    for (Widget* const overlay : overlays)
+    for (Widget* const overlay : overlays) {
+        overlay->placeOverlay();
         overlay->layout(true);
+    }
     for (Widget* const overlay : overlays) {
         if (overlay->visible())
             renderWidget(*overlay);
