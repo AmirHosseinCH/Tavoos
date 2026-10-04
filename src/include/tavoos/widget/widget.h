@@ -375,6 +375,8 @@ public:
     float displayedHeight() const { return m_displayedHeight; }
 
     virtual bool isLayouter() const { return false; }
+    virtual bool isOverlay() const { return false; }
+    bool participatesInLayout() const { return visible() && !isOverlay(); }
 
     struct Size { float width{0.0f}, height{0.0f}; };
     Size intrinsicSize();

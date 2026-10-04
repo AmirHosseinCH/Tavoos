@@ -132,6 +132,14 @@ void Renderer::renderForWindow(Window& window) {
             renderWidget(*widget);
     }
 
+    const std::vector<Widget*> overlays = window.overlays();
+    for (Widget* const overlay : overlays)
+        overlay->layout(true);
+    for (Widget* const overlay : overlays) {
+        if (overlay->visible())
+            renderWidget(*overlay);
+    }
+
     glfwSwapBuffers(window.handle());
 }
 

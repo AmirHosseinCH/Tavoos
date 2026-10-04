@@ -18,7 +18,7 @@ void ColumnWidget::layout(bool force) {
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->participatesInLayout())
             items.push_back(w);
 
     std::vector<Size> itemSizes;
@@ -116,7 +116,7 @@ Widget::Size ColumnWidget::computeIntrinsicSize() {
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->participatesInLayout())
             items.push_back(w);
 
     float totalH = 0.0f, maxW = 0.0f;

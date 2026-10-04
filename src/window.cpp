@@ -50,6 +50,18 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
         m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
         setFocusedWidget(nullptr);
+    std::erase_if(m_overlays, isOrDescendantOf);
+}
+
+void Window::addOverlay(Widget* overlay) {
+    removeOverlay(overlay);
+    m_overlays.push_back(overlay);
+    markDirty();
+}
+
+void Window::removeOverlay(Widget* overlay) {
+    if (std::erase(m_overlays, overlay) > 0)
+        markDirty();
 }
 
 void Window::deferDestruction(std::unique_ptr<Object> widget) {
@@ -156,6 +168,11 @@ Widget* Window::dispatchMouseBubble(Widget* start, MouseEvent& event, const Poin
 }
 
 Widget* Window::hitTestChildren(Window* self, double x, double y) {
+    for (auto it = self->m_overlays.rbegin(); it != self->m_overlays.rend(); ++it) {
+        if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+            return hit;
+    }
+
     const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
         if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))

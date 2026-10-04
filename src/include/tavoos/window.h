@@ -62,6 +62,10 @@ public:
     void setFocusedWidget(Widget* widget);
     void markDirty();
 
+    void addOverlay(Widget* overlay);
+    void removeOverlay(Widget* overlay);
+    const std::vector<Widget*>& overlays() const noexcept { return m_overlays; }
+
 protected:
     virtual void build() = 0;
 
@@ -106,6 +110,7 @@ private:
     Widget* m_hoveredWidget{nullptr};
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
+    std::vector<Widget*> m_overlays;
 
     bool m_dragging{false};
     Point m_dragStartPoint{};

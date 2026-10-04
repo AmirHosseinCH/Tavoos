@@ -50,12 +50,14 @@ void Widget::renderChildren(Renderer& renderer) {
         return;
 
     for (Widget* const widget : zOrderedChildren(*this)) {
-        if (widget->visible())
+        if (widget->visible() && !widget->isOverlay())
             renderer.renderWidget(*widget);
     }
 }
 
 bool Widget::parentIsLayouter() const {
+    if (isOverlay())
+        return false;
     auto* const parentWidget = dynamic_cast<Widget*>(parent());
     return parentWidget && parentWidget->isLayouter();
 }
@@ -72,6 +74,8 @@ Widget *Widget::hitTestTree(float px, float py) const {
 
     const std::vector<Widget*> ordered = zOrderedChildren(*this);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+        if ((*it)->isOverlay())
+            continue;
         if (auto* hit = (*it)->hitTestTree(px, py))
             return hit;
     }
@@ -170,6 +174,9 @@ void Widget::requestRelayout() {
     markLayoutDirty();
     m_intrinsicSizeCacheValid = false;
 
+    if (isOverlay())
+        return;
+
     auto* const parentWidget = dynamic_cast<Widget*>(parent());
     if (!parentWidget || !parentWidget->isLayouter())
         return;
@@ -190,7 +197,12 @@ bool Widget::consumeLayoutDirty() {
 
 Widget::ContentArea Widget::resolveContentArea() {
     ContentArea area{0, 0, 0, 0};
-    if (auto* const parentWidget = dynamic_cast<Widget*>(parent())) {
+    if (isOverlay()) {
+        if (m_ownerWindow) {
+            area.width  = static_cast<float>(m_ownerWindow->width());
+            area.height = static_cast<float>(m_ownerWindow->height());
+        }
+    } else if (auto* const parentWidget = dynamic_cast<Widget*>(parent())) {
         area.x = parentWidget->paddingLeft();
         area.y = parentWidget->paddingTop();
         area.width  = parentWidget->displayedWidth()  - parentWidget->paddingLeft() - parentWidget->paddingRight();
@@ -438,7 +450,7 @@ Point Widget::mapFromWindow(const Point& point) const {
 
 void Widget::updateWorldMatrix() {
     glm::mat4 parentWorld{1.0f};
-    if (auto* parentWidget = dynamic_cast<Widget*>(parent()))
+    if (auto* parentWidget = dynamic_cast<Widget*>(parent()); parentWidget && !isOverlay())
         parentWorld = parentWidget->worldMatrix();
     m_worldMatrix = parentWorld * localMatrix();
 }
