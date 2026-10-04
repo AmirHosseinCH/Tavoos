@@ -4,6 +4,7 @@
 #include <tavoos/widget/image.h>
 #include <tavoos/widget/rectangle.h>
 #include <tavoos/widget/svg.h>
+#include <tavoos/widget/templates/overlaybase.h>
 #include <tavoos/widget/text.h>
 #include <tavoos/widget/widget.h>
 #include <tavoos/window.h>
@@ -132,12 +133,12 @@ void Renderer::renderForWindow(Window& window) {
             renderWidget(*widget);
     }
 
-    const std::vector<Widget*> overlays = window.overlays();
-    for (Widget* const overlay : overlays) {
-        overlay->placeOverlay();
+    const std::vector<OverlayBase*> overlays = window.overlays();
+    for (OverlayBase* const overlay : overlays) {
+        overlay->place();
         overlay->layout(true);
     }
-    for (Widget* const overlay : overlays) {
+    for (OverlayBase* const overlay : overlays) {
         if (overlay->visible())
             renderWidget(*overlay);
     }

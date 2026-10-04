@@ -377,6 +377,7 @@ public:
 
     virtual bool isLayouter() const { return false; }
     virtual bool isOverlay() const { return false; }
+
     bool participatesInLayout() const { return visible() && !isOverlay(); }
 
     struct Size { float width{0.0f}, height{0.0f}; };
@@ -461,7 +462,6 @@ protected:
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
     virtual ContentArea contentAreaFor(const Widget& child) const;
-    virtual void placeOverlay() {}
     bool parentIsLayouter() const;
     bool isSizeBoundary() const;
 

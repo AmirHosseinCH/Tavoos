@@ -13,6 +13,7 @@ struct GLFWwindow;
 namespace Tavoos {
 
 class Widget;
+class OverlayBase;
 
 class TAVOOS_EXPORT Window : public Object {
     friend class Application;
@@ -62,9 +63,9 @@ public:
     void setFocusedWidget(Widget* widget);
     void markDirty();
 
-    void addOverlay(Widget* overlay);
-    void removeOverlay(Widget* overlay);
-    const std::vector<Widget*>& overlays() const noexcept { return m_overlays; }
+    void addOverlay(OverlayBase* overlay);
+    void removeOverlay(OverlayBase* overlay);
+    const std::vector<OverlayBase*>& overlays() const noexcept { return m_overlays; }
 
 protected:
     virtual void build() = 0;
@@ -110,7 +111,8 @@ private:
     Widget* m_hoveredWidget{nullptr};
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
-    std::vector<Widget*> m_overlays;
+    std::vector<OverlayBase*> m_overlays;
+    std::vector<std::pair<OverlayBase*, Widget*>> m_overlayFocus;
 
     bool m_dragging{false};
     Point m_dragStartPoint{};
