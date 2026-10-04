@@ -55,6 +55,12 @@ void Widget::renderChildren(Renderer& renderer) {
     }
 }
 
+Widget::ContentArea Widget::contentAreaFor(const Widget&) const {
+    return { paddingLeft(), paddingTop(),
+             displayedWidth()  - paddingLeft() - paddingRight(),
+             displayedHeight() - paddingTop()  - paddingBottom() };
+}
+
 bool Widget::parentIsLayouter() const {
     if (isOverlay())
         return false;
@@ -203,10 +209,7 @@ Widget::ContentArea Widget::resolveContentArea() {
             area.height = static_cast<float>(m_ownerWindow->height());
         }
     } else if (auto* const parentWidget = dynamic_cast<Widget*>(parent())) {
-        area.x = parentWidget->paddingLeft();
-        area.y = parentWidget->paddingTop();
-        area.width  = parentWidget->displayedWidth()  - parentWidget->paddingLeft() - parentWidget->paddingRight();
-        area.height = parentWidget->displayedHeight() - parentWidget->paddingTop()  - parentWidget->paddingBottom();
+        area = parentWidget->contentAreaFor(*this);
     } else if (auto* const window = dynamic_cast<Window*>(parent())) {
         area.width  = static_cast<float>(window->width());
         area.height = static_cast<float>(window->height());

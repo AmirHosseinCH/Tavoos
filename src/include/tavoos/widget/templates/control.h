@@ -40,6 +40,7 @@ public:
     unsigned contentRevision() const noexcept { return m_contentRevision; }
 
 protected:
+    const Widget* backgroundSlot() const noexcept { return m_background; }
     void render(Renderer& renderer) override;
     Size computeIntrinsicSize() override;
 

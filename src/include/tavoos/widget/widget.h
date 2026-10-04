@@ -355,6 +355,7 @@ public:
     float marginBottom() const { return m_margin.bottom(); }
 
     bool visible() const { return m_visible; }
+    Window* ownerWindow() const noexcept { return m_ownerWindow; }
     bool focusable() const { return m_focusable; }
     bool focused() const { return m_focused; }
     State<bool>& focusedState() { return m_focused; }
@@ -459,6 +460,7 @@ protected:
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
+    virtual ContentArea contentAreaFor(const Widget& child) const;
     bool parentIsLayouter() const;
     bool isSizeBoundary() const;
 
