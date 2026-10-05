@@ -32,6 +32,7 @@ quick-start example in [README.md](../README.md).
    - [`TextFieldWidget`](#textfieldwidget)
    - [`SpinBoxWidget`](#spinboxwidget)
    - [`PopupWidget`](#popupwidget)
+   - [`FlickAreaWidget`](#flickareawidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Dragging](#dragging)
@@ -568,9 +569,61 @@ reach the widget behind it; a modal one swallows it. Escape closes it when `Esca
 on the anchor itself counts as outside, so use `open()` in the anchor's click handler instead of
 toggling, or the popup closes on press and reopens on release.
 
+### `FlickAreaWidget`
+
+```cpp
+TB::FlickArea([](Tavoos::FlickAreaWidget& f) {
+    f.width(300).height(200).radius(12).backgroundColor(Tavoos::Color::rgba(245, 246, 250));
+    TB::Column([](Tavoos::ColumnWidget& c) {
+        c.fill(Tavoos::Fill::Width).spacing(8);
+        for (int i = 0; i < 20; ++i)
+            TB::Button([i](Tavoos::ButtonWidget& b) {
+                b.fill(Tavoos::Fill::Width).text("Item " + std::to_string(i));
+            });
+    });
+});
+```
+
+A clipped viewport onto content larger than itself. Children go inside it (there is no `content`
+slot) and it scrolls with the wheel, with the keyboard, and by dragging the content. It scrolls
+only on an axis where the content actually overflows, so content that fits is left alone. Built
+on `FlickAreaBase`.
+
+| Property | Type | Notes |
+|---|---|---|
+| `flickDirection()` | `FlickDirection` | `Horizontal`, `Vertical`, or both with `\|`. Default: both. Use it to lock an axis. |
+| `contentX()`, `contentY()` | `float` | The current offset. Setting it jumps there, clamped to the range. |
+| `contentXState()`, `contentYState()` | `State<float>&` | Reactive offsets. |
+| `contentWidth()`, `contentHeight()` | `float` | The content size. Set it to override; `0` means "from the children". |
+| `viewportWidth()`, `viewportHeight()`, `maxContentX()`, `maxContentY()` | `float` | Read-only: the visible size and how far each axis can scroll. |
+| `wheelStep()` | `float` | Pixels per wheel notch and per arrow key. Default 48. |
+| `dragScroll()` | `bool` | Drag the content with the mouse. Default on. |
+| `keyNavigation()` | `bool` | Arrows, Page Up/Down, Home/End. Default on. |
+| `scrollTo(x, y)`, `scrollBy(dx, dy)` | - | Move programmatically; clamped. |
+| `scrollToTop()`, `scrollToBottom()`, `scrollToLeft()`, `scrollToRight()` | - | Jump to an end. |
+| `onScroll(fn)` | `std::function<void(float, float)>` | Fired with the new offsets whenever they change. |
+| `background<W>(body)` | - | Replace the background. Its shape is also the clip shape. |
+| `backgroundColor()`, `radius()` | `Paint` / `int` | A larger radius rounds the clipped content too. |
+
+For sideways scrolling, set the content size or put children at an `x` beyond the view:
+
+```cpp
+TB::FlickArea([](Tavoos::FlickAreaWidget& strip) {
+    strip.width(300).height(120)
+        .flickDirection(Tavoos::FlickDirection::Horizontal)
+        .contentWidth(900);
+    TB::Rectangle([](Tavoos::RectangleWidget& r) { r.width(200).height(100).color(Tavoos::Color::Cyan); });
+    TB::Rectangle([](Tavoos::RectangleWidget& r) { r.width(200).height(100).x(300).color(Tavoos::Color::Yellow); });
+});
+```
+
+Dragging inside an area does not click the item the drag started on, and a control inside that
+handles its own drag, such as a slider, keeps it. When an inner area reaches its end, further
+wheel input scrolls the area around it.
+
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -612,6 +665,7 @@ what you give it.
 | `SpinBoxBase` | the range, `step`, `commitText`, `valueText`, `increase`/`decrease` | `background`, `content`, `up`, `down` |
 | `OverlayBase` | open/close, `closePolicy`, `modal`, input blocking, focus, sizing to its children | `background`, optionally `scrim`; children are declared inside it |
 | `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
+| `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
@@ -865,3 +919,7 @@ Call `.focus()` on a widget to focus it programmatically instead of waiting for 
 Popups manage focus for you: opening one moves focus to its first focusable child, and closing it
 gives focus back to whatever had it, unless you clicked somewhere else in the meantime. While a
 modal popup is open, Tab cycles only through its own controls.
+
+A flick area scrolls with the arrow keys, Page Up/Down, and Home/End. It does not need to be
+focused: a key that the focused widget inside it ignores (a button, for example) bubbles up and
+scrolls it.
