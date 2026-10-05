@@ -41,6 +41,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Click-to-focus](#click-to-focus)
    - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
    - [Dragging](#dragging)
+   - [Overlays and popups](#overlays-and-popups)
    - [Theme and style structs](#theme-and-style-structs)
    - [The interaction-color pattern](#the-interaction-color-pattern)
 10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
@@ -1121,6 +1122,15 @@ void Renderer::renderForWindow(Window& window) {
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
             if (widget->visible())
                 renderWidget(*widget);
+
+    const std::vector<OverlayBase*> overlays = window.overlays();
+    for (OverlayBase* const overlay : overlays) {
+        overlay->place();
+        overlay->layout(true);
+    }
+    for (OverlayBase* const overlay : overlays)
+        if (overlay->visible())
+            renderWidget(*overlay);
 }
 ```
 
@@ -1131,7 +1141,8 @@ detached-and-deferred by an event handler in a *previous* frame (see
 `m_windowResources`, since multiple windows can share one GL context); set up the projection
 from logical window size (not physical framebuffer size - see `HiDPI` note below); clear;
 run the [dirty-flag-driven layout pass](#dirty-flag-propagation) on every top-level child;
-render every visible one.
+render every visible one; then place, lay out, and render the window's
+[overlays](#overlays-and-popups) on top, in stack order.
 
 Note the ortho projection uses `window.width()`/`height()` (logical units) while
 `glViewport` uses `window.framebufferWidth()`/`framebufferHeight()` (physical pixels) - this
@@ -1484,6 +1495,11 @@ with the parent's, so nested rotated/scaled widgets transform correctly relative
 ancestors - both for rendering (the vertex shader uses `worldMatrix` directly) and for
 hit-testing (its inverse).
 
+Overlays are the one exception to the tree walk. `hitTestTree` skips overlay children, and
+`Window::hitTestChildren` tests the overlay stack first, topmost first. If a modal overlay is
+tested and nothing inside it is hit, the point counts as a miss and nothing beneath it is
+reachable (see [Overlays and popups](#overlays-and-popups)).
+
 ### Press / release / click / double-click
 
 ```cpp
@@ -1557,7 +1573,8 @@ void Window::focusNext(bool reverse) {
 `keyCallback` intercepts Tab (`GLFW_KEY_TAB`) before anything else and calls `focusNext`
 (`Shift+Tab` reverses); every other key only dispatches if `m_focusedWidget` is set. The
 chain is recomputed from scratch on every Tab press rather than cached - simple, and cheap
-enough in practice for typical UI sizes.
+enough in practice for typical UI sizes. While a modal overlay is open, the chain is collected
+from that overlay's subtree only, so Tab never leaves it.
 
 ## Interaction state & control widgets
 
@@ -1710,6 +1727,10 @@ text looks is a property of the base (`textColor`, `placeholderColor`, `caretCol
 `content()` is hidden so the internals can't be replaced. The viewport clips to its own rect, so
 the text and caret can never draw outside the padded interior.
 
+**`OverlayBase`** and **`PopupBase`** (`templates/overlaybase.h`, `templates/popupbase.h`) are
+the bases for window-level layers such as popups; they are covered in
+[Overlays and popups](#overlays-and-popups).
+
 `focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
 itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
 
@@ -1844,6 +1865,86 @@ events but computing its own constrained position instead of the free-translate 
 is how `SliderBase` is built: drag events bubble from the handle or the track to the slider,
 whose own `triggerDragMove` derives a clamped value from `event.totalDx()` against the value
 held at drag start - nothing sets `draggable(true)`.
+
+### Overlays and popups
+
+An **overlay** is a widget whose `isOverlay()` returns true. It is out of flow: its parent's
+layout, render pass, and hit-test all skip it (`participatesInLayout()` is false), and it is
+laid out against the *window* rather than its parent - its content area is the window and its
+world matrix ignores the parent chain. Ancestor `clip(true)`, rotation, and layout therefore
+never affect it, even though it is declared as a child of an anchor widget.
+
+`Window` keeps the open overlays in a typed stack, `std::vector<OverlayBase*>` (`addOverlay`
+/ `removeOverlay`, topmost last). After the normal tree, `Renderer::renderForWindow` calls each
+overlay's `place()` and `layout(true)` and then renders them in stack order, which is the
+snippet under [Per-frame sequence](#per-frame-sequence). Hit-testing walks the same stack in
+reverse before the tree:
+
+```cpp
+Widget* Window::hitTestChildren(Window* self, double x, double y) {
+    for (auto it = self->m_overlays.rbegin(); it != self->m_overlays.rend(); ++it) {
+        if (auto* hit = static_cast<Widget*>(*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+            return hit;
+        if ((*it)->modalActive())
+            return nullptr;
+    }
+    /* ... then the normal tree ... */
+}
+```
+
+**`OverlayBase`** (`templates/overlaybase.h`) extends `Control` and owns everything about being
+an overlay: `open()`/`close()`, `opened()`/`openedState()`, `onOpen`/`onClose`, `closePolicy`,
+`modal`, and the `scrim` slot. It claims mouse, drag, and wheel events so nothing inside it
+bubbles on to the anchor, sizes itself to its children's extent plus padding (an explicit
+`width`/`height` wins), and gives its `background` the whole overlay rather than the padded area
+through `Widget::contentAreaFor()`. As with `TextFieldBase`, `content()` is hidden: the overlay's
+children are declared inside it. A subclass overrides the virtual `place()` to choose where it
+sits.
+
+The **scrim** is a slot like `background`, painted first (`z(-2)`) and sized to the whole window
+through `contentAreaFor()`; it is shown only while the overlay is open *and* modal. A transparent
+scrim is installed by default, so an overlay never needs one to block input. Because the scrim is
+a child of the overlay, a modal overlay is still a single stack entry.
+
+Dismissal is driven from `Window`, using the overlay's `closePolicy` (a bitmask of `None`,
+`ClickOutside`, `Escape`, both set by default):
+
+- A press outside the topmost overlay closes it when `ClickOutside` is set. "Outside" means
+  the press hit nothing inside the overlay, or only its scrim. A non-modal overlay then lets the
+  press continue to whatever is behind it; a modal one swallows it. A press on the *anchor* counts
+  as outside, so an anchor that toggles on click should call `open()` rather than flip state.
+- `Escape` closes the topmost overlay when `Escape` is set, and the key is consumed before the
+  focused widget sees it.
+- `modal` is read when the overlay opens. While it is open, hit-testing blocks hover, press, drag,
+  and scroll to everything behind it, and Tab is confined to its own controls.
+
+Focus follows the stack. `Window::addOverlay` records the previously focused widget and moves
+focus to the overlay's first focusable child; `removeOverlay` restores it, but only when focus is
+still inside the overlay, so a click that moved focus elsewhere is kept. A restore target that was
+removed in the meantime is dropped rather than restored.
+
+**`PopupBase`** (`templates/popupbase.h`) is an `OverlayBase` that places itself relative to a
+target rectangle - the parent widget by default, or the window (`target(PlacementTarget::Window)`)
+- in `place()`, once per rendered frame, so it follows an anchor that moves or resizes:
+
+| Target | `Bottom` / `Top` / `Left` / `Right` | `Center` |
+|---|---|---|
+| `Parent` | Outside the anchor, start-aligned on the cross axis; flips to the opposite side if the preferred side is too small and the other has more room | Centered over the anchor |
+| `Window` | Docked inside that edge of the window, centered on the cross axis; no flip | Centered in the window |
+
+Each side has its own offset (`offsetLeft`/`Top`/`Right`/`Bottom`; `offset(v)` sets all four): the
+gap from the anchor when the popup sits on that side, or the inset from the window edge. After a
+flip the *new* side's offset applies. Results are clamped into the window. `x()` and `y()` are
+explicit coordinates measured from the target's top-left corner; they override placement per
+axis and are not clamped. Whichever of `x`, `y`, and `placement` was set last wins, tracked by
+the properties' change notifications rather than call order, so a bound value that changes later
+counts as the latest.
+
+**`PopupWidget`** (`controls/popupwidget.h`) is the concrete popup. It installs a rectangle
+`background` and a rectangle `scrim`, both bound to `PopupStyle` (`backgroundColor`, `borderColor`,
+`scrimColor`, `borderWidth`, `padding`, `radius`) through `Theme::popup`, using the same
+`style()`/`applyStyle()` pattern as every other control (see
+[Theme and style structs](#theme-and-style-structs)).
 
 ### Theme and style structs
 
