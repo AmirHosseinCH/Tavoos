@@ -77,6 +77,8 @@ bool Widget::hitTest(float px, float py) const {
 Widget *Widget::hitTestTree(float px, float py) const {
     if (!visible())
         return nullptr;
+    if (m_clip && !hitTest(px, py))
+        return nullptr;
 
     const std::vector<Widget*> ordered = zOrderedChildren(*this);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
