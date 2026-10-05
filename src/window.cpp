@@ -206,6 +206,8 @@ Widget* Window::hitTestChildren(Window* self, double x, double y) {
     for (auto it = self->m_overlays.rbegin(); it != self->m_overlays.rend(); ++it) {
         if (auto* hit = static_cast<Widget*>(*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
             return hit;
+        if ((*it)->modalActive())
+            return nullptr;
     }
 
     const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
