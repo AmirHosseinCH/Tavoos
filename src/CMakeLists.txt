@@ -25,6 +25,7 @@ set(TAVOOS_SOURCES
     widget/templates/buttongroup.cpp
     widget/controls/radiowidget.cpp
     widget/controls/switchwidget.cpp
+    widget/templates/flickareabase.cpp
     widget/templates/overlaybase.cpp
     widget/templates/popupbase.cpp
     widget/templates/progressbarbase.cpp
@@ -79,6 +80,7 @@ target_sources(Tavoos
     include/tavoos/widget/templates/buttongroup.h
     include/tavoos/widget/controls/radiowidget.h
     include/tavoos/widget/controls/switchwidget.h
+    include/tavoos/widget/templates/flickareabase.h
     include/tavoos/widget/templates/overlaybase.h
     include/tavoos/widget/templates/popupbase.h
     include/tavoos/widget/templates/progressbarbase.h
