@@ -31,6 +31,7 @@ quick-start example in [README.md](../README.md).
    - [`SliderWidget`](#sliderwidget)
    - [`TextFieldWidget`](#textfieldwidget)
    - [`SpinBoxWidget`](#spinboxwidget)
+   - [`PopupWidget`](#popupwidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Dragging](#dragging)
@@ -503,9 +504,73 @@ Built on `SpinBoxBase`: a text field plus up/down stepper buttons, sharing one b
 Typing a value commits on Enter (clamped to `[minValue, maxValue]`) or reverts to the current
 value if what you typed doesn't parse as an integer; the up/down buttons commit immediately.
 
+### `PopupWidget`
+
+```cpp
+Tavoos::PopupWidget* menu = nullptr;
+
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("Menu").onClick([](Tavoos::MouseEvent&) { menu->open(); });
+
+    TB::Popup([](Tavoos::PopupWidget& p) {
+        menu = &p;
+        p.placement(Tavoos::Placement::Bottom).offset(6);
+        TB::Column([](Tavoos::ColumnWidget& c) {
+            c.spacing(4);
+            TB::Button([](Tavoos::ButtonWidget& item) {
+                item.text("Open").onClick([](Tavoos::MouseEvent&) { menu->close(); });
+            });
+        });
+    });
+});
+```
+
+A popup is declared **inside its anchor** and its children go inside it - there is no `content`
+slot. It is hidden until opened, then drawn above everything else in the window, unclipped by the
+anchor's ancestors, and sized to its children plus padding (set `width`/`height` to override).
+Built on `PopupBase`, itself built on `OverlayBase`.
+
+| Property | Type | Notes |
+|---|---|---|
+| `open()`, `close()` | - | Show / hide it. Opening twice or closing twice is a no-op. |
+| `opened()`, `openedState()` | `bool` / `State<bool>&` | Whether it is open. |
+| `onOpen(fn)`, `onClose(fn)` | `std::function<void()>` | Fired on each change. |
+| `placement()` | `Placement` | `Bottom` (default), `Top`, `Left`, `Right`, `Center`. |
+| `target()` | `PlacementTarget` | `Parent` (default) places it against the anchor, `Window` against the window. |
+| `offset()`, `offsetLeft()` / `offsetTop()` / `offsetRight()` / `offsetBottom()` | `float` | Gap from the anchor, or inset from the window edge, for the side it ends up on. `offset(v)` sets all four. |
+| `x()`, `y()` | `int` | Explicit position from the target's top-left corner. Overrides placement per axis; not clamped. |
+| `closePolicy()` | `ClosePolicy` | Combine `ClickOutside` and `Escape` with `\|`; `None` for neither. Default: both. |
+| `modal()` | `bool` | Blocks pointer input behind the popup, dims the window, and confines Tab to the popup. Read when it opens. |
+| `background<W>(body)`, `scrim<W>(body)` | - | Replace the popup's background or the dimming layer with your own widget. |
+| `backgroundColor()`, `borderColor()`, `scrimColor()` | `Paint` | |
+| `borderWidth()`, `radius()` | `float` / `int` | |
+| `padding()` | `float` | The inner spacing around the children (default 8, set by the style). |
+
+Placement works on both targets. Against the **parent**, `Bottom`/`Top`/`Left`/`Right` put the popup
+outside the anchor, start-aligned, and flip to the opposite side when the chosen one has no room;
+`Center` centers it over the anchor. Against the **window**, the same values dock it inside that
+edge, centered along it, and `Center` centers it in the window. The popup is always kept inside
+the window, except where you set `x`/`y` explicitly. Whichever of `x`, `y`, and `placement` you set
+last wins.
+
+```cpp
+TB::Popup([](Tavoos::PopupWidget& dialog) {
+    dialog.target(Tavoos::PlacementTarget::Window)
+        .placement(Tavoos::Placement::Center)
+        .modal(true)
+        .closePolicy(Tavoos::ClosePolicy::Escape)
+        .scrimColor(Tavoos::Color::rgba(0, 0, 0, 140));
+});
+```
+
+A press outside the popup closes it when `ClickOutside` is set. A normal popup lets that press
+reach the widget behind it; a modal one swallows it. Escape closes it when `Escape` is set. A press
+on the anchor itself counts as outside, so use `open()` in the anchor's click handler instead of
+toggling, or the popup closes on press and reopens on release.
+
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -545,6 +610,8 @@ what you give it.
 | `ProgressBarBase` | the range, nothing more | `background`, `content` bound to `positionState()` |
 | `SliderBase` | the range, `pressed`, press/drag/tap handling | `background`, `content`, and a `handle` positioned with `xFraction(positionState())` |
 | `SpinBoxBase` | the range, `step`, `commitText`, `valueText`, `increase`/`decrease` | `background`, `content`, `up`, `down` |
+| `OverlayBase` | open/close, `closePolicy`, `modal`, input blocking, focus, sizing to its children | `background`, optionally `scrim`; children are declared inside it |
+| `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
@@ -794,3 +861,7 @@ receives:
   border-color `AnimatedState`).
 
 Call `.focus()` on a widget to focus it programmatically instead of waiting for Tab.
+
+Popups manage focus for you: opening one moves focus to its first focusable child, and closing it
+gives focus back to whatever had it, unless you clicked somewhere else in the meantime. While a
+modal popup is open, Tab cycles only through its own controls.

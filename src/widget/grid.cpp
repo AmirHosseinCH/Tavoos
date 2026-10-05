@@ -14,7 +14,7 @@ GridWidget::GridMetrics GridWidget::computeMetrics() const {
 
     std::vector<Widget*> items;
     for (auto& child : children())
-        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->visible())
+        if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->participatesInLayout())
             items.push_back(w);
 
     const int cols = std::max(1, m_columns.get());

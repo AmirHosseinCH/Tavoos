@@ -355,6 +355,7 @@ public:
     float marginBottom() const { return m_margin.bottom(); }
 
     bool visible() const { return m_visible; }
+    Window* ownerWindow() const noexcept { return m_ownerWindow; }
     bool focusable() const { return m_focusable; }
     bool focused() const { return m_focused; }
     State<bool>& focusedState() { return m_focused; }
@@ -375,6 +376,9 @@ public:
     float displayedHeight() const { return m_displayedHeight; }
 
     virtual bool isLayouter() const { return false; }
+    virtual bool isOverlay() const { return false; }
+
+    bool participatesInLayout() const { return visible() && !isOverlay(); }
 
     struct Size { float width{0.0f}, height{0.0f}; };
     Size intrinsicSize();
@@ -457,6 +461,7 @@ protected:
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
+    virtual ContentArea contentAreaFor(const Widget& child) const;
     bool parentIsLayouter() const;
     bool isSizeBoundary() const;
 

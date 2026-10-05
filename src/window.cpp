@@ -2,6 +2,7 @@
 #include <tavoos/builder.h>
 #include <tavoos/events/events.h>
 #include <tavoos/gfx/renderer.h>
+#include <tavoos/widget/templates/overlaybase.h>
 #include <tavoos/window.h>
 
 #include <algorithm>
@@ -50,6 +51,52 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
         m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
         setFocusedWidget(nullptr);
+    std::erase_if(m_overlays, isOrDescendantOf);
+    std::erase_if(m_overlayFocus, [&](const auto& entry) { return isOrDescendantOf(entry.first); });
+    for (auto& entry : m_overlayFocus)
+        if (isOrDescendantOf(entry.second))
+            entry.second = nullptr;
+}
+
+void Window::addOverlay(OverlayBase* overlay) {
+    std::erase(m_overlays, overlay);
+
+    const auto known = std::ranges::find_if(m_overlayFocus, [overlay](const auto& entry) { return entry.first == overlay; });
+    if (known == m_overlayFocus.end())
+        m_overlayFocus.emplace_back(overlay, m_focusedWidget);
+
+    m_overlays.push_back(overlay);
+
+    std::vector<Widget*> chain;
+    collectFocusable(overlay, chain);
+    if (!chain.empty())
+        setFocusedWidget(chain.front());
+
+    markDirty();
+}
+
+void Window::removeOverlay(OverlayBase* overlay) {
+    if (std::erase(m_overlays, overlay) == 0)
+        return;
+
+    Widget* restore = nullptr;
+    const auto entry = std::ranges::find_if(m_overlayFocus, [overlay](const auto& e) { return e.first == overlay; });
+    if (entry != m_overlayFocus.end()) {
+        restore = entry->second;
+        m_overlayFocus.erase(entry);
+    }
+
+    bool focusInside = false;
+    for (Widget* w = m_focusedWidget; w; w = dynamic_cast<Widget*>(w->parent())) {
+        if (w == overlay) {
+            focusInside = true;
+            break;
+        }
+    }
+    if (focusInside)
+        setFocusedWidget(restore);
+
+    markDirty();
 }
 
 void Window::deferDestruction(std::unique_ptr<Object> widget) {
@@ -156,6 +203,13 @@ Widget* Window::dispatchMouseBubble(Widget* start, MouseEvent& event, const Poin
 }
 
 Widget* Window::hitTestChildren(Window* self, double x, double y) {
+    for (auto it = self->m_overlays.rbegin(); it != self->m_overlays.rend(); ++it) {
+        if (auto* hit = static_cast<Widget*>(*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+            return hit;
+        if ((*it)->modalActive())
+            return nullptr;
+    }
+
     const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
         if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
@@ -197,6 +251,13 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
     Widget* const hit = hitTestChildren(self, mx, my);
     const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
+
+    if (action == GLFW_PRESS && !self->m_overlays.empty()) {
+        OverlayBase* const top = self->m_overlays.back();
+        if (hasFlag(top->closePolicy(), ClosePolicy::ClickOutside) &&
+            !top->isContentHit(static_cast<Widget*>(top)->hitTestTree(static_cast<float>(mx), static_cast<float>(my))))
+            top->close();
+    }
 
     if (action == GLFW_PRESS) {
         self->m_pressedWidget = hit;
@@ -395,6 +456,14 @@ void Window::setFocusedWidget(Widget* widget) {
 void Window::keyCallback(GLFWwindow* window, int key, int /*scancode*/, int action, int mods) {
     auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
 
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS && !self->m_overlays.empty()) {
+        OverlayBase* const top = self->m_overlays.back();
+        if (hasFlag(top->closePolicy(), ClosePolicy::Escape)) {
+            top->close();
+            return;
+        }
+    }
+
     if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
         self->focusNext(mods & GLFW_MOD_SHIFT);
         return;
@@ -428,8 +497,12 @@ void Window::collectFocusable(Object* root, std::vector<Widget*>& out) {
 }
 
 void Window::focusNext(bool reverse) {
+    Object* focusRoot = this;
+    if (!m_overlays.empty() && m_overlays.back()->modalActive())
+        focusRoot = m_overlays.back();
+
     std::vector<Widget*> chain;
-    collectFocusable(this, chain);
+    collectFocusable(focusRoot, chain);
     if (chain.empty())
         return;
 

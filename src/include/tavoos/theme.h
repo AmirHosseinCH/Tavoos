@@ -3,6 +3,7 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/controls/style/buttonstyle.h>
 #include <tavoos/widget/controls/style/checkboxstyle.h>
+#include <tavoos/widget/controls/style/popupstyle.h>
 #include <tavoos/widget/controls/style/radiostyle.h>
 #include <tavoos/widget/controls/style/progressbarstyle.h>
 #include <tavoos/widget/controls/style/sliderstyle.h>
@@ -21,6 +22,7 @@ public:
     State<ProgressBarStyle> progressBar{ProgressBarStyle{}};
     State<SliderStyle> slider{SliderStyle{}};
     State<TextFieldStyle> textField{TextFieldStyle{}};
+    State<PopupStyle> popup{PopupStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
 };
 
