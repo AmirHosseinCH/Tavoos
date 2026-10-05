@@ -113,7 +113,7 @@ private:
     bool scrollable();
     void syncOffsets();
 
-    Property<FlickDirection> m_direction{FlickDirection::Vertical};
+    Property<FlickDirection> m_direction{FlickDirection::Horizontal | FlickDirection::Vertical};
     Property<float> m_contentX{0.0f};
     Property<float> m_contentY{0.0f};
     Property<float> m_contentWidth{0.0f};
