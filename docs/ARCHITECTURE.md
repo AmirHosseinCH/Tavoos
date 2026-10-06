@@ -42,6 +42,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
    - [Dragging](#dragging)
    - [Overlays and popups](#overlays-and-popups)
+   - [Flick areas](#flick-areas)
    - [Theme and style structs](#theme-and-style-structs)
    - [The interaction-color pattern](#the-interaction-color-pattern)
 10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
@@ -1251,6 +1252,10 @@ content, put `clip(true)` on an actual shaped primitive (typically a `RectangleW
 fully transparent one) and nest the content that needs bounding as *its* children, rather than
 clipping the composite wrapper itself.
 
+A `Control` can also clip itself if its `render()` draws a shape while the mask is being
+captured: `FlickAreaBase` renders its `background` slot through `renderer.renderWidget(...)` in
+that case, so the clip takes the shape of the background (see [Flick areas](#flick-areas)).
+
 ## Animation system
 
 `src/include/tavoos/animation/`.
@@ -1453,6 +1458,7 @@ bool Widget::hasHandlerFor(EventType type) {
 ```cpp
 Widget* Widget::hitTestTree(float px, float py) const {
     if (!visible()) return nullptr;
+    if (m_clip && !hitTest(px, py)) return nullptr;
     const std::vector<Widget*> ordered = zOrderedChildren(*this);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it)   // reverse: highest z / last-drawn first
         if (auto* hit = (*it)->hitTestTree(px, py))
@@ -1500,6 +1506,10 @@ Overlays are the one exception to the tree walk. `hitTestTree` skips overlay chi
 tested and nothing inside it is hit, the point counts as a miss and nothing beneath it is
 reachable (see [Overlays and popups](#overlays-and-popups)).
 
+A widget with `clip(true)` returns a miss for points outside its own rectangle without testing
+its children. Children that are clipped out of view therefore cannot catch input meant for
+whatever is visible at that spot, which matters for scrolled content.
+
 ### Press / release / click / double-click
 
 ```cpp
@@ -1543,6 +1553,11 @@ pressed widget, rather than to whatever happens to be under the cursor now. A `M
 additionally requires the same widget within `kDoubleClickTimeThreshold` (0.4s) *and*
 `kDoubleClickDistanceThreshold` (5px) of the *previous* click for `MouseDoubleClick` to also
 fire.
+
+A click is also not sent after a drag that some widget handled. On release, the result of
+dispatching `DragEnd` is kept: if a widget accepted it, the release is still delivered but no
+`MouseClick` follows, so dragging scrollable content does not click the item under the pointer.
+Presses that are never handled as drags still click as usual.
 
 ### Focus chain
 
@@ -1730,6 +1745,9 @@ the text and caret can never draw outside the padded interior.
 **`OverlayBase`** and **`PopupBase`** (`templates/overlaybase.h`, `templates/popupbase.h`) are
 the bases for window-level layers such as popups; they are covered in
 [Overlays and popups](#overlays-and-popups).
+
+**`FlickAreaBase`** (`templates/flickareabase.h`) is the base for scrolling content; see
+[Flick areas](#flick-areas).
 
 `focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
 itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
@@ -1945,6 +1963,52 @@ counts as the latest.
 `scrimColor`, `borderWidth`, `padding`, `radius`) through `Theme::popup`, using the same
 `style()`/`applyStyle()` pattern as every other control (see
 [Theme and style structs](#theme-and-style-structs)).
+
+### Flick areas
+
+**`FlickAreaBase`** (`templates/flickareabase.h`) extends `Control` with a clipped viewport over
+content that can be larger than itself. Children are declared inside it and `content()` is
+hidden, as with popups; the only slot is `background`. `FlickAreaWidget`
+(`controls/flickareawidget.h`) is the concrete version: a background rectangle styled by
+`FlickAreaStyle` (`backgroundColor`, `radius`) through `Theme::flickArea`, transparent and square
+by default.
+
+**Scrolling is a layout shift.** The area overrides `contentAreaFor(child)`: the background gets
+the full viewport, and every other child gets the viewport area shifted by `-contentX`/`-contentY`.
+A scrolled child therefore has the correct resolved position, displayed geometry, and world
+matrix, which is what rendering and hit-testing already read, so no event position is ever
+transformed. The cost is that each offset change marks the area's layout dirty and the force
+layout pass runs over the whole content subtree. Sizes are cached, so what repeats is the
+position and matrix work per descendant. Offsets are rounded for layout so text stays crisp.
+
+**Offsets and content size.** The requested offsets (`contentX`, `contentY`) are `Property`s; the
+effective, clamped ones are the `contentXState`/`contentYState` states, updated by
+`syncOffsets()`, which runs whenever an offset, the content size, or the direction changes and
+whenever the area's own resolved size changes. Content size comes from `computeContentSize()`,
+the extent of the children (margin plus `x`/`y` plus intrinsic size, with a `Fill` axis counting
+as 0), raised to at least the viewport; an explicit `contentWidth`/`contentHeight` overrides it.
+The maximum offset on an axis is the content size minus the viewport, never below 0, and 0 for
+an axis missing from `flickDirection` (default: both). `computeContentSize()` is virtual so a
+virtualized list can supply its own extent.
+
+**The clip shape.** `FlickAreaBase` sets `clip(true)`, which routes it through the three-step
+[clip composite](#clipping). A `Control` draws nothing while the mask is captured, so its
+`render()` draws the `background` slot's shape in that case and the real content otherwise. The
+base installs a transparent background in its constructor so there is always a shape, and
+replacing `background` with a rounded rectangle makes the clip rounded too.
+
+**Input.**
+- **Wheel:** `triggerWheel` scrolls by `wheelStep` per notch on each axis. `hasHandlerFor(Wheel)`
+  is true only while the area can actually scroll, and a tick that moves nothing is `ignore()`d,
+  so a wheel at the end of an inner area continues to an outer one.
+- **Drag:** with `dragScroll` on and something to scroll, the area claims `DragStart`/`DragMove`/
+  `DragEnd` and moves the content with the pointer. Drags bubble up from the hit widget, so a
+  slider or other control inside claims its own drag first, and the click-suppression rule under
+  [Press / release / click](#press--release--click--double-click) keeps the pressed item from
+  being clicked afterward.
+- **Keys:** arrows scroll by `wheelStep`, Page Up/Down by the viewport size, Home/End jump to the
+  ends. The area does not need focus itself: keys the focused child ignores bubble up to it.
+  Unrecognised keys and keys that move nothing are `ignore()`d.
 
 ### Theme and style structs
 

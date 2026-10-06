@@ -5,6 +5,7 @@
 #include <tavoos/object.h>
 #include <tavoos/widget/controls/buttonwidget.h>
 #include <tavoos/widget/controls/checkboxwidget.h>
+#include <tavoos/widget/controls/flickareawidget.h>
 #include <tavoos/widget/controls/popupwidget.h>
 #include <tavoos/widget/controls/progressbarwidget.h>
 #include <tavoos/widget/controls/radiowidget.h>
@@ -53,6 +54,7 @@ public:
     static void Switch(std::function<void(SwitchWidget&)> body)       { create<SwitchWidget>(std::move(body)); }
     static void ProgressBar(std::function<void(ProgressBarWidget&)> body) { create<ProgressBarWidget>(std::move(body)); }
     static void Slider(std::function<void(SliderWidget&)> body)       { create<SliderWidget>(std::move(body)); }
+    static void FlickArea(std::function<void(FlickAreaWidget&)> body) { create<FlickAreaWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }

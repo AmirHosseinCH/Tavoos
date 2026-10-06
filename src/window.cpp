@@ -285,13 +285,14 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             }
         }
     } else if (action == GLFW_RELEASE) {
+        bool dragHandled = false;
         if (self->m_pressedWidget && self->m_dragging) {
             const float dx = windowPoint.x - self->m_dragLastPoint.x;
             const float dy = windowPoint.y - self->m_dragLastPoint.y;
             const float totalDx = windowPoint.x - self->m_dragStartPoint.x;
             const float totalDy = windowPoint.y - self->m_dragStartPoint.y;
             DragEvent dragEndEvent{EventType::DragEnd, dx, dy, totalDx, totalDy};
-            dispatchBubble(self->m_pressedWidget, dragEndEvent, &Widget::triggerDragEnd);
+            dragHandled = dispatchBubble(self->m_pressedWidget, dragEndEvent, &Widget::triggerDragEnd) != nullptr;
             self->m_dragging = false;
         }
 
@@ -300,7 +301,7 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
         }
 
-        if (hit && hit == self->m_pressedWidget) {
+        if (hit && hit == self->m_pressedWidget && !dragHandled) {
             MouseEvent clickEvent{EventType::MouseClick, 0.0f, 0.0f, mb, km};
             dispatchMouseBubble(hit, clickEvent, windowPoint, &Widget::triggerClick);
 
