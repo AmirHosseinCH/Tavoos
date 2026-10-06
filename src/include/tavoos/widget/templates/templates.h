@@ -7,6 +7,7 @@
 #include <tavoos/widget/templates/popupbase.h>
 #include <tavoos/widget/templates/progressbarbase.h>
 #include <tavoos/widget/templates/rangebase.h>
+#include <tavoos/widget/templates/scrollareabase.h>
 #include <tavoos/widget/templates/sliderbase.h>
 #include <tavoos/widget/templates/spinboxbase.h>
 #include <tavoos/widget/templates/textfieldbase.h>

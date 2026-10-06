@@ -27,6 +27,7 @@ set(TAVOOS_SOURCES
     widget/controls/switchwidget.cpp
     widget/templates/flickareabase.cpp
     widget/templates/overlaybase.cpp
+    widget/templates/scrollareabase.cpp
     widget/templates/popupbase.cpp
     widget/templates/progressbarbase.cpp
     widget/templates/rangebase.cpp
@@ -83,6 +84,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/switchwidget.h
     include/tavoos/widget/templates/flickareabase.h
     include/tavoos/widget/templates/overlaybase.h
+    include/tavoos/widget/templates/scrollareabase.h
     include/tavoos/widget/templates/popupbase.h
     include/tavoos/widget/templates/progressbarbase.h
     include/tavoos/widget/templates/rangebase.h
