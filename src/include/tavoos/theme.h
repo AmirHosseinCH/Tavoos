@@ -6,6 +6,7 @@
 #include <tavoos/widget/controls/style/flickareastyle.h>
 #include <tavoos/widget/controls/style/popupstyle.h>
 #include <tavoos/widget/controls/style/radiostyle.h>
+#include <tavoos/widget/controls/style/scrollareastyle.h>
 #include <tavoos/widget/controls/style/progressbarstyle.h>
 #include <tavoos/widget/controls/style/sliderstyle.h>
 #include <tavoos/widget/controls/style/spinboxstyle.h>
@@ -25,6 +26,7 @@ public:
     State<TextFieldStyle> textField{TextFieldStyle{}};
     State<PopupStyle> popup{PopupStyle{}};
     State<FlickAreaStyle> flickArea{FlickAreaStyle{}};
+    State<ScrollAreaStyle> scrollArea{ScrollAreaStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
 };
 
