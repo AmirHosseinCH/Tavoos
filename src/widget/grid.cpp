@@ -202,13 +202,13 @@ void GridWidget::layout(bool force) {
         const Alignment align = alignment();
         if (hasFlag(align, Alignment::Left))                  resX = area.x + marginLeft();
         else if (hasFlag(align, Alignment::Right))             resX = area.x + area.width - resolvedW - marginRight();
-        else if (hasFlag(align, Alignment::CenterHorizontal))  resX = area.x + (area.width - resolvedW) * 0.5f;
-        else                                                    resX = area.x + static_cast<float>(x());
+        else if (hasFlag(align, Alignment::CenterHorizontal))  resX = area.x + marginLeft() + (area.width - marginLeft() - marginRight() - resolvedW) * 0.5f;
+        else                                                    resX = area.x + marginLeft() + static_cast<float>(x());
 
         if (hasFlag(align, Alignment::Top))                   resY = area.y + marginTop();
         else if (hasFlag(align, Alignment::Bottom))            resY = area.y + area.height - resolvedH - marginBottom();
-        else if (hasFlag(align, Alignment::CenterVertical))    resY = area.y + (area.height - resolvedH) * 0.5f;
-        else                                                    resY = area.y + static_cast<float>(y());
+        else if (hasFlag(align, Alignment::CenterVertical))    resY = area.y + marginTop() + (area.height - marginTop() - marginBottom() - resolvedH) * 0.5f;
+        else                                                    resY = area.y + marginTop() + static_cast<float>(y());
     }
 
     setResolved(resX, resY, resolvedW, resolvedH);
