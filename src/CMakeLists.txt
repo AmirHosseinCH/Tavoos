@@ -3,7 +3,7 @@ set(TAVOOS_SOURCES
     object.cpp
     window.cpp
     builder.cpp
-    componentbase.cpp
+    component/componentbase.cpp
     animation/animationmanager.cpp
     gfx/renderer.cpp
     gfx/shader.cpp
@@ -66,8 +66,8 @@ target_sources(Tavoos
     include/tavoos/object.h
     include/tavoos/window.h
     include/tavoos/builder.h
-    include/tavoos/componentbase.h
-    include/tavoos/component.h
+    include/tavoos/component/componentbase.h
+    include/tavoos/component/component.h
     include/tavoos/types.h
     include/tavoos/widget/widget.h
     include/tavoos/widget/templates/templates.h

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <tavoos/componentbase.h>
+#include <tavoos/component/componentbase.h>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/widget.h>
 

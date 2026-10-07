@@ -262,8 +262,8 @@ signal to check against, not new tracking.
 
 ### Components
 
-`Component<Root>` (`tavoos/component.h`) and its non-template base `ComponentBase`
-(`tavoos/componentbase.h`) build reusable compositions on top of the tree building above.
+`Component<Root>` (`tavoos/component/component.h`) and its non-template base `ComponentBase`
+(`tavoos/component/componentbase.h`) build reusable compositions on top of the tree building above.
 `Component<Root>` derives both `Root`, any widget type, and `ComponentBase`, and inherits
 `Root`'s constructors, so every fluent setter of the root keeps working and keeps returning the
 derived type. `ComponentBase` holds a virtual `build()` and a private `runBuild()` that only

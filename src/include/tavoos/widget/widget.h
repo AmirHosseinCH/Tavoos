@@ -1,7 +1,7 @@
 #pragma once
 
 #include <tavoos/animation/animation.h>
-#include <tavoos/componentbase.h>
+#include <tavoos/component/componentbase.h>
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>

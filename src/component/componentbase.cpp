@@ -1,4 +1,4 @@
-#include <tavoos/componentbase.h>
+#include <tavoos/component/componentbase.h>
 
 #include <tavoos/builder.h>
 #include <tavoos/widget/widget.h>
