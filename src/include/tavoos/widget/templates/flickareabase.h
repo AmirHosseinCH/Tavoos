@@ -98,6 +98,8 @@ public:
 
 protected:
     virtual Size computeContentSize();
+    virtual bool isContentChild(const Widget& child) const;
+    virtual void onOffsetsSynced(bool offsetsChanged) { (void)offsetsChanged; }
 
     void render(Renderer& renderer) override;
     bool hasHandlerFor(EventType type) override;

@@ -33,6 +33,7 @@ quick-start example in [README.md](../README.md).
    - [`SpinBoxWidget`](#spinboxwidget)
    - [`PopupWidget`](#popupwidget)
    - [`FlickAreaWidget`](#flickareawidget)
+   - [`ScrollAreaWidget`](#scrollareawidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Dragging](#dragging)
@@ -621,9 +622,68 @@ Dragging inside an area does not click the item the drag started on, and a contr
 handles its own drag, such as a slider, keeps it. When an inner area reaches its end, further
 wheel input scrolls the area around it.
 
+### `ScrollAreaWidget`
+
+```cpp
+TB::ScrollArea([](Tavoos::ScrollAreaWidget& area) {
+    area.width(300).height(200).radius(8).backgroundColor(Tavoos::Color::rgba(245, 246, 250));
+    TB::Column([](Tavoos::ColumnWidget& c) {
+        c.fill(Tavoos::Fill::Width).spacing(8);
+        for (int i = 0; i < 20; ++i)
+            TB::Button([i](Tavoos::ButtonWidget& b) {
+                b.fill(Tavoos::Fill::Width).text("Item " + std::to_string(i));
+            });
+    });
+});
+```
+
+A scrolling area with scrollbars. It is built on `ScrollAreaBase`, which extends the same
+`FlickAreaBase` as [`FlickAreaWidget`](#flickareawidget), so everything on a flick area
+applies (`flickDirection`, `contentX`/`contentY`, `contentWidth`/`contentHeight`, `scrollTo`,
+`onScroll`, `wheelStep`, and the rest), with one difference in defaults: **dragging the content
+and keyboard scrolling are off**, as in most desktop scroll areas. Turn them on with
+`dragScroll(true)` and `keyNavigation(true)`. The scrollbars overlay the content; they do not
+take space from it.
+
+| Property | Type | Notes |
+|---|---|---|
+| `barPolicy()` | `BarPolicy` | `Auto` (default): a bar exists only while its axis overflows. `Always`, or `Never`. Sets both axes. |
+| `verticalBarPolicy()`, `horizontalBarPolicy()` | `BarPolicy` | The same for one axis. An axis missing from `flickDirection` never shows a bar. |
+| `autoHide()` | `bool` | Fade the bars out when idle. Default on. |
+| `barHideDelay()`, `barFadeDuration()` | `float` | Seconds before the fade starts (default 1.0) and how long it takes (default 0.2). |
+| `minThumbSize()` | `float` | The smallest the thumb gets, in pixels. Default 24. |
+| `verticalTrack<W>(body)`, `verticalThumb<W>(body)`, `horizontalTrack<W>(body)`, `horizontalThumb<W>(body)` | - | Replace a bar part with your own widget. |
+| `verticalThumbSizeState()`, `verticalThumbPositionState()` (and `horizontal...`) | `State<float>&` | What a custom thumb binds: its length as a fraction of the track and its position. |
+| `verticalThumbHoveredState()`, `verticalThumbPressedState()` (and `horizontal...`) | `State<bool>&` | Pointer state of each thumb. |
+| `backgroundColor()`, `radius()` | `Paint` / `int` | As on a flick area. |
+| `trackColor()` | `Paint` | Default transparent. |
+| `thumbColor()`, `thumbHoverColor()`, `thumbPressedColor()` | `Paint` | The thumb in each state. |
+| `thumbRadius()`, `barThickness()`, `barMargin()` | `int` / `int` / `float` | Bar shape, and the gap from the edge. |
+| `transition()` | `float` | Thumb color transition, in seconds. |
+
+The bars appear when the content scrolls, when the pointer is over the area, and while a thumb is
+held, and fade out after `barHideDelay`. Drag a thumb to scroll in proportion, or click the track
+to move one page toward the click. The wheel scrolls over the bars as well as the content. To
+keep the bars permanently visible:
+
+```cpp
+TB::ScrollArea([](Tavoos::ScrollAreaWidget& area) {
+    area.width(300).height(200)
+        .barPolicy(Tavoos::BarPolicy::Always)
+        .autoHide(false)
+        .thumbColor(Tavoos::Color::rgba(40, 90, 200, 160))
+        .keyNavigation(true);
+    TB::Rectangle([](Tavoos::RectangleWidget& r) { r.width(280).height(600).color(Tavoos::Color::Cyan); });
+});
+```
+
+`Always` shows the bar for every axis `flickDirection` allows, even one that doesn't overflow, as
+a full-length thumb. Use `flickDirection` to limit the axes, or `Auto` to show a bar only when
+needed.
+
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -666,6 +726,7 @@ what you give it.
 | `OverlayBase` | open/close, `closePolicy`, `modal`, input blocking, focus, sizing to its children | `background`, optionally `scrim`; children are declared inside it |
 | `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
 | `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
+| `ScrollAreaBase` | everything in `FlickAreaBase`, plus bar policy, auto-hide, thumb drag, track click, thumb size and position states | `background`, `verticalTrack`/`verticalThumb`, `horizontalTrack`/`horizontalThumb`; children are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
@@ -922,4 +983,4 @@ modal popup is open, Tab cycles only through its own controls.
 
 A flick area scrolls with the arrow keys, Page Up/Down, and Home/End. It does not need to be
 focused: a key that the focused widget inside it ignores (a button, for example) bubbles up and
-scrolls it.
+scrolls it. A scroll area has this off by default; enable it with `keyNavigation(true)`.

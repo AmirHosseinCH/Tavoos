@@ -32,7 +32,7 @@ Widget::Size FlickAreaBase::computeContentSize() {
     float extentHeight = 0.0f;
     for (const auto& child : children()) {
         auto* const widget = dynamic_cast<Widget*>(child.get());
-        if (!widget || widget == backgroundSlot() || !widget->participatesInLayout())
+        if (!widget || !isContentChild(*widget) || !widget->participatesInLayout())
             continue;
 
         const Size size = widget->intrinsicSize();
@@ -42,6 +42,10 @@ Widget::Size FlickAreaBase::computeContentSize() {
         extentHeight = std::max(extentHeight, widget->marginTop() + static_cast<float>(widget->y()) + childHeight + widget->marginBottom());
     }
     return { extentWidth, extentHeight };
+}
+
+bool FlickAreaBase::isContentChild(const Widget& child) const {
+    return &child != backgroundSlot();
 }
 
 float FlickAreaBase::contentWidth() {
@@ -75,6 +79,7 @@ void FlickAreaBase::syncOffsets() {
     markLayoutDirty();
     if (changed && m_onScroll)
         m_onScroll(x, y);
+    onOffsetsSynced(changed);
 }
 
 void FlickAreaBase::onResolvedSizeChanged() {
@@ -169,7 +174,7 @@ void FlickAreaBase::triggerKeyPress(KeyEvent& event) {
 }
 
 Widget::ContentArea FlickAreaBase::contentAreaFor(const Widget& child) const {
-    if (&child == backgroundSlot())
+    if (!isContentChild(child))
         return { 0.0f, 0.0f, displayedWidth(), displayedHeight() };
 
     const float areaWidth = m_contentWidth.get() > 0.0f ? std::max(viewportWidth(), m_contentWidth.get()) : viewportWidth();

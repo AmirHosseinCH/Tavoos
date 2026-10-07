@@ -43,6 +43,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Dragging](#dragging)
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
+   - [Scroll areas](#scroll-areas)
    - [Theme and style structs](#theme-and-style-structs)
    - [The interaction-color pattern](#the-interaction-color-pattern)
 10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
@@ -1749,6 +1750,9 @@ the bases for window-level layers such as popups; they are covered in
 **`FlickAreaBase`** (`templates/flickareabase.h`) is the base for scrolling content; see
 [Flick areas](#flick-areas).
 
+**`ScrollAreaBase`** (`templates/scrollareabase.h`) adds scrollbars to a flick area; see
+[Scroll areas](#scroll-areas).
+
 `focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
 itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
 
@@ -2009,6 +2013,74 @@ replacing `background` with a rounded rectangle makes the clip rounded too.
 - **Keys:** arrows scroll by `wheelStep`, Page Up/Down by the viewport size, Home/End jump to the
   ends. The area does not need focus itself: keys the focused child ignores bubble up to it.
   Unrecognised keys and keys that move nothing are `ignore()`d.
+
+A subclass customizes the area through two protected hooks. `isContentChild(child)` says which
+children are scrolled content (the default is everything except the background); a child it
+rejects is laid out against the whole viewport and does not count toward the content extent.
+`onOffsetsSynced(offsetsChanged)` runs at the end of every `syncOffsets()`, whether the offsets
+moved or only the size, direction, or content changed.
+
+### Scroll areas
+
+**`ScrollAreaBase`** (`templates/scrollareabase.h`) extends `FlickAreaBase` with scrollbars.
+`ScrollAreaWidget` (`controls/scrollareawidget.h`) is the concrete version, styled by
+`ScrollAreaStyle` through `Theme::scrollArea`. Everything about content, offsets, and the clip
+is inherited; the one change to the inherited behavior is that the constructor turns
+`dragScroll` and `keyNavigation` off, the usual desktop convention, since dragging content
+fights with selection and with drags inside it. Both are the same properties and can be turned
+back on.
+
+**Bar slots.** There are four, `verticalTrack`, `verticalThumb`, `horizontalTrack`, and
+`horizontalThumb`, each installed like `background` (`z` 10 for tracks, 11 for thumbs). They
+overlay the content rather than reserving space. `isContentChild()` rejects them, so they are
+not scrolled and do not enlarge the content extent, and `contentAreaFor()` gives them the whole
+viewport. The base binds each slot's `visible` and `opacity` before running the user's body, so
+a body can still override either.
+
+**What the base publishes.** For each axis, a thumb size (the visible fraction of the content,
+raised to at least `minThumbSize` pixels) and a thumb position (offset divided by the maximum
+offset), plus hover and pressed states. A concrete thumb binds two properties:
+
+```cpp
+thumb.heightFraction(verticalThumbSizeState()).yFraction(verticalThumbPositionState());
+```
+
+`yFraction` is already "fraction of the free space along the track", so the position state
+needs no conversion and dragging uses the same arithmetic in reverse.
+
+**Policy and visibility.** Each axis has a `BarPolicy`: `Auto` (a bar exists only while that
+axis overflows), `Always`, or `Never`; an axis missing from `flickDirection` never has one.
+`syncBars()`, run from `onOffsetsSynced()`, recomputes the sizes, positions, and whether each bar
+is wanted.
+
+**Auto-hide.** `ScrollAreaBase` also derives `AnimatableBase` privately, as `TextFieldBase`
+does for the caret. A fading axis (`autoHide` on and policy `Auto`) has an opacity state; a bar's
+slot is shown only while it is wanted *and* its opacity is above zero, so a faded-out bar is
+hidden and cannot be hit. `wake()` resets an idle timer and registers the animation, and it is
+called when the offsets change, when the pointer enters or leaves the area, and when a thumb is
+pressed. `tick(dt)` keeps the idle timer at zero while the area is hovered or a thumb is
+pressed, raises the opacity toward 1 while `idle < barHideDelay`, lowers it toward 0 after, over
+`barFadeDuration`, and returns false once settled so the animation manager unregisters it.
+Axes with policy `Always`, or with `autoHide` off, stay at opacity 1.
+
+**Bar interaction.** The bars are ordinary children, so their events bubble up to the area.
+The base claims `MousePress` and `MouseMove` only to read the position, which arrives in the
+area's own coordinates, and tests it against the visible slots' rectangles. If the point is not
+on a bar it calls `ignore()`, so presses elsewhere keep bubbling to ancestors.
+- A press on a **thumb** starts a bar drag on that axis. While it lasts the base claims
+  `DragMove` and scrolls by `dy * maxContentY / (trackLength - thumbLength)`, using the slots'
+  displayed sizes (the horizontal case is the same with `dx`). A drag that starts anywhere else
+  is still the inherited content drag when `dragScroll` is on.
+- A press on a **track** away from the thumb scrolls one viewport toward the click.
+- Release and `DragEnd` clear the pressed and drag state. The wheel needs nothing extra, since
+  wheel events over a bar already bubble to the area.
+
+**`ScrollAreaWidget`.** It installs the background, plus a rectangle track and thumb for each
+axis. Tracks hug an edge, and thumbs bind the two fractions above. The thumb color is an
+`AnimatedState<Paint>` that moves between `thumbColor`, `thumbHoverColor`, and
+`thumbPressedColor` over `transition` seconds as the base's hover and pressed states change.
+`ScrollAreaStyle` also carries the fade timings and `minThumbSize`, which the widget forwards to
+the base's setters in `applyStyle`.
 
 ### Theme and style structs
 

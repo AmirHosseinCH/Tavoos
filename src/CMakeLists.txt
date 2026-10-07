@@ -24,9 +24,11 @@ set(TAVOOS_SOURCES
     widget/controls/checkboxwidget.cpp
     widget/templates/buttongroup.cpp
     widget/controls/radiowidget.cpp
+    widget/controls/scrollareawidget.cpp
     widget/controls/switchwidget.cpp
     widget/templates/flickareabase.cpp
     widget/templates/overlaybase.cpp
+    widget/templates/scrollareabase.cpp
     widget/templates/popupbase.cpp
     widget/templates/progressbarbase.cpp
     widget/templates/rangebase.cpp
@@ -80,9 +82,11 @@ target_sources(Tavoos
     include/tavoos/widget/controls/checkboxwidget.h
     include/tavoos/widget/templates/buttongroup.h
     include/tavoos/widget/controls/radiowidget.h
+    include/tavoos/widget/controls/scrollareawidget.h
     include/tavoos/widget/controls/switchwidget.h
     include/tavoos/widget/templates/flickareabase.h
     include/tavoos/widget/templates/overlaybase.h
+    include/tavoos/widget/templates/scrollareabase.h
     include/tavoos/widget/templates/popupbase.h
     include/tavoos/widget/templates/progressbarbase.h
     include/tavoos/widget/templates/rangebase.h
@@ -99,6 +103,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/buttonstyle.h
     include/tavoos/widget/controls/style/checkboxstyle.h
     include/tavoos/widget/controls/style/radiostyle.h
+    include/tavoos/widget/controls/style/scrollareastyle.h
     include/tavoos/widget/controls/style/switchstyle.h
     include/tavoos/widget/controls/style/flickareastyle.h
     include/tavoos/widget/controls/style/popupstyle.h
