@@ -26,6 +26,7 @@ concept WindowDerived = std::derived_from<T, Window>;
 
 class TAVOOS_EXPORT Builder {
     friend class Window;
+    friend class ComponentBase;
 
 public:
     Builder() = delete;
@@ -73,6 +74,8 @@ private:
         const auto parentObject = currentItem;
         std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
         currentItem = widget.get();
+        if constexpr (std::is_base_of_v<ComponentBase, T>)
+            static_cast<ComponentBase&>(static_cast<T&>(*widget)).runBuild();
         body(static_cast<T&>(*widget));
         parentObject->appendChild(widget);
         currentItem = parentObject;

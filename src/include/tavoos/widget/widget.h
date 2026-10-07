@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tavoos/animation/animation.h>
+#include <tavoos/componentbase.h>
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
@@ -396,6 +397,8 @@ public:
         static_assert(std::is_base_of_v<Widget, T>, "addChild<T>() requires T to derive from Widget");
         auto child = std::make_unique<T>(this);
         T* raw = child.get();
+        if constexpr (std::is_base_of_v<ComponentBase, T>)
+            static_cast<ComponentBase&>(*raw).runBuild();
         if (body)
             body(*raw);
         std::unique_ptr<Object> asObject = std::move(child);
