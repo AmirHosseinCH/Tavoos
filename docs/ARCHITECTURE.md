@@ -12,6 +12,7 @@ document is where the "why" behind non-obvious code lives instead.
 1. [Design philosophy](#design-philosophy)
 2. [The object model](#the-object-model)
 3. [Building the tree](#building-the-tree)
+   - [Components](#components)
 4. [Reactive properties](#reactive-properties)
    - [`Property<T>`](#propertyt)
    - [`State<T>`](#statet)
@@ -258,6 +259,58 @@ an event handler can remove the very widget an event is being dispatched to (or 
 of it), any write of a `Widget*` into `Window`'s own state *after* dispatching to it should
 first check that the widget wasn't just invalidated - `clearReferencesTo`'s nulling is the
 signal to check against, not new tracking.
+
+### Components
+
+`Component<Root>` (`tavoos/component.h`) and its non-template base `ComponentBase`
+(`tavoos/componentbase.h`) build reusable compositions on top of the tree building above.
+`Component<Root>` derives both `Root`, any widget type, and `ComponentBase`, and inherits
+`Root`'s constructors, so every fluent setter of the root keeps working and keeps returning the
+derived type. `ComponentBase` holds a virtual `build()` and a private `runBuild()` that only
+`Builder` and `Widget` can call.
+
+`build()` cannot run from a constructor, where virtual dispatch to the derived class does not
+exist yet, so creation is two-phase and both creation paths know about it:
+
+```cpp
+template<typename T>
+static void create(std::function<void(T&)> body) {
+    const auto parentObject = currentItem;
+    std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
+    currentItem = widget.get();
+    if constexpr (std::is_base_of_v<ComponentBase, T>)
+        static_cast<ComponentBase&>(static_cast<T&>(*widget)).runBuild();
+    body(static_cast<T&>(*widget));
+    parentObject->appendChild(widget);
+    currentItem = parentObject;
+}
+```
+
+`Widget::addChild<T>` makes the same `if constexpr` check and calls `runBuild()` before running
+its body, so a component created after the window is built is built the same way. Detecting it at
+compile time means `Widget` itself gains no virtual.
+
+`runBuild()` saves `Builder::currentItem` (which is why `ComponentBase` is a `Builder` friend),
+points it at the component, calls `build()`, and restores the saved value. In `create` that saved
+value is the component itself, so the instance's body then runs in the same scope. Two
+consequences follow from the order *construct, `build()`, then the instance's body*:
+
+- The internal tree exists before any property is assigned, so `build()` binds to the
+  component's property states (`m_name.state()`) instead of reading values; a property set
+  later flows through the binding.
+- `TB::` calls in the body construct their widgets with `currentItem`, the component, as parent,
+  so children declared inside an instance attach to the component, after whatever `build()`
+  created.
+
+Slot bodies (`background`, `content`, ...) run inside `addChild` before the slot is appended, and
+they are *not* in a builder scope for the slot: a `TB::` call there would attach to
+`currentItem`, the component, not to the slot. Inside a slot body a component uses `addChild<T>`
+on the slot widget.
+
+`TAVOOS_PROPERTY(Type, name, default)` expands to a `BindableState<Type>` member `m_name`, a
+fluent `name(PropertyArg<Type>)` using deducing `this`, a `name()` getter, and a `nameState()`
+accessor returning the output `State`. `TAVOOS_CALLBACK(name, Signature)` expands to a protected
+`std::function` member `m_name` and a fluent setter. Both leave the class in a `public:` section.
 
 ## Reactive properties
 
