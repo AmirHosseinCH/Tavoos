@@ -52,6 +52,7 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
     if (isOrDescendantOf(m_focusedWidget))
         setFocusedWidget(nullptr);
     std::erase_if(m_overlays, isOrDescendantOf);
+    std::erase_if(m_retiredOverlays, isOrDescendantOf);
     std::erase_if(m_focusMemory, [&](const auto& entry) { return isOrDescendantOf(entry.first); });
     for (auto& entry : m_focusMemory)
         if (isOrDescendantOf(entry.second))
@@ -104,6 +105,7 @@ void Window::transferFocusMemory(Widget* from, Widget* to) {
 
 void Window::addOverlay(OverlayBase* overlay) {
     std::erase(m_overlays, overlay);
+    std::erase(m_retiredOverlays, overlay);
     rememberFocus(overlay);
     m_overlays.push_back(overlay);
     focusFirstIn(overlay);
@@ -115,6 +117,20 @@ void Window::removeOverlay(OverlayBase* overlay) {
         return;
     restoreFocus(overlay);
     markDirty();
+}
+
+void Window::retireOverlay(OverlayBase* overlay) {
+    if (std::erase(m_overlays, overlay) == 0)
+        return;
+    std::erase(m_retiredOverlays, overlay);
+    m_retiredOverlays.push_back(overlay);
+    restoreFocus(overlay);
+    markDirty();
+}
+
+void Window::releaseOverlay(OverlayBase* overlay) {
+    if (std::erase(m_retiredOverlays, overlay) > 0)
+        markDirty();
 }
 
 void Window::deferDestruction(std::unique_ptr<Object> widget) {

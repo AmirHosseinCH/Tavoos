@@ -547,6 +547,7 @@ Built on `PopupBase`, itself built on `OverlayBase`.
 | `x()`, `y()` | `int` | Explicit position from the target's top-left corner. Overrides placement per axis; not clamped. |
 | `closePolicy()` | `ClosePolicy` | Combine `ClickOutside` and `Escape` with `\|`; `None` for neither. Default: both. |
 | `modal()` | `bool` | Blocks pointer input behind the popup, dims the window, and confines Tab to the popup. Read when it opens. |
+| `enter<T>(args...)`, `exit<T>(args...)` | transition | Animate opening and closing. Default: a short fade in and out. An empty factory means no animation. |
 | `background<W>(body)`, `scrim<W>(body)` | - | Replace the popup's background or the dimming layer with your own widget. |
 | `backgroundColor()`, `borderColor()`, `scrimColor()` | `Paint` | |
 | `borderWidth()`, `radius()` | `float` / `int` | |
@@ -573,6 +574,23 @@ A press outside the popup closes it when `ClickOutside` is set. A normal popup l
 reach the widget behind it; a modal one swallows it. Escape closes it when `Escape` is set. A press
 on the anchor itself counts as outside, so use `open()` in the anchor's click handler instead of
 toggling, or the popup closes on press and reopens on release.
+
+A popup fades in and out by default. `enter` and `exit` take a transition type and its constructor
+arguments, like the [stack view's slots](#transitions):
+
+```cpp
+TB::Popup([](Tavoos::PopupWidget& drawer) {
+    drawer.target(Tavoos::PlacementTarget::Window)
+        .placement(Tavoos::Placement::Bottom)
+        .enter<Tavoos::SlideIn>(Tavoos::Edge::Bottom, 0.25f)
+        .exit<Tavoos::SlideOut>(Tavoos::Edge::Bottom, 0.2f);
+});
+```
+
+Slides travel by the size of the window. While a popup fades out it no longer takes input: Escape
+and outside presses skip it, a modal popup stops blocking, and presses reach the widgets behind it.
+`onOpen` and `onClose` fire when `open()` and `close()` are called, not when the animation ends.
+Opening a popup that is still closing finishes the exit at once and starts the enter.
 
 ### `FlickAreaWidget`
 
@@ -1275,7 +1293,8 @@ itself is built on.
 **Transitions.** `Tavoos::Transition` and the presets (`FadeIn`, `SlideOut`, ...) animate a widget
 through `prepare`, `update` and `finish`, and a `TransitionRunner` runs several of them on one clock.
 The stack view uses them for its push, pop and replace animations (see
-[`StackViewWidget`](#stackviewwidget)), and you can write your own by deriving `Transition`.
+[`StackViewWidget`](#stackviewwidget)), popups use them for opening and closing (see
+[`PopupWidget`](#popupwidget)), and you can write your own by deriving `Transition`.
 
 ## Resource embedding
 

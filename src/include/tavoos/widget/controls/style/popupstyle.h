@@ -1,6 +1,10 @@
 #pragma once
 
+#include <tavoos/animation/transition.h>
+#include <tavoos/animation/transitions.h>
 #include <tavoos/types.h>
+
+#include <memory>
 
 namespace Tavoos {
 
@@ -11,6 +15,8 @@ struct PopupStyle {
     float borderWidth{1.0f};
     float padding{8.0f};
     int radius{8};
+    TransitionFactory enter{[] { return std::make_unique<FadeIn>(0.15f); }};
+    TransitionFactory exit{[] { return std::make_unique<FadeOut>(0.1f); }};
 };
 
 }

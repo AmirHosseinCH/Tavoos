@@ -70,7 +70,10 @@ public:
 
     void addOverlay(OverlayBase* overlay);
     void removeOverlay(OverlayBase* overlay);
+    void retireOverlay(OverlayBase* overlay);
+    void releaseOverlay(OverlayBase* overlay);
     const std::vector<OverlayBase*>& overlays() const noexcept { return m_overlays; }
+    const std::vector<OverlayBase*>& retiredOverlays() const noexcept { return m_retiredOverlays; }
 
 protected:
     virtual void build() = 0;
@@ -117,6 +120,7 @@ private:
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
     std::vector<OverlayBase*> m_overlays;
+    std::vector<OverlayBase*> m_retiredOverlays;
     std::vector<std::pair<Widget*, Widget*>> m_focusMemory;
 
     bool m_dragging{false};

@@ -133,7 +133,8 @@ void Renderer::renderForWindow(Window& window) {
             renderWidget(*widget);
     }
 
-    const std::vector<OverlayBase*> overlays = window.overlays();
+    std::vector<OverlayBase*> overlays = window.retiredOverlays();
+    overlays.insert(overlays.end(), window.overlays().begin(), window.overlays().end());
     for (OverlayBase* const overlay : overlays) {
         overlay->place();
         overlay->layout(true);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <tavoos/animation/transition.h>
+#include <tavoos/animation/transitionrunner.h>
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
@@ -45,6 +47,28 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) enter(this auto&& self, TransitionFactory factory) {
+        self.m_enter = std::move(factory);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) exit(this auto&& self, TransitionFactory factory) {
+        self.m_exit = std::move(factory);
+        return std::forward<decltype(self)>(self);
+    }
+
+    template<typename T, typename... Args>
+    decltype(auto) enter(this auto&& self, Args&&... args) {
+        self.m_enter = [... captured = std::forward<Args>(args)] { return std::make_unique<T>(captured...); };
+        return std::forward<decltype(self)>(self);
+    }
+
+    template<typename T, typename... Args>
+    decltype(auto) exit(this auto&& self, Args&&... args) {
+        self.m_exit = [... captured = std::forward<Args>(args)] { return std::make_unique<T>(captured...); };
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) onOpen(this auto&& self, std::function<void()> callback) {
         self.m_onOpen = std::move(callback);
         return std::forward<decltype(self)>(self);
@@ -59,6 +83,9 @@ public:
     ClosePolicy closePolicy() const { return m_closePolicy; }
     bool modal() const { return m_modal; }
     bool modalActive() const noexcept { return m_modalActive; }
+
+    const TransitionFactory& enter() const { return m_enter; }
+    const TransitionFactory& exit() const { return m_exit; }
 
     State<bool>& openedState() { return m_openedState; }
 
@@ -93,6 +120,8 @@ private:
     }
 
     void applyOpened(bool opened);
+    void runTransition(TransitionFactory factory, std::function<void()> onFinished);
+    void finishHiding();
 
     Property<bool> m_opened{false};
     State<bool> m_openedState{false};
@@ -100,6 +129,10 @@ private:
     Property<bool> m_modal{false};
     Widget* m_scrim{nullptr};
     bool m_modalActive{false};
+
+    TransitionFactory m_enter;
+    TransitionFactory m_exit;
+    TransitionRunner m_runner;
 
     std::function<void()> m_onOpen;
     std::function<void()> m_onClose;

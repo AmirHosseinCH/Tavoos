@@ -54,7 +54,7 @@ public:
     int radius() const { return m_radius; }
     PopupStyle style() const {
         return { m_backgroundColor.get(), m_borderColor.get(), m_scrimColor.get(),
-                 m_borderWidth.get(), paddingLeft(), m_radius.get() };
+                 m_borderWidth.get(), paddingLeft(), m_radius.get(), enter(), exit() };
     }
 
 private:
