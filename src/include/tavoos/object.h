@@ -18,6 +18,15 @@ public:
     Object* parent() const { return m_parent; }
     const std::vector<std::unique_ptr<Object>>& children() const { return m_childrens; }
 
+    template<typename T>
+    T* ancestor() const {
+        for (Object* object = m_parent; object; object = object->parent()) {
+            if (auto* match = dynamic_cast<T*>(object))
+                return match;
+        }
+        return nullptr;
+    }
+
 protected:
     void clearChildren() { m_childrens.clear(); }
 

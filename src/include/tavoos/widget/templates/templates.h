@@ -10,4 +10,5 @@
 #include <tavoos/widget/templates/scrollareabase.h>
 #include <tavoos/widget/templates/sliderbase.h>
 #include <tavoos/widget/templates/spinboxbase.h>
+#include <tavoos/widget/templates/stackviewbase.h>
 #include <tavoos/widget/templates/textfieldbase.h>

@@ -5,6 +5,8 @@ set(TAVOOS_SOURCES
     builder.cpp
     component/componentbase.cpp
     animation/animationmanager.cpp
+    animation/transitionrunner.cpp
+    animation/transitions.cpp
     gfx/renderer.cpp
     gfx/shader.cpp
     gfx/texturecache.cpp
@@ -38,9 +40,11 @@ set(TAVOOS_SOURCES
     widget/controls/progressbarwidget.cpp
     widget/templates/sliderbase.cpp
     widget/controls/sliderwidget.cpp
+    widget/controls/stackviewwidget.cpp
     widget/templates/textfieldbase.cpp
     widget/controls/textfieldwidget.cpp
     widget/templates/spinboxbase.cpp
+    widget/templates/stackviewbase.cpp
     widget/controls/spinboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
@@ -99,9 +103,11 @@ target_sources(Tavoos
     include/tavoos/widget/controls/progressbarwidget.h
     include/tavoos/widget/templates/sliderbase.h
     include/tavoos/widget/controls/sliderwidget.h
+    include/tavoos/widget/controls/stackviewwidget.h
     include/tavoos/widget/templates/textfieldbase.h
     include/tavoos/widget/controls/textfieldwidget.h
     include/tavoos/widget/templates/spinboxbase.h
+    include/tavoos/widget/templates/stackviewbase.h
     include/tavoos/widget/controls/spinboxwidget.h
     include/tavoos/widget/controls/style/buttonstyle.h
     include/tavoos/widget/controls/style/checkboxstyle.h
@@ -112,6 +118,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/popupstyle.h
     include/tavoos/widget/controls/style/progressbarstyle.h
     include/tavoos/widget/controls/style/sliderstyle.h
+    include/tavoos/widget/controls/style/stackviewstyle.h
     include/tavoos/widget/controls/style/textfieldstyle.h
     include/tavoos/widget/controls/style/spinboxstyle.h
     include/tavoos/widget/widgets.h
@@ -140,6 +147,9 @@ target_sources(Tavoos
     include/tavoos/animation/animatedstate.h
     include/tavoos/animation/animationmanager.h
     include/tavoos/animation/animation.h
+    include/tavoos/animation/transition.h
+    include/tavoos/animation/transitions.h
+    include/tavoos/animation/transitionrunner.h
     include/tavoos/resources/resourceregistry.h
     include/tavoos/resources/pathscheme.h
     include/tavoos/resources/resources.h

@@ -9,6 +9,7 @@
 #include <tavoos/widget/controls/style/scrollareastyle.h>
 #include <tavoos/widget/controls/style/progressbarstyle.h>
 #include <tavoos/widget/controls/style/sliderstyle.h>
+#include <tavoos/widget/controls/style/stackviewstyle.h>
 #include <tavoos/widget/controls/style/spinboxstyle.h>
 #include <tavoos/widget/controls/style/switchstyle.h>
 #include <tavoos/widget/controls/style/textfieldstyle.h>
@@ -27,6 +28,7 @@ public:
     State<PopupStyle> popup{PopupStyle{}};
     State<FlickAreaStyle> flickArea{FlickAreaStyle{}};
     State<ScrollAreaStyle> scrollArea{ScrollAreaStyle{}};
+    State<StackViewStyle> stackView{StackViewStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
 };
 

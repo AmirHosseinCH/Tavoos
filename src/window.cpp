@@ -52,50 +52,68 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
     if (isOrDescendantOf(m_focusedWidget))
         setFocusedWidget(nullptr);
     std::erase_if(m_overlays, isOrDescendantOf);
-    std::erase_if(m_overlayFocus, [&](const auto& entry) { return isOrDescendantOf(entry.first); });
-    for (auto& entry : m_overlayFocus)
+    std::erase_if(m_focusMemory, [&](const auto& entry) { return isOrDescendantOf(entry.first); });
+    for (auto& entry : m_focusMemory)
         if (isOrDescendantOf(entry.second))
             entry.second = nullptr;
 }
 
-void Window::addOverlay(OverlayBase* overlay) {
-    std::erase(m_overlays, overlay);
-
-    const auto known = std::ranges::find_if(m_overlayFocus, [overlay](const auto& entry) { return entry.first == overlay; });
-    if (known == m_overlayFocus.end())
-        m_overlayFocus.emplace_back(overlay, m_focusedWidget);
-
-    m_overlays.push_back(overlay);
-
+void Window::focusFirstIn(Widget* root) {
     std::vector<Widget*> chain;
-    collectFocusable(overlay, chain);
+    collectFocusable(root, chain);
     if (!chain.empty())
         setFocusedWidget(chain.front());
+}
 
+void Window::rememberFocus(Widget* key) {
+    const auto known = std::ranges::find_if(m_focusMemory, [key](const auto& entry) { return entry.first == key; });
+    if (known == m_focusMemory.end())
+        m_focusMemory.emplace_back(key, m_focusedWidget);
+}
+
+void Window::restoreFocus(Widget* key) {
+    Widget* restore = nullptr;
+    const auto entry = std::ranges::find_if(m_focusMemory, [key](const auto& e) { return e.first == key; });
+    if (entry != m_focusMemory.end()) {
+        restore = entry->second;
+        m_focusMemory.erase(entry);
+    }
+
+    for (Widget* w = m_focusedWidget; w; w = dynamic_cast<Widget*>(w->parent())) {
+        if (w == key) {
+            setFocusedWidget(restore);
+            break;
+        }
+    }
+}
+
+void Window::transferFocusMemory(Widget* from, Widget* to) {
+    const auto source = std::ranges::find_if(m_focusMemory, [from](const auto& entry) { return entry.first == from; });
+    if (source == m_focusMemory.end())
+        return;
+
+    Widget* const saved = source->second;
+    m_focusMemory.erase(source);
+
+    const auto target = std::ranges::find_if(m_focusMemory, [to](const auto& entry) { return entry.first == to; });
+    if (target != m_focusMemory.end())
+        target->second = saved;
+    else
+        m_focusMemory.emplace_back(to, saved);
+}
+
+void Window::addOverlay(OverlayBase* overlay) {
+    std::erase(m_overlays, overlay);
+    rememberFocus(overlay);
+    m_overlays.push_back(overlay);
+    focusFirstIn(overlay);
     markDirty();
 }
 
 void Window::removeOverlay(OverlayBase* overlay) {
     if (std::erase(m_overlays, overlay) == 0)
         return;
-
-    Widget* restore = nullptr;
-    const auto entry = std::ranges::find_if(m_overlayFocus, [overlay](const auto& e) { return e.first == overlay; });
-    if (entry != m_overlayFocus.end()) {
-        restore = entry->second;
-        m_overlayFocus.erase(entry);
-    }
-
-    bool focusInside = false;
-    for (Widget* w = m_focusedWidget; w; w = dynamic_cast<Widget*>(w->parent())) {
-        if (w == overlay) {
-            focusInside = true;
-            break;
-        }
-    }
-    if (focusInside)
-        setFocusedWidget(restore);
-
+    restoreFocus(overlay);
     markDirty();
 }
 
