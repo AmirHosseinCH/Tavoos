@@ -61,6 +61,10 @@ public:
     int framebufferHeight() const noexcept { return m_framebufferHeight; }
 
     void setFocusedWidget(Widget* widget);
+    Widget* focusedWidget() const noexcept { return m_focusedWidget; }
+    void focusFirstIn(Widget* root);
+    void rememberFocus(Widget* key);
+    void restoreFocus(Widget* key);
     void markDirty();
 
     void addOverlay(OverlayBase* overlay);
@@ -112,7 +116,7 @@ private:
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
     std::vector<OverlayBase*> m_overlays;
-    std::vector<std::pair<OverlayBase*, Widget*>> m_overlayFocus;
+    std::vector<std::pair<Widget*, Widget*>> m_focusMemory;
 
     bool m_dragging{false};
     Point m_dragStartPoint{};
