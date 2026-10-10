@@ -11,6 +11,7 @@
 #include <tavoos/widget/controls/radiowidget.h>
 #include <tavoos/widget/controls/scrollareawidget.h>
 #include <tavoos/widget/controls/sliderwidget.h>
+#include <tavoos/widget/controls/stackviewwidget.h>
 #include <tavoos/widget/controls/spinboxwidget.h>
 #include <tavoos/widget/controls/switchwidget.h>
 #include <tavoos/widget/controls/textfieldwidget.h>
@@ -58,6 +59,7 @@ public:
     static void Slider(std::function<void(SliderWidget&)> body)       { create<SliderWidget>(std::move(body)); }
     static void FlickArea(std::function<void(FlickAreaWidget&)> body) { create<FlickAreaWidget>(std::move(body)); }
     static void ScrollArea(std::function<void(ScrollAreaWidget&)> body) { create<ScrollAreaWidget>(std::move(body)); }
+    static void StackView(std::function<void(StackViewWidget&)> body) { create<StackViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
