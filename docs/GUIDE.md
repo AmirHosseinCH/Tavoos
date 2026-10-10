@@ -36,10 +36,11 @@ quick-start example in [README.md](../README.md).
    - [`ScrollAreaWidget`](#scrollareawidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
-8. [Dragging](#dragging)
-9. [Animation](#animation)
-10. [Resource embedding](#resource-embedding)
-11. [Keyboard & focus](#keyboard--focus)
+8. [Components](#components)
+9. [Dragging](#dragging)
+10. [Animation](#animation)
+11. [Resource embedding](#resource-embedding)
+12. [Keyboard & focus](#keyboard--focus)
 
 ## Core concepts
 
@@ -158,6 +159,8 @@ someContainer.addChild<Tavoos::RectangleWidget>([](Tavoos::RectangleWidget& r) {
 - **`T* addChild<T>(std::function<void(T&)> body = {})`** - constructs `T` as a new child, runs `body` on it, and returns the pointer (which stays valid for as long as the widget remains in the tree).
 - **`removeSelf()`** - detaches this widget (and its subtree) from its parent. Safe to call from within the widget's own event handler.
 - **`removeChild(Widget* child)`** - same, called on the parent for a specific child.
+
+A [component](#components) is built the same way when created with `addChild<T>`.
 
 ## Types reference
 
@@ -867,6 +870,204 @@ private:
 
 The hook runs when the size is first known and whenever it changes, before the children are laid
 out, so what it sets takes effect in the same pass.
+
+## Components
+
+A **component** is a piece of UI you define once and reuse anywhere, with its own properties: a
+labeled form field, a dialog, a whole page. It is an ordinary widget class. You derive
+`Component<Root>`, where `Root` is the kind of widget it *is* (`ColumnWidget`, `RectangleWidget`,
+a control, ...), and fill its tree in `build()` with the same `TB::` calls a window uses. To add
+new interaction behavior use a [custom control](#custom-controls); to compose widgets that already
+exist, use a component.
+
+```cpp
+class LabeledField : public Tavoos::Component<Tavoos::ColumnWidget> {
+public:
+    LabeledField(Tavoos::Object* parent) : Component{parent} { spacing(4); }
+
+    TAVOOS_PROPERTY(std::string, label, "")
+    TAVOOS_PROPERTY(std::string, placeholder, "")
+    TAVOOS_CALLBACK(onSubmit, void(const std::string&))
+
+    const std::string& text() const { return m_field->text(); }
+
+protected:
+    void build() override {
+        TB::Text([this](Tavoos::TextWidget& t) { t.text(m_label.state()); });
+        TB::TextField([this](Tavoos::TextFieldWidget& f) {
+            m_field = &f;
+            f.fill(Tavoos::Fill::Width).placeholder(m_placeholder.state());
+            f.onSubmit([this](const std::string& s) { if (m_onSubmit) m_onSubmit(s); });
+        });
+    }
+
+private:
+    Tavoos::TextFieldWidget* m_field{nullptr};
+};
+```
+
+Use it like any widget, with its own properties plus those of its root type:
+
+```cpp
+TB::Create<LabeledField>([](LabeledField& f) {
+    f.label("Email").placeholder("you@example.com").spacing(8);
+});
+```
+
+### How it is built
+
+1. The component is constructed.
+2. `build()` runs once, with `TB::` calls attaching to the component.
+3. The instance's body runs, so it can set properties and declare more children, which attach to
+   the component after the ones `build()` created.
+
+Because `build()` runs before the body, bind to a property's state (`m_label.state()`) rather
+than reading its value; a value set in the body then flows through. Keep pointers to inner
+widgets in members (`m_field`); they stay valid while the component exists.
+
+### Properties and callbacks
+
+| Macro | Generates |
+|---|---|
+| `TAVOOS_PROPERTY(Type, name, default)` | A bindable member `m_name`, a fluent setter `name(value)` that accepts a value or a `State`, a getter `name()`, and `nameState()` for binding. |
+| `TAVOOS_CALLBACK(name, Signature)` | A fluent setter `name(fn)` and a protected `std::function` member `m_name`; call it with `if (m_name) m_name(...)`. |
+
+`Type` must not contain a top-level comma, and both macros leave the class in a `public:` section.
+
+### The root type
+
+A component *is* its root, so the root's setters (`spacing`, `width`, `fill`, `color`, ...) work
+and keep returning the component type. The root can be a control; this dialog is a popup:
+
+```cpp
+class ConfirmDialog : public Tavoos::Component<Tavoos::PopupWidget> {
+public:
+    ConfirmDialog(Tavoos::Object* parent) : Component{parent} {
+        target(Tavoos::PlacementTarget::Window).placement(Tavoos::Placement::Center).modal(true);
+    }
+
+    TAVOOS_PROPERTY(std::string, message, "Are you sure?")
+    TAVOOS_CALLBACK(onConfirm, void())
+
+protected:
+    void build() override {
+        TB::Column([this](Tavoos::ColumnWidget& column) {
+            column.spacing(12);
+            TB::Text([this](Tavoos::TextWidget& t) { t.text(m_message.state()); });
+            TB::Row([this](Tavoos::RowWidget& row) {
+                row.spacing(8);
+                TB::Button([this](Tavoos::ButtonWidget& b) {
+                    b.text("Cancel").onClick([this](Tavoos::MouseEvent&) { close(); });
+                });
+                TB::Button([this](Tavoos::ButtonWidget& b) {
+                    b.text("OK").onClick([this](Tavoos::MouseEvent&) {
+                        if (m_onConfirm)
+                            m_onConfirm();
+                        close();
+                    });
+                });
+            });
+        });
+    }
+};
+```
+
+A `RectangleWidget` root has no size of its own, because a rectangle does not grow to fit its
+children. For a box that hugs its content, use a `Control` root and put the content in its
+`content` slot. Inside a slot body, `TB::` is not available for the slot's own children; use
+`addChild<T>` there (see [Dynamic children](#dynamic-children)).
+
+### Composing components
+
+A component can use other components in its `build()`, and a page is just a component placed in
+the window:
+
+```cpp
+class LoginPage : public Tavoos::Component<Tavoos::ColumnWidget> {
+public:
+    LoginPage(Tavoos::Object* parent) : Component{parent} { spacing(12).width(320); }
+
+    TAVOOS_PROPERTY(std::string, heading, "Sign in")
+    TAVOOS_CALLBACK(onLogin, void(const std::string&, const std::string&))
+
+protected:
+    void build() override {
+        TB::Text([this](Tavoos::TextWidget& t) { t.text(m_heading.state()); });
+        TB::Create<LabeledField>([this](LabeledField& f) {
+            m_email = &f;
+            f.label("Email").placeholder("you@example.com");
+        });
+        TB::Create<LabeledField>([this](LabeledField& f) {
+            m_password = &f;
+            f.label("Password");
+        });
+        TB::Button([this](Tavoos::ButtonWidget& b) {
+            b.text("Sign in").onClick([this](Tavoos::MouseEvent&) {
+                if (m_onLogin)
+                    m_onLogin(m_email->text(), m_password->text());
+            });
+        });
+    }
+
+private:
+    LabeledField* m_email{nullptr};
+    LabeledField* m_password{nullptr};
+};
+
+class MainWindow : public Tavoos::Window {
+public:
+    void build() override {
+        TB::Create<LoginPage>([](LoginPage& page) {
+            page.heading("Welcome back").x(20).y(20).onLogin([](const std::string& email, const std::string& password) {
+                (void)email;
+                (void)password;
+            });
+        });
+    }
+};
+```
+
+A component can also keep its own state. This counter holds the count itself and reports changes:
+
+```cpp
+class Counter : public Tavoos::Component<Tavoos::RowWidget> {
+public:
+    Counter(Tavoos::Object* parent) : Component{parent} { spacing(8); }
+
+    TAVOOS_PROPERTY(int, step, 1)
+    TAVOOS_CALLBACK(onChange, void(int))
+
+    int count() const { return m_count.get(); }
+
+protected:
+    void build() override {
+        TB::Button([this](Tavoos::ButtonWidget& b) {
+            b.text("-").onClick([this](Tavoos::MouseEvent&) { change(-m_step.get()); });
+        });
+        TB::Text([this](Tavoos::TextWidget& t) { t.text(m_label); });
+        TB::Button([this](Tavoos::ButtonWidget& b) {
+            b.text("+").onClick([this](Tavoos::MouseEvent&) { change(m_step.get()); });
+        });
+    }
+
+private:
+    void change(int delta) {
+        m_count.set(m_count.get() + delta);
+        m_label.set(std::to_string(m_count.get()));
+        if (m_onChange)
+            m_onChange(m_count.get());
+    }
+
+    Tavoos::State<int> m_count{0};
+    Tavoos::State<std::string> m_label{"0"};
+};
+```
+
+To create a component after the window is built, use `addChild<T>`, which builds it the same way:
+
+```cpp
+someContainer.addChild<Counter>([](Counter& c) { c.step(5); });
+```
 
 ## Dragging
 
