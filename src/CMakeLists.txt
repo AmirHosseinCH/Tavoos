@@ -5,6 +5,8 @@ set(TAVOOS_SOURCES
     builder.cpp
     component/componentbase.cpp
     animation/animationmanager.cpp
+    animation/transitionrunner.cpp
+    animation/transitions.cpp
     gfx/renderer.cpp
     gfx/shader.cpp
     gfx/texturecache.cpp
@@ -142,6 +144,9 @@ target_sources(Tavoos
     include/tavoos/animation/animatedstate.h
     include/tavoos/animation/animationmanager.h
     include/tavoos/animation/animation.h
+    include/tavoos/animation/transition.h
+    include/tavoos/animation/transitions.h
+    include/tavoos/animation/transitionrunner.h
     include/tavoos/resources/resourceregistry.h
     include/tavoos/resources/pathscheme.h
     include/tavoos/resources/resources.h
