@@ -1181,7 +1181,8 @@ void Renderer::renderForWindow(Window& window) {
             if (widget->visible())
                 renderWidget(*widget);
 
-    const std::vector<OverlayBase*> overlays = window.overlays();
+    std::vector<OverlayBase*> overlays = window.retiredOverlays();
+    overlays.insert(overlays.end(), window.overlays().begin(), window.overlays().end());
     for (OverlayBase* const overlay : overlays) {
         overlay->place();
         overlay->layout(true);
@@ -1200,7 +1201,7 @@ detached-and-deferred by an event handler in a *previous* frame (see
 from logical window size (not physical framebuffer size - see `HiDPI` note below); clear;
 run the [dirty-flag-driven layout pass](#dirty-flag-propagation) on every top-level child;
 render every visible one; then place, lay out, and render the window's
-[overlays](#overlays-and-popups) on top, in stack order.
+[overlays](#overlays-and-popups) on top, closing ones first and then the open ones in stack order.
 
 Note the ortho projection uses `window.width()`/`height()` (logical units) while
 `glViewport` uses `window.framebufferWidth()`/`framebufferHeight()` (physical pixels) - this
@@ -1495,6 +1496,9 @@ without changing its size and without touching its alignment, and `finish` resto
 margins. The fades and scales set `opacity` and `scale` and restore them the same way. A binding
 on one of those properties is replaced for the duration and then replaced by the captured plain
 value.
+
+Overlays run the same transitions on their own widget for opening and closing (see
+[Overlays and popups](#overlays-and-popups)).
 
 ## Event system
 
@@ -2005,8 +2009,12 @@ never affect it, even though it is declared as a child of an anchor widget.
 `Window` keeps the open overlays in a typed stack, `std::vector<OverlayBase*>` (`addOverlay`
 / `removeOverlay`, topmost last). After the normal tree, `Renderer::renderForWindow` calls each
 overlay's `place()` and `layout(true)` and then renders them in stack order, which is the
-snippet under [Per-frame sequence](#per-frame-sequence). Hit-testing walks the same stack in
-reverse before the tree:
+snippet under [Per-frame sequence](#per-frame-sequence). A second, render-only list,
+`m_retiredOverlays`, holds overlays that have left the stack but are still playing an exit
+transition. `retireOverlay` moves an overlay there (restoring focus at that moment) and
+`releaseOverlay` drops it when the exit ends; the renderer places, lays out and draws retired
+overlays first, beneath the open ones, and `clearReferencesTo` clears both lists. Hit-testing
+walks the stack in reverse before the tree:
 
 ```cpp
 Widget* Window::hitTestChildren(Window* self, double x, double y) {
@@ -2047,8 +2055,18 @@ Dismissal is driven from `Window`, using the overlay's `closePolicy` (a bitmask 
   and scroll to everything behind it, and Tab is confined to its own controls.
 
 Focus follows the stack through the [focus memory](#focus-memory): `Window::addOverlay` calls
-`rememberFocus` and `focusFirstIn`, and `removeOverlay` calls `restoreFocus`, so focus returns
-to the widget that had it, unless it has moved elsewhere in the meantime.
+`rememberFocus` and `focusFirstIn`, and `removeOverlay` and `retireOverlay` call `restoreFocus`,
+so focus returns to the widget that had it, unless it has moved elsewhere in the meantime.
+
+**Transitions.** `OverlayBase` owns two `TransitionFactory` slots, `enter` and `exit`, and a
+`TransitionRunner` that animates the overlay widget itself, with the window size as the container.
+Its opacity reaches the background, content and scrim through the inherited effective opacity, so
+they fade together. `applyOpened` first calls `finishNow()`, so a transition in flight completes
+before the new one starts. Opening shows the overlay, adds it to the stack, and runs `enter`.
+Closing with an `exit` factory and a window retires the overlay and runs `exit`; its completion
+callback hides the overlay and the scrim and releases it. Without an `exit`, or without a window,
+it hides immediately. `modalActive` clears at the moment of `close()`, so the animation never
+blocks input, and `onOpen`/`onClose` fire at that moment too.
 
 **`PopupBase`** (`templates/popupbase.h`) is an `OverlayBase` that places itself relative to a
 target rectangle - the parent widget by default, or the window (`target(PlacementTarget::Window)`)
@@ -2069,7 +2087,8 @@ counts as the latest.
 
 **`PopupWidget`** (`controls/popupwidget.h`) is the concrete popup. It installs a rectangle
 `background` and a rectangle `scrim`, both bound to `PopupStyle` (`backgroundColor`, `borderColor`,
-`scrimColor`, `borderWidth`, `padding`, `radius`) through `Theme::popup`, using the same
+`scrimColor`, `borderWidth`, `padding`, `radius`, and the `enter` and `exit` transition
+factories, which default to a short fade) through `Theme::popup`, using the same
 `style()`/`applyStyle()` pattern as every other control (see
 [Theme and style structs](#theme-and-style-structs)).
 
