@@ -3,6 +3,7 @@
 #include <tavoos/window.h>
 
 #include <algorithm>
+#include <vector>
 
 namespace Tavoos {
 
@@ -23,17 +24,26 @@ void OverlayBase::close() {
 void OverlayBase::applyOpened(bool opened) {
     if (opened == m_openedState.get())
         return;
+    m_runner.finishNow();
     m_openedState.set(opened);
-    visible(opened);
 
     m_modalActive = opened && m_modal.get();
-    if (m_scrim)
-        m_scrim->visible(m_modalActive);
+    Window* const window = ownerWindow();
 
-    if (Window* const window = ownerWindow()) {
-        if (opened)
+    if (opened) {
+        visible(true);
+        if (m_scrim)
+            m_scrim->visible(m_modalActive);
+        if (window)
             window->addOverlay(this);
-        else
+        if (window && m_enter)
+            runTransition(m_enter, nullptr);
+    } else if (window && m_exit) {
+        window->retireOverlay(this);
+        runTransition(m_exit, [this] { finishHiding(); });
+    } else {
+        finishHiding();
+        if (window)
             window->removeOverlay(this);
     }
 
@@ -41,6 +51,22 @@ void OverlayBase::applyOpened(bool opened) {
         m_onOpen();
     else if (!opened && m_onClose)
         m_onClose();
+}
+
+void OverlayBase::runTransition(TransitionFactory factory, std::function<void()> onFinished) {
+    Window* const window = ownerWindow();
+    std::vector<TransitionRunner::Entry> entries;
+    entries.push_back({this, factory()});
+    m_runner.start(std::move(entries), static_cast<float>(window->width()), static_cast<float>(window->height()),
+                   nullptr, std::move(onFinished));
+}
+
+void OverlayBase::finishHiding() {
+    visible(false);
+    if (m_scrim)
+        m_scrim->visible(false);
+    if (Window* const window = ownerWindow())
+        window->releaseOverlay(this);
 }
 
 bool OverlayBase::isContentHit(const Widget* hit) const {
