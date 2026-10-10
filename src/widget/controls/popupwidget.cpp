@@ -27,6 +27,8 @@ void PopupWidget::applyStyle(const PopupStyle& value) {
     borderWidth(value.borderWidth);
     radius(value.radius);
     padding(value.padding);
+    enter(value.enter);
+    exit(value.exit);
 }
 
 }

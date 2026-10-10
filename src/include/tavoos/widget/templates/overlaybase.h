@@ -84,6 +84,9 @@ public:
     bool modal() const { return m_modal; }
     bool modalActive() const noexcept { return m_modalActive; }
 
+    const TransitionFactory& enter() const { return m_enter; }
+    const TransitionFactory& exit() const { return m_exit; }
+
     State<bool>& openedState() { return m_openedState; }
 
     void open();
