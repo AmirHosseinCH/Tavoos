@@ -44,6 +44,7 @@ set(TAVOOS_SOURCES
     widget/templates/textfieldbase.cpp
     widget/controls/textfieldwidget.cpp
     widget/templates/spinboxbase.cpp
+    widget/templates/stackviewbase.cpp
     widget/controls/spinboxwidget.cpp
     resources/resourceregistry.cpp
     resources/pathscheme.cpp
@@ -106,6 +107,7 @@ target_sources(Tavoos
     include/tavoos/widget/templates/textfieldbase.h
     include/tavoos/widget/controls/textfieldwidget.h
     include/tavoos/widget/templates/spinboxbase.h
+    include/tavoos/widget/templates/stackviewbase.h
     include/tavoos/widget/controls/spinboxwidget.h
     include/tavoos/widget/controls/style/buttonstyle.h
     include/tavoos/widget/controls/style/checkboxstyle.h
@@ -116,6 +118,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/popupstyle.h
     include/tavoos/widget/controls/style/progressbarstyle.h
     include/tavoos/widget/controls/style/sliderstyle.h
+    include/tavoos/widget/controls/style/stackviewstyle.h
     include/tavoos/widget/controls/style/textfieldstyle.h
     include/tavoos/widget/controls/style/spinboxstyle.h
     include/tavoos/widget/widgets.h
