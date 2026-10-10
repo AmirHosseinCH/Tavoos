@@ -31,6 +31,12 @@ Widget* StackViewWidget::item(int index) const {
     return all[static_cast<std::size_t>(index)];
 }
 
+int StackViewWidget::indexOf(const Widget* target) const {
+    const std::vector<Widget*> all = items();
+    const auto found = std::ranges::find(all, target);
+    return found == all.end() ? -1 : static_cast<int>(found - all.begin());
+}
+
 void StackViewWidget::syncDepth() {
     m_depth.setIfChanged(static_cast<int>(items().size()));
 }

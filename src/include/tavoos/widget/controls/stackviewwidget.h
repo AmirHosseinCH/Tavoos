@@ -58,6 +58,7 @@ public:
     State<int>& depthState() { return m_depth; }
     Widget* currentItem() const;
     Widget* item(int index) const;
+    int indexOf(const Widget* item) const;
 
     static StackViewWidget* of(Widget& widget) { return widget.ancestor<StackViewWidget>(); }
 
