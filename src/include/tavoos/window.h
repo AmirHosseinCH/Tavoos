@@ -65,6 +65,7 @@ public:
     void focusFirstIn(Widget* root);
     void rememberFocus(Widget* key);
     void restoreFocus(Widget* key);
+    void transferFocusMemory(Widget* from, Widget* to);
     void markDirty();
 
     void addOverlay(OverlayBase* overlay);

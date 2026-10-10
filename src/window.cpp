@@ -87,6 +87,21 @@ void Window::restoreFocus(Widget* key) {
     }
 }
 
+void Window::transferFocusMemory(Widget* from, Widget* to) {
+    const auto source = std::ranges::find_if(m_focusMemory, [from](const auto& entry) { return entry.first == from; });
+    if (source == m_focusMemory.end())
+        return;
+
+    Widget* const saved = source->second;
+    m_focusMemory.erase(source);
+
+    const auto target = std::ranges::find_if(m_focusMemory, [to](const auto& entry) { return entry.first == to; });
+    if (target != m_focusMemory.end())
+        target->second = saved;
+    else
+        m_focusMemory.emplace_back(to, saved);
+}
+
 void Window::addOverlay(OverlayBase* overlay) {
     std::erase(m_overlays, overlay);
     rememberFocus(overlay);

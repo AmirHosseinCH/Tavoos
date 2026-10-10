@@ -61,6 +61,11 @@ void StackViewWidget::itemPushed(Widget* previous, Widget* created) {
     notify();
 }
 
+void StackViewWidget::handOverFocus(Widget* replaced, Widget* created) {
+    if (Window* const window = ownerWindow())
+        window->transferFocusMemory(replaced, created);
+}
+
 void StackViewWidget::retire(Widget* item) {
     removeChild(item);
     syncDepth();

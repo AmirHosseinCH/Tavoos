@@ -32,8 +32,10 @@ public:
     T* replace(std::function<void(T&)> body = {}) {
         Widget* const replaced = currentItem();
         T* const created = push<T>(std::move(body));
-        if (replaced)
+        if (replaced) {
+            handOverFocus(replaced, created);
             retire(replaced);
+        }
         return created;
     }
 
@@ -63,6 +65,7 @@ private:
     std::vector<Widget*> items() const;
     void itemPushed(Widget* previous, Widget* created);
     void retire(Widget* item);
+    void handOverFocus(Widget* replaced, Widget* created);
     void syncDepth();
     void notify();
 
