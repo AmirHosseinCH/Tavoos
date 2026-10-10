@@ -32,11 +32,13 @@ document is where the "why" behind non-obvious code lives instead.
    - [`AnimatableBase` / `AnimationManager`](#animatablebase--animationmanager)
    - [`AnimatedState<T>`](#animatedstatet)
    - [`Widget::PairTween`](#widgetpairtween)
+   - [Transitions](#transitions)
 8. [Event system](#event-system)
    - [Bubbling](#bubbling)
    - [Hit-testing](#hit-testing)
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
+   - [Focus memory](#focus-memory)
 9. [Interaction state & control widgets](#interaction-state--control-widgets)
    - [`Control` and the behavior bases](#control-and-the-behavior-bases)
    - [Click-to-focus](#click-to-focus)
@@ -45,6 +47,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
+   - [Stack views](#stack-views)
    - [Theme and style structs](#theme-and-style-structs)
    - [The interaction-color pattern](#the-interaction-color-pattern)
 10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
@@ -1465,6 +1468,34 @@ eases on subsequent ones. `PairTween::animateTo` takes raw `float*` targets (`&m
 uses the immediate, final resolved values, so children of an animating widget are never
 themselves mid-animation-lag; only that one widget's paint position eases.
 
+### Transitions
+
+`Transition` (`animation/transition.h`) animates one widget through a short lifecycle that a runner
+drives: `prepare(item, containerWidth, containerHeight)` captures the widget's own values and sets
+the start state, `update(progress)` applies the eased progress from 0 to 1, and `finish(completed)`
+puts the captured values back. A transition object keeps its own state, so subclasses can
+remember whatever they change. Its constructor takes only parameters (a duration and an
+easing); it never touches a widget. A `TransitionFactory` (`std::function<std::unique_ptr<
+Transition>()>`) creates a fresh instance for each use.
+
+`TransitionRunner` (`animation/transitionrunner.h`) runs all the transitions of one operation on a
+single clock, as an `AnimatableBase`. `start(entries, width, height, isAlive, onFinished)` calls
+`prepare` on each entry and registers with the animation manager. Each frame it calls `update` with
+that entry's own eased progress, and when the longest duration has elapsed it calls `finish(true)`
+on every entry and then `onFinished`. `finishNow()` jumps every entry to progress 1 first, which is
+what an operation arriving mid-transition does. A runner with only zero-duration entries completes
+immediately without registering. `isAlive(Widget*)` is a callback the owner provides; the runner
+asks it before touching an entry, so a widget removed by someone else mid-transition is skipped
+instead of dereferenced.
+
+The presets (`animation/transitions.h`) are plain subclasses: `FadeIn`, `FadeOut`, `ScaleIn`,
+`ScaleOut`, `SlideIn(Edge)`, `SlideOut(Edge)` and a `LambdaTransition` that wraps a function. The
+slides move a widget by adding `+d` to one margin and `-d` to the opposite one, which shifts it
+without changing its size and without touching its alignment, and `finish` restores the captured
+margins. The fades and scales set `opacity` and `scale` and restore them the same way. A binding
+on one of those properties is replaced for the duration and then replaced by the captured plain
+value.
+
 ## Event system
 
 `src/include/tavoos/events/` defines `Event`/`MouseEvent`/`KeyEvent`/`WheelEvent`; dispatch
@@ -1645,6 +1676,25 @@ chain is recomputed from scratch on every Tab press rather than cached - simple,
 enough in practice for typical UI sizes. While a modal overlay is open, the chain is collected
 from that overlay's subtree only, so Tab never leaves it.
 
+### Focus memory
+
+A widget that temporarily takes over focus, such as a popup or an item of a stack view, needs to
+give focus back to whatever had it. `Window` keeps a list of `(key, saved)` pairs, `m_focusMemory`,
+where `key` is the widget that took over and `saved` is the widget that was focused when it did:
+
+| Call | What it does |
+|---|---|
+| `rememberFocus(key)` | Stores `(key, current focus)` unless `key` already has an entry. |
+| `focusFirstIn(root)` | Focuses the first focusable widget inside `root`; if there is none, focus does not change. |
+| `restoreFocus(key)` | Removes `key`'s entry. If the focused widget is `key` or a descendant of it, focuses the saved widget (or clears focus if there is none). If focus has already moved elsewhere, it is left alone. |
+| `transferFocusMemory(from, to)` | Moves `from`'s saved widget to `to`, overwriting or creating `to`'s entry. |
+
+`restoreFocus` only acts while focus is still inside `key`, so a click that moved focus elsewhere
+is respected, and it must run before `key` is removed, because removing the subtree clears focus
+and the entry. `clearReferencesTo` also removes entries whose key was removed and nulls saved
+widgets that were removed, so a restore never focuses a dead widget. Overlays use these calls when
+they open and close, and stack views use them when items are pushed, popped and replaced.
+
 ## Interaction state & control widgets
 
 ### `Control` and the behavior bases
@@ -1805,6 +1855,9 @@ the bases for window-level layers such as popups; they are covered in
 
 **`ScrollAreaBase`** (`templates/scrollareabase.h`) adds scrollbars to a flick area; see
 [Scroll areas](#scroll-areas).
+
+**`StackViewBase`** (`templates/stackviewbase.h`) is a stack of items with animated transitions;
+see [Stack views](#stack-views).
 
 `focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
 itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
@@ -1993,10 +2046,9 @@ Dismissal is driven from `Window`, using the overlay's `closePolicy` (a bitmask 
 - `modal` is read when the overlay opens. While it is open, hit-testing blocks hover, press, drag,
   and scroll to everything behind it, and Tab is confined to its own controls.
 
-Focus follows the stack. `Window::addOverlay` records the previously focused widget and moves
-focus to the overlay's first focusable child; `removeOverlay` restores it, but only when focus is
-still inside the overlay, so a click that moved focus elsewhere is kept. A restore target that was
-removed in the meantime is dropped rather than restored.
+Focus follows the stack through the [focus memory](#focus-memory): `Window::addOverlay` calls
+`rememberFocus` and `focusFirstIn`, and `removeOverlay` calls `restoreFocus`, so focus returns
+to the widget that had it, unless it has moved elsewhere in the meantime.
 
 **`PopupBase`** (`templates/popupbase.h`) is an `OverlayBase` that places itself relative to a
 target rectangle - the parent widget by default, or the window (`target(PlacementTarget::Window)`)
@@ -2134,6 +2186,56 @@ axis. Tracks hug an edge, and thumbs bind the two fractions above. The thumb col
 `thumbPressedColor` over `transition` seconds as the base's hover and pressed states change.
 `ScrollAreaStyle` also carries the fade timings and `minThumbSize`, which the widget forwards to
 the base's setters in `applyStyle`.
+
+### Stack views
+
+**`StackViewBase`** (`templates/stackviewbase.h`) extends `Control` with a stack of items that each
+fill the view. `StackViewWidget` (`controls/stackviewwidget.h`) is the concrete version, styled by
+`StackViewStyle` through `Theme::stackView`.
+
+**The items are the children.** The stack keeps no list of its own. Its items are its children,
+minus the `background` slot, overlay children and items that are being retired, in creation order,
+so the last one is the top. Depth, `currentItem()`, `item(i)` and `indexOf()` are computed from that,
+so they cannot go stale. `push<T>(body)` creates an item through `addChild<T>`, so a component's
+`build()` runs. It sets `fill(Fill::Both)` before the body, so the body can still override it, and the
+previous top item stays alive, hidden once the transition ends. `Object::ancestor<T>()` walks the
+parent chain, and `StackViewBase::of(widget)` uses it so an item can reach its stack without a stored
+pointer.
+
+**Operations.** `pop` removes the top item, `popTo` and `popToRoot` remove several, `replace<T>`
+swaps the top item, and `clear` removes everything. A new operation first calls
+`finishTransition()`, which finishes any running transition at once, so nothing queues. `pop`,
+`popTo` and `replace` mark the leaving item as *retiring* before updating the depth, so
+`depth()`, `currentItem()` and `onItemChange` already describe the result while the item is still
+animating out; the item is removed through the usual deferred destruction when its transition ends.
+`popTo` removes the items between the top and the target immediately and animates only the top
+item against the target.
+
+**Transitions.** Six slots, `pushEnter`, `pushExit`, `popEnter`, `popExit`, `replaceEnter` and
+`replaceExit`, each hold a `TransitionFactory`. They are set with a transition type and its
+constructor arguments (`pushEnter<SlideIn>(Edge::Right, 0.3f)`), or with a ready factory (which is
+how the style applies them). An operation builds an enter transition for the incoming item and an
+exit transition for the outgoing one, and hands both to the stack's `TransitionRunner`. An empty
+slot means no animation. A `TransitionSet` (an enter and an exit factory) passed to `push`,
+`pop`, `popTo`, `popToRoot` or `replace` overrides the slots for that call, and
+`TransitionSet::immediate()` forces no animation.
+
+The stack turns `clip(true)` on only while a transition runs, using the same mask-shape trick as
+`FlickAreaBase`: a transparent default background and a `render()` that draws it during mask
+capture, so a slide cannot spill outside the stack. While a transition runs,
+`transitionRunningState()` is true. Input to the retiring item is not blocked; an app that wants
+that can disable its controls from this state.
+
+**Focus.** Pushing calls `rememberFocus` for the new item and `focusFirstIn` on it, then clears
+focus if it is still inside the previous item (the new item had nothing focusable), so keys never
+go to a hidden item. Popping calls `restoreFocus` on the leaving item before it is removed.
+`replace` calls `transferFocusMemory` from the replaced item to the new one, so popping the
+replacement still returns focus to the widget that had it before the replaced item was pushed. See
+[Focus memory](#focus-memory).
+
+**`StackViewWidget`** applies `StackViewStyle`, which holds the six factories, through its `style()`
+overloads and `applyStyle`. The defaults are a slide for push and pop (`SlideIn(Right)` and
+`SlideOut(Left)`, and the reverse for pop) and a crossfade for replace.
 
 ### Theme and style structs
 

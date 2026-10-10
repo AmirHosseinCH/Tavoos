@@ -34,6 +34,7 @@ quick-start example in [README.md](../README.md).
    - [`PopupWidget`](#popupwidget)
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
+   - [`StackViewWidget`](#stackviewwidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Components](#components)
@@ -684,9 +685,147 @@ TB::ScrollArea([](Tavoos::ScrollAreaWidget& area) {
 a full-length thumb. Use `flickDirection` to limit the axes, or `Auto` to show a bar only when
 needed.
 
+### `StackViewWidget`
+
+```cpp
+class LoginPage : public Tavoos::Component<Tavoos::ColumnWidget> {
+public:
+    LoginPage(Tavoos::Object* parent) : Component{parent} { spacing(8); }
+
+    TAVOOS_PROPERTY(std::string, heading, "Sign in")
+
+protected:
+    void build() override {
+        TB::Text([this](Tavoos::TextWidget& t) { t.text(m_heading.state()); });
+        TB::TextField([](Tavoos::TextFieldWidget& f) { f.width(200).height(32); });
+        TB::Button([this](Tavoos::ButtonWidget& b) {
+            b.text("Back").onClick([this](Tavoos::MouseEvent&) { Tavoos::StackViewWidget::of(*this)->pop(); });
+        });
+    }
+};
+
+class HomePage : public Tavoos::Component<Tavoos::ColumnWidget> {
+public:
+    HomePage(Tavoos::Object* parent) : Component{parent} { spacing(8); }
+
+protected:
+    void build() override {
+        TB::Text([](Tavoos::TextWidget& t) { t.text("Home"); });
+        TB::Button([this](Tavoos::ButtonWidget& b) {
+            b.text("Sign in").onClick([this](Tavoos::MouseEvent&) {
+                Tavoos::StackViewWidget::of(*this)->push<LoginPage>([](LoginPage& page) { page.heading("Welcome back"); });
+            });
+        });
+    }
+};
+
+class MainWindow : public Tavoos::Window {
+public:
+    void build() override {
+        TB::StackView([](Tavoos::StackViewWidget& stack) {
+            stack.fill(Tavoos::Fill::Both);
+            stack.initialItem<HomePage>();
+        });
+    }
+};
+```
+
+A stack of **items** that each fill the view: the item on top is shown, and pushing another covers
+it. Items are created by type, so they are usually [components](#components), and the body works like
+`TB::Create`'s. The items below the top stay alive and keep their state (text typed into a field is
+still there after you go back), and popping an item destroys it. An item reaches the stack it lives
+in with `StackViewWidget::of(widget)`. Built on `StackViewBase`. The stack has no size of its own, so
+give it one or `fill` it.
+
+| Method or property | Notes |
+|---|---|
+| `push<T>(body)`, `replace<T>(body)` | Create an item of type `T`, push it or swap it for the top item. Return the new item. |
+| `initialItem<T>(body)` | The same as the first `push`, for the start of a `TB::StackView` body. |
+| `pop()` | Removes the top item; returns `false` if only one item is left. |
+| `popTo(item)`, `popToRoot()` | Remove items down to `item` or to the first one. |
+| `clear()` | Removes every item, with no animation. |
+| `depth()`, `depthState()` | How many items there are. |
+| `currentItem()`, `item(i)`, `indexOf(item)` | The top item, the item at an index (0 is the bottom), and an item's index or -1. |
+| `onItemChange(fn)` | Called with the new top item (or null) as soon as an operation starts. |
+| `transitionRunningState()` | `State<bool>`: true while a transition is running. |
+| `of(widget)` | The stack that `widget` belongs to, or null. |
+
+Focus follows the stack: pushing moves focus into the new item, and popping returns it to the
+widget that had it before. Hidden items are skipped by Tab.
+
+#### Transitions
+
+Pushing, popping and replacing animate by default: a slide for push and pop and a crossfade for
+replace. A transition is a small class; the stack has six slots (`pushEnter`, `pushExit`,
+`popEnter`, `popExit`, `replaceEnter`, `replaceExit`), set with a transition type and its constructor
+arguments:
+
+```cpp
+TB::StackView([](Tavoos::StackViewWidget& stack) {
+    stack.fill(Tavoos::Fill::Both);
+    stack.pushEnter<Tavoos::SlideIn>(Tavoos::Edge::Bottom, 0.3f)
+        .pushExit<Tavoos::FadeOut>(0.2f)
+        .popExit<Tavoos::SlideOut>(Tavoos::Edge::Bottom, 0.3f)
+        .replaceEnter<Zoom>(0.4f)
+        .popEnter<Tavoos::LambdaTransition>([](Tavoos::Widget& w, float t) { w.opacity(t); }, 0.15f);
+    stack.initialItem<HomePage>();
+});
+```
+
+The presets are `FadeIn`, `FadeOut`, `ScaleIn`, `ScaleOut`, `SlideIn(Edge)` and `SlideOut(Edge)`, plus
+`LambdaTransition(fn)` for a one-off effect (`fn(widget, progress)`). Every preset takes a duration and an
+optional easing last. An empty slot means no animation, and `clearTransitions()` empties all six.
+To override them for one call, pass a `TransitionSet` (an enter factory and an exit factory), or
+`TransitionSet::immediate()` for none:
+
+```cpp
+stack.push<LoginPage>({}, Tavoos::TransitionSet::immediate());
+```
+
+To write your own, derive `Transition` and implement three methods. `prepare` captures the
+item's own values and sets the start state, `update` applies the eased progress (0 to 1), and
+`finish` puts the values back:
+
+```cpp
+class Zoom : public Tavoos::Transition {
+public:
+    explicit Zoom(float duration = 0.25f) : Transition{duration} {}
+
+    void prepare(Tavoos::Widget& item, float, float) override {
+        m_item = &item;
+        m_rotation = item.rotation();
+        m_opacity = item.opacity();
+    }
+
+    void update(float progress) override {
+        m_item->rotation(m_rotation + (1.0f - progress) * 45.0f);
+        m_item->opacity(m_opacity * progress);
+    }
+
+    void finish(bool) override {
+        m_item->rotation(m_rotation);
+        m_item->opacity(m_opacity);
+    }
+
+private:
+    Tavoos::Widget* m_item{nullptr};
+    float m_rotation{0.0f};
+    float m_opacity{1.0f};
+};
+```
+
+Things to know:
+- A transition replaces any binding on the properties it animates (`opacity`, `scale`, the margins
+  for slides) for its duration, and restores plain values at the end.
+- An operation that arrives while a transition is running finishes it immediately and then starts
+  its own.
+- The retiring item keeps receiving input until its transition ends. Use `transitionRunningState()`
+  to disable your controls while it runs.
+- To change the defaults for every stack, set `Theme::stackView` with a `StackViewStyle`.
+
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `StackViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -730,6 +869,7 @@ what you give it.
 | `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
 | `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
 | `ScrollAreaBase` | everything in `FlickAreaBase`, plus bar policy, auto-hide, thumb drag, track click, thumb size and position states | `background`, `verticalTrack`/`verticalThumb`, `horizontalTrack`/`horizontalThumb`; children are declared inside it |
+| `StackViewBase` | a stack of items, push/pop/replace, transitions, focus handover, `depth`/`currentItem`/`indexOf` | `background`; items are created with `push<T>`/`initialItem<T>` |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
@@ -1132,6 +1272,11 @@ done), and call `AnimationManager::instance().registerAnimation(this)` /
 `unregisterAnimation(this)` to start/stop it - this is the same mechanism `AnimatedState`
 itself is built on.
 
+**Transitions.** `Tavoos::Transition` and the presets (`FadeIn`, `SlideOut`, ...) animate a widget
+through `prepare`, `update` and `finish`, and a `TransitionRunner` runs several of them on one clock.
+The stack view uses them for its push, pop and replace animations (see
+[`StackViewWidget`](#stackviewwidget)), and you can write your own by deriving `Transition`.
+
 ## Resource embedding
 
 Assets (fonts, images) can be compiled directly into your binary instead of shipped as loose
@@ -1185,3 +1330,6 @@ modal popup is open, Tab cycles only through its own controls.
 A flick area scrolls with the arrow keys, Page Up/Down, and Home/End. It does not need to be
 focused: a key that the focused widget inside it ignores (a button, for example) bubbles up and
 scrolls it. A scroll area has this off by default; enable it with `keyNavigation(true)`.
+
+A stack view moves focus into a pushed item and gives it back when the item is popped, and its hidden
+items are never Tab targets.
