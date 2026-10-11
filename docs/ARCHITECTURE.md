@@ -48,6 +48,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
    - [Stack views](#stack-views)
+   - [Swipe views](#swipe-views)
    - [Theme and style structs](#theme-and-style-structs)
    - [The interaction-color pattern](#the-interaction-color-pattern)
 10. [Image & SVG rendering and caching](#image--svg-rendering-and-caching)
@@ -1863,6 +1864,9 @@ the bases for window-level layers such as popups; they are covered in
 **`StackViewBase`** (`templates/stackviewbase.h`) is a stack of items with animated transitions;
 see [Stack views](#stack-views).
 
+**`SwipeViewBase`** (`templates/swipeviewbase.h`) lays out its children as pages and snaps between
+them; see [Swipe views](#swipe-views).
+
 `focused()`/`focusedState()` are the one piece of interaction state that lives on `Widget`
 itself (see [Click-to-focus](#click-to-focus) below), since focus is meaningful for any widget.
 
@@ -2255,6 +2259,82 @@ replacement still returns focus to the widget that had it before the replaced it
 **`StackViewWidget`** applies `StackViewStyle`, which holds the six factories, through its `style()`
 overloads and `applyStyle`. The defaults are a slide for push and pop (`SlideIn(Right)` and
 `SlideOut(Left)`, and the reverse for pop) and a crossfade for replace.
+
+### Swipe views
+
+**`SwipeViewBase`** (`templates/swipeviewbase.h`) extends `Control` with pages that sit side by
+side along an `Orientation`. `SwipeViewWidget` (`controls/swipeviewwidget.h`) is the concrete
+version, styled by `SwipeViewStyle` (`duration`, `easing`) through `Theme::swipeView`. Like the
+stack view it owns no background of its own: it installs a transparent one, which also serves as the
+clip shape, and always has `clip(true)`.
+
+**One number drives everything.** The view keeps a float `position`, measured in pages. `0` shows
+page 0, `1` shows page 1, and `0.5` is halfway between. The pages are the children, minus the
+`background` slot and overlays, in creation order, so a page's index is its place in that list.
+Nothing is transformed. `contentAreaFor(page)` returns the viewport rectangle moved along the axis by
+
+```
+round((pageIndex - position) * pageSize)
+```
+
+so each page resolves a real position, and rendering, hit-testing and focus read it like any other
+layout result, with no event positions translated. This is the same layout-shift approach as
+`FlickAreaBase`. Every position change marks the view's layout dirty.
+
+**Visibility.** `syncVisibility()` runs on every position change and shows only the pages from
+`floor(position)` to `ceil(position)`, which is one page at rest and two while moving. The other
+pages get `visible(false)`, so rendering, hit-testing and the Tab chain skip them. Layout still runs
+for them, because the view is not a layouter.
+
+**Index.** `m_currentIndex` is the requested value and can be out of range or set before any pages
+exist. `currentIndexState()` is the clamped one. `applyIndex(animated)` reconciles them whenever the
+request changes:
+
+1. It clamps the request, and writes the clamped value back when pages exist.
+2. It finds the page at that index and, if it is a different page from before, moves focus.
+3. It updates the state and calls `onCurrentIndexChange`.
+4. It animates `position` to the index, or jumps there when `animated` is false, the size or duration
+   is zero, there is no window, or the user is dragging.
+
+**Page changes.** `Object::appendChild` and `detachChild` are private, so the view cannot be told
+when a child is added or removed. `refreshPages()` instead compares the current page list with the
+last one it saw, and runs on every render, at the first layout (from `onResolvedSizeChanged()`, so an
+initial index shows on the first frame), and at the start of `setCurrentIndex` and drags. When the list
+changed it drops focus memory for pages that are gone, updates `countState()`, and keeps the same page
+current if it still exists (setting the index to its new place) or otherwise re-applies the clamped
+request, without animating. A page added or removed at runtime can therefore take one frame to settle.
+
+**Animation.** `animateTo(index)` records the start and end positions and registers with the
+`AnimationManager`. Each tick advances an elapsed time and sets
+`position = from + (to - from) * easing(t)`, ending exactly on the target. The tween is on `position`,
+not the index, so a drag or a new request that interrupts it continues from where it is.
+
+**Dragging.** The view claims `DragStart`, `DragMove` and `DragEnd` when `interactive` is set and
+there are two or more pages, so a drag that starts on a widget ignoring drags bubbles up to it.
+
+- `DragStart` refreshes the pages, stops the animation and sets `m_dragging`, which makes
+  `applyIndex` leave the position alone.
+- `DragMove` does `position -= delta / pageSize`, clamped to `0..count-1`, and stores a
+  timestamped sample of `position * pageSize`, keeping about the last 100 ms.
+- `DragEnd` estimates the release velocity from those samples, and treats it as zero if the last sample
+  is more than 80 ms old. The target is the nearest page, unless the speed is above 400 px/s, in which
+  case it is the next page in the direction of travel (`ceil` forward, `floor` back). It clears
+  `m_dragging` and requests that index, so the snap animates from the release point; even
+  a snap back to the same page animates, because `position` is not on it yet.
+
+A handled `DragEnd` also makes the window suppress the click that would follow, so a drag that
+starts on a button does not press it.
+
+**Keys.** `KeyPress` is claimed when `keyNavigation` is set and there are two or more pages. The
+arrow keys matching the orientation call `setCurrentIndex(index ± 1)`. If the index does not change
+(at an end) or the key is another one, the event is ignored so it bubbles on. The view is not
+focusable; it receives keys from a focused descendant that ignored them, the same way as a flick area.
+
+**Focus.** When the current page changes and the focused widget is inside the old page, the view
+saves that widget against the old page, then focuses the new page's saved widget if it is still in
+that page's tree (checked by searching the tree for the pointer, never dereferencing it), or its first
+focusable widget, or clears focus if it has none. This is a small per-page memory of its own, because
+`Window`'s [focus memory](#focus-memory) restores only while focus is still inside the key widget.
 
 ### Theme and style structs
 

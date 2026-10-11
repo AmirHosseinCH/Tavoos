@@ -35,6 +35,7 @@ quick-start example in [README.md](../README.md).
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
    - [`StackViewWidget`](#stackviewwidget)
+   - [`SwipeViewWidget`](#swipeviewwidget)
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Components](#components)
@@ -841,9 +842,62 @@ Things to know:
   to disable your controls while it runs.
 - To change the defaults for every stack, set `Theme::stackView` with a `StackViewStyle`.
 
+### `SwipeViewWidget`
+
+```cpp
+TB::SwipeView([](Tavoos::SwipeViewWidget& swipe) {
+    swipe.width(360).height(240).onCurrentIndexChange([](int index) {
+        std::println("page {}", index);
+    });
+
+    TB::Rectangle([](Tavoos::RectangleWidget& page) {
+        page.fill(Tavoos::Fill::Both).color(Tavoos::Color::Red);
+    });
+    TB::Rectangle([](Tavoos::RectangleWidget& page) {
+        page.fill(Tavoos::Fill::Both).color(Tavoos::Color::Green);
+    });
+    TB::Rectangle([](Tavoos::RectangleWidget& page) {
+        page.fill(Tavoos::Fill::Both).color(Tavoos::Color::Blue);
+    });
+});
+```
+
+A row of **pages** that you swipe between. The children are the pages, each should `fill` the view,
+and the one at `currentIndex` is shown. Dragging moves the pages with the pointer and, on release,
+snaps to the nearest page; a quick flick moves to the next page even if the pointer went less than
+half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one or `fill` it.
+
+| Property or method | Notes |
+|---|---|
+| `currentIndex()`, `currentIndexState()` | The page shown. Setting it animates to that page. Out-of-range values are clamped, and a value set before the pages exist is applied once they do. |
+| `setCurrentIndex(i, animated)` | The same, with `animated = false` to jump. |
+| `next()`, `previous()` | Go one page forward or back; nothing happens at the ends. |
+| `count()`, `countState()` | How many pages there are. |
+| `page(i)` | The page at an index, or null. |
+| `orientation()` | `Horizontal` (default) or `Vertical`. |
+| `interactive()` | Whether dragging changes the page. Default: on. |
+| `keyNavigation()` | Left/Right (horizontal) or Up/Down (vertical) change the page. Default: on. |
+| `duration()`, `easing()` | The snap animation. Defaults come from the style: 0.25 seconds, ease in-out. |
+| `onCurrentIndexChange(fn)` | Called with the new index as soon as it changes, before the animation ends. |
+
+- Pages added or removed later are picked up automatically. If the current page is removed, the
+  view moves to a neighbor without animating; if an earlier page is removed, the same page stays
+  current.
+- Only the page or two in view are shown. The others are hidden, so they are not drawn, cannot be
+  hit, and are skipped by Tab. The view owns each page's `visible`, as a stack view does.
+- A drag that starts on a button or any other widget that ignores drags swipes the view, and the
+  button is not clicked afterwards. A scroll area or flick area inside a page keeps the drags it
+  handles itself, and the swipe view gets the rest.
+- Focus follows the page: when the page changes and focus was inside the old one, it moves to the
+  widget that had focus last time in the new page, or to its first focusable widget.
+- The mouse wheel does nothing, so a page can scroll its own content.
+- The view clips its pages. To give it rounded corners or a color, install your own `background`.
+- To change the defaults for every swipe view, set `Theme::swipeView` with a `SwipeViewStyle`
+  (`duration`, `easing`).
+
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `StackViewStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -888,6 +942,7 @@ what you give it.
 | `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
 | `ScrollAreaBase` | everything in `FlickAreaBase`, plus bar policy, auto-hide, thumb drag, track click, thumb size and position states | `background`, `verticalTrack`/`verticalThumb`, `horizontalTrack`/`horizontalThumb`; children are declared inside it |
 | `StackViewBase` | a stack of items, push/pop/replace, transitions, focus handover, `depth`/`currentItem`/`indexOf` | `background`; items are created with `push<T>`/`initialItem<T>` |
+| `SwipeViewBase` | pages as children laid out along an orientation, `position`, drag and flick snapping, `currentIndex`/`count`, key navigation, per-page focus | `background` (also the clip shape); pages are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
@@ -1352,3 +1407,8 @@ scrolls it. A scroll area has this off by default; enable it with `keyNavigation
 
 A stack view moves focus into a pushed item and gives it back when the item is popped, and its hidden
 items are never Tab targets.
+
+A swipe view changes page with the arrow keys that match its orientation. As with a flick area, it does
+not need to be focused: a key ignored by the focused widget inside it (a button, for example) bubbles
+up to it. Changing page moves focus into the new page and back again when you return, and the pages
+that are out of view are never Tab targets.
