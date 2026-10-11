@@ -11,6 +11,7 @@
 #include <tavoos/widget/controls/style/sliderstyle.h>
 #include <tavoos/widget/controls/style/stackviewstyle.h>
 #include <tavoos/widget/controls/style/spinboxstyle.h>
+#include <tavoos/widget/controls/style/swipeviewstyle.h>
 #include <tavoos/widget/controls/style/switchstyle.h>
 #include <tavoos/widget/controls/style/textfieldstyle.h>
 
@@ -29,6 +30,7 @@ public:
     State<FlickAreaStyle> flickArea{FlickAreaStyle{}};
     State<ScrollAreaStyle> scrollArea{ScrollAreaStyle{}};
     State<StackViewStyle> stackView{StackViewStyle{}};
+    State<SwipeViewStyle> swipeView{SwipeViewStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
 };
 
