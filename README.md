@@ -10,9 +10,11 @@ A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builde
 - **Reactive properties** - `Property<T>`/`State<T>` bindings that propagate changes automatically.
 - **Layout system** - `Column`, `Row`, `Grid`, and `Flex`.
 - **Controls** - Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField, and SpinBox, each themeable via a shared `Theme` and stylable per-instance.
+- **Popups, scrolling, and navigation** - `Popup` overlays, `FlickArea` and `ScrollArea` for content larger than its view, and `StackView` and `SwipeView` for moving between pages.
+- **Components** - reusable widget types with declared properties and a `build()` method, usable anywhere a widget is.
 - **Text, images, and SVG** - font loading with weight/family fallback, JPEG/PNG images, and SVG rendering, all through the same widget model.
 - **Resource embedding** - `tavoos_add_resources()` compiles assets (fonts, images) directly into the binary at build time, loaded via `resource:/` paths - no loose files to ship.
-- **Animation** - property transitions with easing.
+- **Animation** - property animations with easing, and transitions for popups and page changes.
 
 A sample login form app built with Tavoos:
 
@@ -59,8 +61,8 @@ int main() {
 
 ## Documentation
 
-- [docs/GUIDE.md](docs/GUIDE.md) - using Tavoos: core concepts, widget properties, types, animation, resource embedding.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how Tavoos itself is built: object model, layout, rendering, animation, events.
+- [docs/GUIDE.md](docs/GUIDE.md) - using Tavoos: core concepts, layouts and controls, theming, components, animation and transitions, keyboard and focus, resource embedding.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how Tavoos itself is built: object model, layout, rendering, animation, events, focus, overlays, scrolling, and navigation.
 
 ## Building
 
