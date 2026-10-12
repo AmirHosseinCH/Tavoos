@@ -357,6 +357,7 @@ public:
 
     bool visible() const { return m_visible; }
     Window* ownerWindow() const noexcept { return m_ownerWindow; }
+    bool built() const noexcept { return m_built; }
     bool focusable() const { return m_focusable; }
     bool focused() const { return m_focused; }
     State<bool>& focusedState() { return m_focused; }
@@ -403,6 +404,7 @@ public:
             body(*raw);
         std::unique_ptr<Object> asObject = std::move(child);
         appendChild(asObject);
+        raw->finishBuild();
         raw->requestRelayout();
         return raw;
     }
@@ -461,6 +463,7 @@ protected:
     void renderChildren(Renderer&);
     virtual Size computeIntrinsicSize();
     virtual void onResolvedSizeChanged() {}
+    virtual void onBuilt() {}
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
@@ -492,6 +495,10 @@ protected:
 private:
     virtual void layout(bool force = false);
     void setResolved(float, float, float, float);
+    void finishBuild() {
+        m_built = true;
+        onBuilt();
+    }
 
     class PairTween : public AnimatableBase {
     public:
@@ -612,6 +619,7 @@ private:
     bool m_intrinsicSizeCacheValid{false};
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};
+    bool m_built{false};
     static bool s_isBuilding;
 };
 
