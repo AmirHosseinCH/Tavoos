@@ -103,6 +103,7 @@ public:
 protected:
     bool isContentChild(const Widget& child) const override;
     void onOffsetsSynced(bool offsetsChanged) override;
+    void onBuilt() override;
     bool hasHandlerFor(EventType type) override;
     void triggerPress(MouseEvent& event) override;
     void triggerRelease(MouseEvent& event) override;
@@ -166,6 +167,7 @@ private:
     Axis m_barDrag{Axis::None};
     float m_idle{0.0f};
     bool m_animating{false};
+    bool m_wakeOnBuilt{false};
 };
 
 }

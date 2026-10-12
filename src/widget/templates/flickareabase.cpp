@@ -71,6 +71,11 @@ bool FlickAreaBase::scrollable() {
 }
 
 void FlickAreaBase::syncOffsets() {
+    if (!built()) {
+        m_syncPending = true;
+        return;
+    }
+
     const float x = std::clamp(std::round(m_contentX.get()), 0.0f, maxContentX());
     const float y = std::clamp(std::round(m_contentY.get()), 0.0f, maxContentY());
     const bool changed = x != m_contentXState.get() || y != m_contentYState.get();
@@ -84,6 +89,11 @@ void FlickAreaBase::syncOffsets() {
 
 void FlickAreaBase::onResolvedSizeChanged() {
     syncOffsets();
+}
+
+void FlickAreaBase::onBuilt() {
+    if (m_syncPending)
+        syncOffsets();
 }
 
 void FlickAreaBase::scrollTo(float x, float y) {
