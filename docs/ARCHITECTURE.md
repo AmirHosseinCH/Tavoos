@@ -12,6 +12,7 @@ document is where the "why" behind non-obvious code lives instead.
 1. [Design philosophy](#design-philosophy)
 2. [The object model](#the-object-model)
 3. [Building the tree](#building-the-tree)
+   - [The build-complete hook](#the-build-complete-hook)
    - [Components](#components)
 4. [Reactive properties](#reactive-properties)
    - [`Property<T>`](#propertyt)
@@ -142,9 +143,11 @@ private:
     static void create(std::function<void(T&)> body) {
         const auto parentObject = currentItem;
         std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
+        T* const raw = static_cast<T*>(widget.get());
         currentItem = widget.get();
-        body(static_cast<T&>(*widget));
+        body(*raw);
         parentObject->appendChild(widget);
+        raw->finishBuild();
         currentItem = parentObject;
     }
 };
@@ -180,6 +183,7 @@ T* addChild(std::function<void(T&)> body = {}) {
         body(*raw);
     std::unique_ptr<Object> asObject = std::move(child);
     appendChild(asObject);
+    raw->finishBuild();
     raw->requestRelayout();
     return raw;
 }
@@ -189,6 +193,34 @@ This has no dependency on `Builder::currentItem` at all - it's the only safe way
 tree dynamically, at runtime, after `build()` has already returned. If a dynamically-added
 widget itself needs children, nest more `addChild<T>()` calls, not `TB::` ones - they'll
 silently do nothing useful (`currentItem` is `nullptr`, so `TB::create<T>` dereferences it).
+
+### The build-complete hook
+
+A property setter runs its change callbacks immediately, so a widget whose callbacks do real work
+repeats it for every setter in the body, and does it before the children, slots or pages it depends
+on exist. `Widget` therefore has a build-complete hook:
+
+- `built()` is false while the constructor and the body run, and true afterwards.
+- `onBuilt()` is a protected virtual, empty by default. It runs once, after the body has run and the
+  widget has been appended to its parent.
+- `finishBuild()` is private and sets the flag, then calls `onBuilt()`. It is called from the two
+  creation paths and nowhere else: `Builder::create` (a friend of `Widget`) and `addChild<T>`. Those
+  are the only places a widget is created, so the flag is reliable.
+
+Children finish before their parents, so a widget's `onBuilt()` sees all of its children, slots and
+pages already built. A component's `build()` and its body both run before its `onBuilt()`.
+
+A base class opts in by skipping derived work while `!built()` and doing it once in `onBuilt()`:
+
+- `FlickAreaBase::syncOffsets()` only records `m_syncPending` before the build, and `onBuilt()`
+  syncs once if something was deferred. `ScrollAreaBase` does the same for its bar updates
+  (`m_wakeOnBuilt`).
+- `SwipeViewBase` ignores `currentIndex` changes and `refreshPages()` before the build, and
+  `onBuilt()` reconciles the pages and applies the requested index once, with every page present.
+
+Setters called after the build behave as they always did. Derived states, such as `contentY()` or
+`currentIndexState()`, keep their initial values until `onBuilt()`. `s_isBuilding` is separate: it
+only suppresses relayout requests during the window's initial build.
 
 ### Removing widgets: two-phase deferred destruction
 
@@ -281,11 +313,13 @@ template<typename T>
 static void create(std::function<void(T&)> body) {
     const auto parentObject = currentItem;
     std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
+    T* const raw = static_cast<T*>(widget.get());
     currentItem = widget.get();
     if constexpr (std::is_base_of_v<ComponentBase, T>)
-        static_cast<ComponentBase&>(static_cast<T&>(*widget)).runBuild();
-    body(static_cast<T&>(*widget));
+        static_cast<ComponentBase&>(*raw).runBuild();
+    body(*raw);
     parentObject->appendChild(widget);
+    raw->finishBuild();
     currentItem = parentObject;
 }
 ```
@@ -293,6 +327,10 @@ static void create(std::function<void(T&)> body) {
 `Widget::addChild<T>` makes the same `if constexpr` check and calls `runBuild()` before running
 its body, so a component created after the window is built is built the same way. Detecting it at
 compile time means `Widget` itself gains no virtual.
+
+After the body returns and the component is appended, `finishBuild()` runs the component's
+`onBuilt()` like any other widget's, after its `build()` and its body (see
+[The build-complete hook](#the-build-complete-hook)).
 
 `runBuild()` saves `Builder::currentItem` (which is why `ComponentBase` is a `Builder` friend),
 points it at the component, calls `build()`, and restores the saved value. In `create` that saved
@@ -2123,6 +2161,10 @@ The maximum offset on an axis is the content size minus the viewport, never belo
 an axis missing from `flickDirection` (default: both). `computeContentSize()` is virtual so a
 virtualized list can supply its own extent.
 
+Setting offsets while the area is built only records that a sync is pending; the sync runs once
+in `onBuilt()`, so `onScroll` fires once for an initial offset even when it is registered after
+the setter.
+
 **The clip shape.** `FlickAreaBase` sets `clip(true)`, which routes it through the three-step
 [clip composite](#clipping). A `Control` draws nothing while the mask is captured, so its
 `render()` draws the `background` slot's shape in that case and the real content otherwise. The
@@ -2303,6 +2345,8 @@ initial index shows on the first frame), and at the start of `setCurrentIndex` a
 changed it drops focus memory for pages that are gone, updates `countState()`, and keeps the same page
 current if it still exists (setting the index to its new place) or otherwise re-applies the clamped
 request, without animating. A page added or removed at runtime can therefore take one frame to settle.
+`onBuilt()` runs `refreshPages()` once the pages exist, so an index set in the body is applied
+before the first frame and `onCurrentIndexChange` fires once for it.
 
 **Animation.** `animateTo(index)` records the start and end positions and registers with the
 `AnimationManager`. Each tick advances an elapsed time and sets
@@ -2613,3 +2657,5 @@ are usable from another without duplication.
    pattern (`create<YourWidgetType>(std::move(body))`).
 5. If it needs to be a layout container, override `layout()` (private) and set
    `isLayouter()` to return `true`.
+6. If setting a property triggers work that needs the whole widget, such as its children or
+   slots, ignore that callback while `!built()` and do the work once in `onBuilt()`.

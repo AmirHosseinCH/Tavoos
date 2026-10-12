@@ -625,7 +625,7 @@ on `FlickAreaBase`.
 | `keyNavigation()` | `bool` | Arrows, Page Up/Down, Home/End. Default on. |
 | `scrollTo(x, y)`, `scrollBy(dx, dy)` | - | Move programmatically; clamped. |
 | `scrollToTop()`, `scrollToBottom()`, `scrollToLeft()`, `scrollToRight()` | - | Jump to an end. |
-| `onScroll(fn)` | `std::function<void(float, float)>` | Fired with the new offsets whenever they change. |
+| `onScroll(fn)` | `std::function<void(float, float)>` | Fired with the new offsets whenever they change, including once for an initial `contentX`/`contentY` set while building. |
 | `background<W>(body)` | - | Replace the background. Its shape is also the clip shape. |
 | `backgroundColor()`, `radius()` | `Paint` / `int` | A larger radius rounds the clipped content too. |
 
@@ -878,7 +878,7 @@ half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one
 | `interactive()` | Whether dragging changes the page. Default: on. |
 | `keyNavigation()` | Left/Right (horizontal) or Up/Down (vertical) change the page. Default: on. |
 | `duration()`, `easing()` | The snap animation. Defaults come from the style: 0.25 seconds, ease in-out. |
-| `onCurrentIndexChange(fn)` | Called with the new index as soon as it changes, before the animation ends. |
+| `onCurrentIndexChange(fn)` | Called with the new index as soon as it changes, before the animation ends, and once for an initial `currentIndex`. |
 
 - Pages added or removed later are picked up automatically. If the current page is removed, the
   view moves to a neighbor without animating; if an earlier page is removed, the same page stays
@@ -1084,6 +1084,40 @@ private:
 The hook runs when the size is first known and whenever it changes, before the children are laid
 out, so what it sets takes effect in the same pass.
 
+**Work that needs everything set.** A setter in a body runs its callbacks immediately, so a
+callback that does real work runs once per setter, before the children it needs exist. Skip that
+work until the widget is built, and do it once in `onBuilt()`:
+
+```cpp
+class Gallery : public Tavoos::Control {
+public:
+    Gallery(Tavoos::Object* parent) : Control{parent} {
+        m_columns.onChange([this](const int&) {
+            if (built())
+                arrange();
+        });
+    }
+
+    decltype(auto) columns(this auto&& self, Tavoos::PropertyArg<int> value) {
+        value.applyTo(self.m_columns);
+        return std::forward<decltype(self)>(self);
+    }
+
+protected:
+    void onBuilt() override { arrange(); }
+
+private:
+    void arrange();
+
+    Tavoos::Property<int> m_columns{3};
+};
+```
+
+`built()` is false in the constructor and in the body, and true from the moment `onBuilt()` runs,
+once, after the body has run and the widget is attached. Children are built before their parents,
+so by then every child and slot exists. Anything you set after that runs its callbacks immediately,
+as usual.
+
 ## Components
 
 A **component** is a piece of UI you define once and reuse anywhere, with its own properties: a
@@ -1133,6 +1167,7 @@ TB::Create<LabeledField>([](LabeledField& f) {
 2. `build()` runs once, with `TB::` calls attaching to the component.
 3. The instance's body runs, so it can set properties and declare more children, which attach to
    the component after the ones `build()` created.
+4. Once the component is attached, `onBuilt()` runs.
 
 Because `build()` runs before the body, bind to a property's state (`m_label.state()`) rather
 than reading its value; a value set in the body then flows through. Keep pointers to inner
