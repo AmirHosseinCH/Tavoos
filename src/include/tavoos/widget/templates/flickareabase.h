@@ -108,6 +108,7 @@ protected:
     void triggerKeyPress(KeyEvent& event) override;
     ContentArea contentAreaFor(const Widget& child) const override;
     void onResolvedSizeChanged() override;
+    void onBuilt() override;
 
 private:
     using Control::content;
@@ -125,6 +126,7 @@ private:
     Property<bool> m_keyNavigation{true};
     State<float> m_contentXState{0.0f};
     State<float> m_contentYState{0.0f};
+    bool m_syncPending{false};
 
     std::function<void(float, float)> m_onScroll;
 };

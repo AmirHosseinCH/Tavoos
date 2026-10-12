@@ -88,6 +88,7 @@ protected:
     void triggerKeyPress(KeyEvent& event) override;
     ContentArea contentAreaFor(const Widget& child) const override;
     void onResolvedSizeChanged() override;
+    void onBuilt() override;
 
 private:
     using Control::content;

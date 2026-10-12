@@ -9,6 +9,10 @@ ScrollAreaBase::ScrollAreaBase(Object* parent) : FlickAreaBase{parent} {
     keyNavigation(false);
 
     auto resync = [this](const auto&) {
+        if (!built()) {
+            m_wakeOnBuilt = true;
+            return;
+        }
         syncBars();
         wake();
     };
@@ -39,6 +43,14 @@ void ScrollAreaBase::onOffsetsSynced(bool offsetsChanged) {
     syncBars();
     if (offsetsChanged)
         wake();
+}
+
+void ScrollAreaBase::onBuilt() {
+    FlickAreaBase::onBuilt();
+    if (!m_wakeOnBuilt)
+        return;
+    syncBars();
+    wake();
 }
 
 void ScrollAreaBase::syncBars() {

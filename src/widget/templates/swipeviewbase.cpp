@@ -45,7 +45,10 @@ SwipeViewBase::SwipeViewBase(Object* parent) : Control{parent} {
     background([](RectangleWidget& box) { box.color(Color::Transparent); });
 
     m_orientation.onChange([this](const Orientation&) { markLayoutDirty(); });
-    m_currentIndex.onChange([this](const int&) { applyIndex(!m_jumping); });
+    m_currentIndex.onChange([this](const int&) {
+        if (built())
+            applyIndex(!m_jumping);
+    });
 }
 
 SwipeViewBase::~SwipeViewBase() {
@@ -109,12 +112,19 @@ Widget::ContentArea SwipeViewBase::contentAreaFor(const Widget& child) const {
     return { paddingLeft(), paddingTop() + shift, width, height };
 }
 
+void SwipeViewBase::onBuilt() {
+    refreshPages();
+}
+
 void SwipeViewBase::onResolvedSizeChanged() {
     refreshPages();
     markLayoutDirty();
 }
 
 void SwipeViewBase::refreshPages() {
+    if (!built())
+        return;
+
     std::vector<Widget*> now = pages();
     if (now == m_pages)
         return;

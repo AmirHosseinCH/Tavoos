@@ -77,11 +77,13 @@ private:
     static void create(std::function<void(T&)> body) {
         const auto parentObject = currentItem;
         std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
+        T* const raw = static_cast<T*>(widget.get());
         currentItem = widget.get();
         if constexpr (std::is_base_of_v<ComponentBase, T>)
-            static_cast<ComponentBase&>(static_cast<T&>(*widget)).runBuild();
-        body(static_cast<T&>(*widget));
+            static_cast<ComponentBase&>(*raw).runBuild();
+        body(*raw);
         parentObject->appendChild(widget);
+        raw->finishBuild();
         currentItem = parentObject;
     }
 };
