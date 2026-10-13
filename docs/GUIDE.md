@@ -34,6 +34,7 @@ quick-start example in [README.md](../README.md).
    - [`PopupWidget`](#popupwidget)
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
+   - [`ListViewWidget`](#listviewwidget)
    - [`StackViewWidget`](#stackviewwidget)
    - [`SwipeViewWidget`](#swipeviewwidget)
 6. [Theme & styling](#theme--styling)
@@ -161,6 +162,9 @@ someContainer.addChild<Tavoos::RectangleWidget>([](Tavoos::RectangleWidget& r) {
 - **`T* addChild<T>(std::function<void(T&)> body = {})`** - constructs `T` as a new child, runs `body` on it, and returns the pointer (which stays valid for as long as the widget remains in the tree).
 - **`removeSelf()`** - detaches this widget (and its subtree) from its parent. Safe to call from within the widget's own event handler.
 - **`removeChild(Widget* child)`** - same, called on the parent for a specific child.
+
+A list view's delegate is an exception to the "`TB::` won't work later" rule: its rows are created after
+the build, but the list points the builder at each row while its delegate runs, so `TB::` calls there work.
 
 A [component](#components) is built the same way when created with `addChild<T>`.
 
@@ -704,6 +708,55 @@ TB::ScrollArea([](Tavoos::ScrollAreaWidget& area) {
 a full-length thumb. Use `flickDirection` to limit the axes, or `Auto` to show a bar only when
 needed.
 
+### `ListViewWidget`
+
+```cpp
+TB::ListView([](Tavoos::ListViewWidget& list) {
+    list.width(300).height(400).count(10000).spacing(4)
+        .delegate<Tavoos::RectangleWidget>([](Tavoos::RectangleWidget& row, int index) {
+            row.height(48).radius(6).color(Tavoos::Color::Cyan);
+            TB::Text([index](Tavoos::TextWidget& t) {
+                t.text("Item " + std::to_string(index)).alignment(Tavoos::Alignment::Center);
+            });
+        });
+});
+```
+
+A vertical list of rows built from a count and a delegate. Only the rows in view, plus a buffer, exist
+as widgets: rows that scroll far away are destroyed and rows that come into range are built, so the
+list stays cheap for any number of rows. Built on `ListViewBase`, which extends `ScrollAreaBase`, so
+the scrollbars and everything on a [scroll area](#scrollareawidget) apply (`onScroll`, `wheelStep`,
+`barPolicy`, the bar colors, and the rest), including that dragging the content and keyboard scrolling
+are off by default.
+
+| Property or method | Notes |
+|---|---|
+| `count()` | The number of rows. Changing it keeps the rows that still exist and clamps the scroll position. |
+| `delegate<T>(fn)` | Builds a row of widget type `T`. `fn(row, index)` runs each time a row is created. |
+| `spacing()` | The gap between rows. |
+| `cacheBuffer()` | Pixels of rows kept alive beyond each edge of the view. Default 200. |
+| `scrollToIndex(i)` | Scrolls so row `i` is at the top edge, clamped to the scroll range. Called while building, it is applied once the list is built. |
+| `reload()` | Destroys every row and measures again. Use it when your data changed in a way `count` doesn't show. |
+| `rowAt(i)` | The live row at an index, or null if that row is not currently built. |
+| `firstVisibleIndex()`, `lastVisibleIndex()` (and `...State()`) | The first and last rows that intersect the view; -1 when there are none. |
+
+- **Rows size themselves.** A row's height is its explicit `height()`, or what a layout inside it
+  needs, such as a `Column`. A plain `Rectangle` without a height has none, so give it one. Rows fill
+  the width of the list; the delegate body can change that. Text wraps only at an explicit `width()`,
+  as elsewhere.
+- **`TB::` works in the delegate.** The row is the parent for `TB::` calls in the body, as in a
+  component's `build()`. `addChild` works too.
+- **The scroll range is approximate.** Rows that haven't been built yet are assumed to be as tall as
+  the average of the rows measured so far, so the scrollbar thumb and the scroll range can shift as you
+  scroll into new rows. Rows on screen never move when that happens. Dragging the thumb or calling
+  `scrollTo` far away lands near the estimated position and settles as rows are measured.
+- **Rows can change height.** A row that grows or shrinks later is picked up on the next frame, and the
+  rows below it move.
+- **Rows don't keep state.** A row that scrolls out of range is destroyed, along with its focus and
+  anything typed into it. Keep such state in your own data and apply it in the delegate.
+- To change the defaults for every list, set `Theme::listView` with a `ListViewStyle`, which has the
+  same fields as `ScrollAreaStyle`.
+
 ### `StackViewWidget`
 
 ```cpp
@@ -897,7 +950,7 @@ half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one
 
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -941,6 +994,7 @@ what you give it.
 | `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
 | `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
 | `ScrollAreaBase` | everything in `FlickAreaBase`, plus bar policy, auto-hide, thumb drag, track click, thumb size and position states | `background`, `verticalTrack`/`verticalThumb`, `horizontalTrack`/`horizontalThumb`; children are declared inside it |
+| `ListViewBase` | everything in `ScrollAreaBase`, plus a row count and delegate, building only the rows in view, measured row heights, `scrollToIndex`, `firstVisibleIndex`/`lastVisibleIndex` | `background`, the bar slots as on a scroll area; rows come from the delegate |
 | `StackViewBase` | a stack of items, push/pop/replace, transitions, focus handover, `depth`/`currentItem`/`indexOf` | `background`; items are created with `push<T>`/`initialItem<T>` |
 | `SwipeViewBase` | pages as children laid out along an orientation, `position`, drag and flick snapping, `currentIndex`/`count`, key navigation, per-page focus | `background` (also the clip shape); pages are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |

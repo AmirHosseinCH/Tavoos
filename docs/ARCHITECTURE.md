@@ -48,6 +48,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
+   - [List views](#list-views)
    - [Stack views](#stack-views)
    - [Swipe views](#swipe-views)
    - [Theme and style structs](#theme-and-style-structs)
@@ -170,6 +171,10 @@ Builder::currentItem = nullptr; // dereferencing this later crashes
 
 Calling `TB::Rectangle(...)` later (e.g. from an `onClick` handler) dereferences a null
 `parentObject` and crashes.
+
+Code that has to run a user body after the build can give the builder a parent for the length of
+that body with `Builder::Scope`, an RAII object whose constructor points `currentItem` at a widget
+and whose destructor restores the previous value. `ListViewBase` uses it for its delegate.
 
 **2. `Widget::addChild<T>()`** (`widget.h`):
 
@@ -1899,6 +1904,9 @@ the bases for window-level layers such as popups; they are covered in
 **`ScrollAreaBase`** (`templates/scrollareabase.h`) adds scrollbars to a flick area; see
 [Scroll areas](#scroll-areas).
 
+**`ListViewBase`** (`templates/listviewbase.h`) is a scroll area over rows built on demand; see
+[List views](#list-views).
+
 **`StackViewBase`** (`templates/stackviewbase.h`) is a stack of items with animated transitions;
 see [Stack views](#stack-views).
 
@@ -2251,6 +2259,76 @@ axis. Tracks hug an edge, and thumbs bind the two fractions above. The thumb col
 `thumbPressedColor` over `transition` seconds as the base's hover and pressed states change.
 `ScrollAreaStyle` also carries the fade timings and `minThumbSize`, which the widget forwards to
 the base's setters in `applyStyle`.
+
+### List views
+
+**`ListViewBase`** (`templates/listviewbase.h`) extends `ScrollAreaBase` with a row `count` and a
+delegate that builds one row from its index. `ListViewWidget` (`controls/listviewwidget.h`) is the
+concrete version, with the same background and scrollbar slots as `ScrollAreaWidget`, styled by
+`ListViewStyle` (the same fields as `ScrollAreaStyle`) through `Theme::listView`. The list scrolls
+vertically only: its `flickDirection` is `Vertical`.
+
+**Row table.** The base keeps `m_heights`, the measured height of every row (0 meaning not measured
+yet), and `m_tops`, the prefix sums of the row tops with `count + 1` entries, so `m_tops[i]` is where
+row `i` starts in content coordinates and the last entry is the total. A row that has not been measured
+counts as `m_estimate`, the average of the measured rows, or 40 before any is measured. `rebuildOffsets()`
+recomputes the estimate and the tops, and runs when a height, the count or the spacing changes.
+`indexAt(y)` is a binary search over the tops.
+
+**Placement.** `contentAreaFor(row)` takes the base area (the viewport shifted by `-contentX/Y`) and adds
+`m_tops[index]`, with the row's measured height. Rows are `Fill::Width`, so a row's own height is its
+explicit or natural height, which is what was measured. As with the flick area and swipe view, rows
+therefore have real layout positions and no event is translated. The live rows are a contiguous index
+range, a deque `m_rows` with the index of the first one in `m_first`.
+
+**Syncing.** `syncRows()` runs from three places: `onOffsetsSynced()` (the scroll position, the size,
+or a property that feeds them changed), `render()` on every normal frame, so a row that grows later is
+noticed, and `refreshRows()`, which calls `scrollTo(contentX, contentY)` to force the first after a
+change to `count`, `spacing`, `cacheBuffer` or the delegate. It does nothing while the view has no
+height, so nothing is built before the first layout. Otherwise it runs `syncPass()` repeatedly, at most
+8 times:
+
+1. Work out the range to keep, from `indexAt(top - cacheBuffer)` to `indexAt(bottom + cacheBuffer)`.
+2. Remove rows from the front and back that are outside it, and create the missing ones at either end.
+3. Measure every live row (`intrinsicSize().height` plus margins, at least 1) and store the heights that
+   changed.
+4. If any changed, rebuild the offsets and set `contentY` so the row that was at the top of the view stays
+   where it was on screen, then run another pass, because the new offsets may call for different rows.
+
+A pass that measures nothing new ends the loop. The cap only bounds the work done in one sync; `render()`
+continues on the next frame. When the estimate changes, thousands of unbuilt rows above the view change
+height, so `contentY` can move by a large amount while the rows on screen do not move.
+
+**Content size and visible rows.** `computeContentSize()` returns `m_tops[count]` minus the trailing gap,
+so the scroll limit and the scrollbar come from the inherited flick area code. `updateVisible()` sets the
+first and last visible indices from the same table: the first row whose bottom is below the top of the
+view, and the last row whose top is above the bottom.
+
+**Delegate.** `delegate<T>(body)` stores a function that builds a row with `addChild<T>`, sets
+`Fill::Width`, and runs `body(row, index)` inside a `Builder::Scope` on the row. Rows are created after
+the window is built, when the builder has no current parent, so the scope is what lets `TB::` calls in
+the body attach to the row. Removed rows go through the usual deferred destruction, and the window drops
+any focus or hover state pointing into them.
+
+**Data changes.** A `count` change resizes `m_heights` (new rows start unmeasured), removes the rows past
+the end, and re-syncs. `reload()` destroys every row, forgets every measured height, and re-syncs.
+
+**Building.** Following the [build-complete hook](#the-build-complete-hook), the `count`, `spacing` and
+`cacheBuffer` callbacks and the delegate install do nothing until the list is built, and `onBuilt()` sizes
+the height table and rebuilds the offsets once before the first sync. The rebuild must come first: the
+sync reads the content size, which reads `m_tops[count]`. `computeContentSize()` returns 0 until built.
+
+**`scrollToIndex(i)`.** It stores the clamped index as `m_target`, scrolls to that row's estimated top
+with syncing held so the two offset updates do not each run a sync, and then runs one sync. While a target
+is set, each pass anchors on the target row at offset 0 instead of on the row at the top, so as rows near
+the target are measured it is re-aimed to its real top; the target is cleared when the sync ends. Called
+before the build, the index is remembered and applied in `onBuilt()`, and kept until the first sync that
+has a viewport.
+
+**Costs and limits.** A sync costs about the number of live rows, plus O(log n) for each `indexAt`.
+`rebuildOffsets()` is O(count) and runs only when a height changes. Rows keep no state when they leave
+the range. A row needs a natural height (an explicit `height()` or a layouter's content), because a plain
+widget without one measures 0 and is clamped to 1 pixel.
 
 ### Stack views
 
