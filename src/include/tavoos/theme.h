@@ -4,6 +4,7 @@
 #include <tavoos/widget/controls/style/buttonstyle.h>
 #include <tavoos/widget/controls/style/checkboxstyle.h>
 #include <tavoos/widget/controls/style/flickareastyle.h>
+#include <tavoos/widget/controls/style/listviewstyle.h>
 #include <tavoos/widget/controls/style/popupstyle.h>
 #include <tavoos/widget/controls/style/radiostyle.h>
 #include <tavoos/widget/controls/style/scrollareastyle.h>
@@ -29,6 +30,7 @@ public:
     State<PopupStyle> popup{PopupStyle{}};
     State<FlickAreaStyle> flickArea{FlickAreaStyle{}};
     State<ScrollAreaStyle> scrollArea{ScrollAreaStyle{}};
+    State<ListViewStyle> listView{ListViewStyle{}};
     State<StackViewStyle> stackView{StackViewStyle{}};
     State<SwipeViewStyle> swipeView{SwipeViewStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
