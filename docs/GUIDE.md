@@ -754,8 +754,8 @@ are off by default.
   rows below it move.
 - **Rows don't keep state.** A row that scrolls out of range is destroyed, along with its focus and
   anything typed into it. Keep such state in your own data and apply it in the delegate.
-- To change the defaults for every list, set `Theme::listView` with a `ListViewStyle`, which has the
-  same fields as `ScrollAreaStyle`.
+- To change the defaults for every list, set `Theme::listView` with a `ListViewStyle`, which is the same
+  type as `ScrollAreaStyle`.
 
 ### `StackViewWidget`
 
@@ -1171,6 +1171,29 @@ private:
 once, after the body has run and the widget is attached. Children are built before their parents,
 so by then every child and slot exists. Anything you set after that runs its callbacks immediately,
 as usual.
+
+**Restyling a scroll area or list.** You usually don't need a new class: replace a slot on an instance
+(`list.verticalThumb<MyThumb>(...)`, `list.background<MyBackground>(...)`), or derive from
+`ScrollAreaWidget` or `ListViewWidget` and replace slots in your constructor. Those widgets install their
+default slots first, so a replaced slot's default is built and discarded. To keep the style properties
+(`thumbColor()`, `radius()`, `style()`, and the rest) without any default visuals, derive from the skin
+that the widgets are built on. It installs nothing and applies no theme, so you install your own slots and
+call `style(...)` yourself if you want a theme:
+
+```cpp
+class MinimalList : public Tavoos::ScrollAreaSkin<Tavoos::ListViewBase> {
+public:
+    MinimalList(Tavoos::Object* parent) : ScrollAreaSkin{parent} {
+        verticalThumb<Tavoos::RectangleWidget>([this](Tavoos::RectangleWidget& thumb) {
+            thumb.alignment(Tavoos::Alignment::Right).width(4).radius(2).color(Tavoos::Color::Gray)
+                .heightFraction(verticalThumbSizeState()).yFraction(verticalThumbPositionState());
+        });
+        style(Tavoos::Application::instance()->theme().listView);
+    }
+};
+```
+
+`ScrollAreaSkin<Base>` works with any base derived from `ScrollAreaBase`.
 
 ## Components
 

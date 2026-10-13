@@ -2253,19 +2253,31 @@ on a bar it calls `ignore()`, so presses elsewhere keep bubbling to ancestors.
 - Release and `DragEnd` clear the pressed and drag state. The wheel needs nothing extra, since
   wheel events over a bar already bubble to the area.
 
-**`ScrollAreaWidget`.** It installs the background, plus a rectangle track and thumb for each
-axis. Tracks hug an edge, and thumbs bind the two fractions above. The thumb color is an
-`AnimatedState<Paint>` that moves between `thumbColor`, `thumbHoverColor`, and
-`thumbPressedColor` over `transition` seconds as the base's hover and pressed states change.
-`ScrollAreaStyle` also carries the fade timings and `minThumbSize`, which the widget forwards to
-the base's setters in `applyStyle`.
+**`ScrollAreaSkin`** (`controls/scrollareaskin.h`) is a header-only class template that sits between a
+scrolling base and its concrete widget. `ScrollAreaSkin<Base>` derives from `Base`, which can be any
+`ScrollAreaBase`, including `ListViewBase`, and holds the style side of a scroll area. It owns the style
+properties (`backgroundColor`, `trackColor`, the three thumb colors, `radius`, `thumbRadius`,
+`barThickness`, `barMargin`, `transition`), `style()`, and the thumb color logic: the thumb color is an
+`AnimatedState<Paint>` that moves between `thumbColor`, `thumbHoverColor`, and `thumbPressedColor` over
+`transition` seconds as the base's hover and pressed states change. `ScrollAreaStyle` also carries the
+fade timings and `minThumbSize`, which `applyStyle` forwards to the base's setters. Its constructor only
+connects those internal callbacks: it builds no widgets and applies no theme. A protected
+`installDefaultSlots()` installs the background, plus a rectangle track and thumb for each axis (tracks
+hug an edge, and thumbs bind the two fractions above), and nothing calls it unless a derived class does.
+
+**`ScrollAreaWidget`** is `ScrollAreaSkin<ScrollAreaBase>`. Its constructor calls
+`installDefaultSlots()` and then `style(theme().scrollArea)`, so the defaults come first and the theme's
+values are in place before any per-instance setter runs. A class that derives from the skin directly gets
+the style properties without the default visuals, and installs its own slots, with no default built and
+discarded. The layers are therefore: the base owns behavior, the skin adds the style properties, and the
+widget installs the defaults and applies its theme.
 
 ### List views
 
 **`ListViewBase`** (`templates/listviewbase.h`) extends `ScrollAreaBase` with a row `count` and a
 delegate that builds one row from its index. `ListViewWidget` (`controls/listviewwidget.h`) is the
-concrete version, with the same background and scrollbar slots as `ScrollAreaWidget`, styled by
-`ListViewStyle` (the same fields as `ScrollAreaStyle`) through `Theme::listView`. The list scrolls
+concrete version, `ScrollAreaSkin<ListViewBase>` with the same default slots as `ScrollAreaWidget`,
+reading `Theme::listView`. `ListViewStyle` is an alias of `ScrollAreaStyle`. The list scrolls
 vertically only: its `flickDirection` is `Vertical`.
 
 **Row table.** The base keeps `m_heights`, the measured height of every row (0 meaning not measured
