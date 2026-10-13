@@ -10,7 +10,7 @@ A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builde
 - **Reactive properties** - `Property<T>`/`State<T>` bindings that propagate changes automatically.
 - **Layout system** - `Column`, `Row`, `Grid`, and `Flex`.
 - **Controls** - Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField, and SpinBox, each themeable via a shared `Theme` and stylable per-instance.
-- **Popups, scrolling, and navigation** - `Popup` overlays, `FlickArea` and `ScrollArea` for content larger than its view, and `StackView` and `SwipeView` for moving between pages.
+- **Popups, scrolling, and navigation** - `Popup` overlays, `FlickArea`, `ScrollArea` and `ListView` for content larger than its view, and `StackView` and `SwipeView` for moving between pages.
 - **Components** - reusable widget types with declared properties and a `build()` method, usable anywhere a widget is.
 - **Text, images, and SVG** - font loading with weight/family fallback, JPEG/PNG images, and SVG rendering, all through the same widget model.
 - **Resource embedding** - `tavoos_add_resources()` compiles assets (fonts, images) directly into the binary at build time, loaded via `resource:/` paths - no loose files to ship.

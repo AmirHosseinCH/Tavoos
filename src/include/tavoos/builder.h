@@ -6,6 +6,7 @@
 #include <tavoos/widget/controls/buttonwidget.h>
 #include <tavoos/widget/controls/checkboxwidget.h>
 #include <tavoos/widget/controls/flickareawidget.h>
+#include <tavoos/widget/controls/listviewwidget.h>
 #include <tavoos/widget/controls/popupwidget.h>
 #include <tavoos/widget/controls/progressbarwidget.h>
 #include <tavoos/widget/controls/radiowidget.h>
@@ -60,6 +61,7 @@ public:
     static void Slider(std::function<void(SliderWidget&)> body)       { create<SliderWidget>(std::move(body)); }
     static void FlickArea(std::function<void(FlickAreaWidget&)> body) { create<FlickAreaWidget>(std::move(body)); }
     static void ScrollArea(std::function<void(ScrollAreaWidget&)> body) { create<ScrollAreaWidget>(std::move(body)); }
+    static void ListView(std::function<void(ListViewWidget&)> body)   { create<ListViewWidget>(std::move(body)); }
     static void StackView(std::function<void(StackViewWidget&)> body) { create<StackViewWidget>(std::move(body)); }
     static void SwipeView(std::function<void(SwipeViewWidget&)> body) { create<SwipeViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
@@ -69,6 +71,18 @@ public:
     template<typename T>
         requires std::derived_from<T, Widget>
     static void Create(std::function<void(T&)> body) { create<T>(std::move(body)); }
+
+    class Scope {
+    public:
+        explicit Scope(Object* parent) : m_previous{currentItem} { currentItem = parent; }
+        ~Scope() { currentItem = m_previous; }
+
+        Scope(const Scope&) = delete;
+        Scope& operator=(const Scope&) = delete;
+
+    private:
+        Object* m_previous;
+    };
 
 private:
     static Object* currentItem;

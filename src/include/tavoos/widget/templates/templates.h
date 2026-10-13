@@ -3,6 +3,7 @@
 #include <tavoos/widget/templates/buttonbase.h>
 #include <tavoos/widget/templates/buttongroup.h>
 #include <tavoos/widget/templates/flickareabase.h>
+#include <tavoos/widget/templates/listviewbase.h>
 #include <tavoos/widget/templates/overlaybase.h>
 #include <tavoos/widget/templates/popupbase.h>
 #include <tavoos/widget/templates/progressbarbase.h>
