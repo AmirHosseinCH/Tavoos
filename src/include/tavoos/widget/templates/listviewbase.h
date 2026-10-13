@@ -64,13 +64,14 @@ private:
             return addChild<T>([&body, index](T& row) {
                 row.fill(Fill::Width);
                 if (body)
-                    body(row, index);
+                    runInBuilderScope(row, [&row, &body, index] { body(row, index); });
             });
         };
         if (built())
             reload();
     }
 
+    static void runInBuilderScope(Widget& row, const std::function<void()>& call);
     int rowCount() const;
     float gap() const;
     float heightOf(int index) const;

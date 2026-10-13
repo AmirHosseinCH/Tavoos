@@ -1,5 +1,6 @@
 #include <tavoos/widget/templates/listviewbase.h>
 
+#include <tavoos/builder.h>
 #include <tavoos/gfx/renderer.h>
 
 #include <algorithm>
@@ -34,6 +35,11 @@ ListViewBase::ListViewBase(Object* parent) : ScrollAreaBase{parent} {
         if (built())
             refreshRows();
     });
+}
+
+void ListViewBase::runInBuilderScope(Widget& row, const std::function<void()>& call) {
+    Builder::Scope scope{&row};
+    call();
 }
 
 int ListViewBase::rowCount() const {

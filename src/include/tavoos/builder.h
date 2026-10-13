@@ -72,6 +72,18 @@ public:
         requires std::derived_from<T, Widget>
     static void Create(std::function<void(T&)> body) { create<T>(std::move(body)); }
 
+    class Scope {
+    public:
+        explicit Scope(Object* parent) : m_previous{currentItem} { currentItem = parent; }
+        ~Scope() { currentItem = m_previous; }
+
+        Scope(const Scope&) = delete;
+        Scope& operator=(const Scope&) = delete;
+
+    private:
+        Object* m_previous;
+    };
+
 private:
     static Object* currentItem;
 
