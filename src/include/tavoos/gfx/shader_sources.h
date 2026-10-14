@@ -145,18 +145,7 @@ void main() {
 }
 )";
 
-inline const char*shadowFragmentShader = R"(
-in vec2 vLocalPos;
-
-out vec4 fragColor;
-
-uniform vec2 uHalfSize;
-uniform vec4 uRadius;
-uniform vec2 uOffset;
-uniform float uSpread;
-uniform float uSigma;
-uniform vec4 uColor;
-
+inline const char*blurredBoxGLSL = R"(
 float erfApprox(float x) {
     float a = abs(x);
     float t = 1.0 / (1.0 + 0.3275911 * a);
@@ -193,6 +182,19 @@ float blurredBox(vec2 p, vec2 halfSize, vec4 radius, float sigma) {
     }
     return value;
 }
+)";
+
+inline const char*shadowFragmentShader = R"(
+in vec2 vLocalPos;
+
+out vec4 fragColor;
+
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform vec2 uOffset;
+uniform float uSpread;
+uniform float uSigma;
+uniform vec4 uColor;
 
 void main() {
     vec2 shadowHalf = max(uHalfSize + vec2(uSpread), vec2(0.0));
@@ -213,6 +215,40 @@ void main() {
     coverage *= smoothstep(-ownAa, ownAa, ownDist);
 
     fragColor = vec4(uColor.rgb, uColor.a * coverage);
+}
+)";
+
+inline const char*innerShadowFragmentShader = R"(
+in vec2 vLocalPos;
+
+out vec4 fragColor;
+
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform vec2 uOffset;
+uniform float uSpread;
+uniform float uSigma;
+uniform vec4 uColor;
+
+void main() {
+    vec2 holeHalf = max(uHalfSize - vec2(uSpread), vec2(0.0));
+    vec4 holeRadius = clamp(uRadius - vec4(uSpread), vec4(0.0), vec4(min(holeHalf.x, holeHalf.y)));
+    vec2 p = vLocalPos - uOffset;
+
+    float hole;
+    if (uSigma > 0.01) {
+        hole = clamp(blurredBox(p, holeHalf, holeRadius, uSigma), 0.0, 1.0);
+    } else {
+        float dist = sdRoundedBox(p, holeHalf, holeRadius);
+        float aa = max(length(vec2(dFdx(dist), dFdy(dist))), 0.0001);
+        hole = 1.0 - smoothstep(-aa, aa, dist);
+    }
+
+    float ownDist = sdRoundedBox(vLocalPos, uHalfSize, uRadius);
+    float ownAa = max(length(vec2(dFdx(ownDist), dFdy(ownDist))), 0.0001);
+    float inside = 1.0 - smoothstep(-ownAa, ownAa, ownDist);
+
+    fragColor = vec4(uColor.rgb, uColor.a * (1.0 - hole) * inside);
 }
 )";
 

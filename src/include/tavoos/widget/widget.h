@@ -504,6 +504,7 @@ protected:
     void syncDisplayedGeometry();
     void notifyResolvedSizeIfChanged();
     void requestRepaint();
+    void renderInnerEffects(Renderer& renderer);
     void detachAndDefer(Widget* child);
     template<typename... Props>
     void bindRepaintTriggers(Props&... props) {

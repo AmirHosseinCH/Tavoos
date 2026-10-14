@@ -163,6 +163,14 @@ void Widget::removeSelf() {
     detachAndDefer(this);
 }
 
+void Widget::renderInnerEffects(Renderer& renderer) {
+    if (renderer.isCapturingMask())
+        return;
+
+    for (const auto& effect : m_effects)
+        effect->renderInside(renderer, *this);
+}
+
 void Widget::removeEffect(GraphicalEffect& effect) {
     const auto removed = std::erase_if(m_effects, [&effect](const auto& owned) { return owned.get() == &effect; });
     if (removed > 0)

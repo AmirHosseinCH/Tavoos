@@ -8,7 +8,9 @@ set(TAVOOS_SOURCES
     animation/transitionrunner.cpp
     animation/transitions.cpp
     effects/graphicaleffect.cpp
+    effects/shadowbase.cpp
     effects/dropshadow.cpp
+    effects/innershadow.cpp
     gfx/renderer.cpp
     gfx/shader.cpp
     gfx/texturecache.cpp
@@ -80,7 +82,9 @@ target_sources(Tavoos
     include/tavoos/component/component.h
     include/tavoos/types.h
     include/tavoos/effects/graphicaleffect.h
+    include/tavoos/effects/shadowbase.h
     include/tavoos/effects/dropshadow.h
+    include/tavoos/effects/innershadow.h
     include/tavoos/widget/widget.h
     include/tavoos/widget/templates/templates.h
     include/tavoos/widget/templates/control.h

@@ -11,6 +11,7 @@ RectangleWidget::RectangleWidget(Object* parent) : Widget{parent} {
 
 void RectangleWidget::render(Renderer& r) {
     r.renderRectangle(*this);
+    renderInnerEffects(r);
     renderChildren(r);
 }
 

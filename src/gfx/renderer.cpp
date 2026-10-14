@@ -1,4 +1,5 @@
 #include <tavoos/effects/dropshadow.h>
+#include <tavoos/effects/innershadow.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/gfx/shader_sources.h>
 #include <tavoos/text/text.h>
@@ -43,12 +44,14 @@ void Renderer::init() {
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, cameraUBO);
 
     std::string quadFragmentSource = std::string(fragmentShaderPrelude) + quadFragmentShaderHead + roundedBoxGLSL + paintSamplingGLSL + quadFragmentShaderTail;
-    std::string shadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + shadowFragmentShader;
+    std::string shadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + blurredBoxGLSL + shadowFragmentShader;
+    std::string innerShadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + blurredBoxGLSL + innerShadowFragmentShader;
     std::string svgFragmentSource  = std::string(fragmentShaderPrelude) + svgFragmentShaderHead  + paintSamplingGLSL + svgFragmentShaderTail;
     std::string textFragmentSource = std::string(fragmentShaderPrelude) + textFragmentShaderHead + paintSamplingGLSL + textFragmentShaderTail;
 
     quadShader.compile(quadVertexShader, quadFragmentSource);
     shadowShader.compile(quadVertexShader, shadowFragmentSource);
+    innerShadowShader.compile(quadVertexShader, innerShadowFragmentSource);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -247,6 +250,30 @@ void Renderer::renderDropShadow(Widget& widget, const DropShadow& shadow) {
 
     drawQuad(shadow.offsetX() - reach, shadow.offsetY() - reach,
              width + shadow.offsetX() + reach, height + shadow.offsetY() + reach);
+}
+
+void Renderer::renderInnerShadow(Widget& widget, const InnerShadow& shadow) {
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    const float width = widget.displayedWidth();
+    const float height = widget.displayedHeight();
+    if (!radii || width <= 0.0f || height <= 0.0f)
+        return;
+
+    const Color color = shadow.color();
+    const float alpha = color.a * widget.effectiveOpacity();
+    if (alpha <= 0.0f)
+        return;
+
+    innerShadowShader.use();
+    innerShadowShader.setMat4("world", widget.worldMatrix());
+    innerShadowShader.setVec2("uHalfSize", glm::vec2{width, height} * 0.5f);
+    innerShadowShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
+    innerShadowShader.setVec2("uOffset", glm::vec2{shadow.offsetX(), shadow.offsetY()});
+    innerShadowShader.setFloat("uSpread", shadow.spread());
+    innerShadowShader.setFloat("uSigma", std::max(0.0f, shadow.radius()) * 0.5f);
+    innerShadowShader.setVec4("uColor", glm::vec4{color.r, color.g, color.b, alpha});
+
+    drawQuad(width, height);
 }
 
 void Renderer::renderImage(ImageWidget& image) {

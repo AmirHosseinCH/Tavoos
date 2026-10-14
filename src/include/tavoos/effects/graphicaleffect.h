@@ -9,6 +9,7 @@ class Widget;
 
 class TAVOOS_EXPORT GraphicalEffect {
     friend class Renderer;
+    friend class Widget;
 
 public:
     virtual ~GraphicalEffect();
@@ -22,6 +23,7 @@ protected:
     explicit GraphicalEffect(Widget& owner);
 
     virtual void renderBehind(Renderer&, Widget&) {}
+    virtual void renderInside(Renderer&, Widget&) {}
 
     void invalidate();
 

@@ -14,6 +14,7 @@ namespace Tavoos {
 class Window;
 class Widget;
 class DropShadow;
+class InnerShadow;
 class RectangleWidget;
 class ImageWidget;
 class SVGWidget;
@@ -36,6 +37,7 @@ public:
     void renderText(TextWidget& text);
     void renderWidget(Widget&);
     void renderDropShadow(Widget&, const DropShadow&);
+    void renderInnerShadow(Widget&, const InnerShadow&);
 
     bool isCapturingMask() const { return m_capturingMask; }
 
@@ -65,6 +67,7 @@ private:
     GLuint quadVAO{0};
     Shader quadShader{};
     Shader shadowShader;
+    Shader innerShadowShader;
 
     Shader imageShader;
     Shader svgShader;
