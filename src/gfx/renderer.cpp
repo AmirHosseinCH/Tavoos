@@ -1,3 +1,4 @@
+#include <tavoos/effects/dropshadow.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/gfx/shader_sources.h>
 #include <tavoos/text/text.h>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -40,11 +42,13 @@ void Renderer::init() {
     glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &projection, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, cameraUBO);
 
-    std::string quadFragmentSource = std::string(fragmentShaderPrelude) + quadFragmentShaderHead + paintSamplingGLSL + quadFragmentShaderTail;
+    std::string quadFragmentSource = std::string(fragmentShaderPrelude) + quadFragmentShaderHead + roundedBoxGLSL + paintSamplingGLSL + quadFragmentShaderTail;
+    std::string shadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + shadowFragmentShader;
     std::string svgFragmentSource  = std::string(fragmentShaderPrelude) + svgFragmentShaderHead  + paintSamplingGLSL + svgFragmentShaderTail;
     std::string textFragmentSource = std::string(fragmentShaderPrelude) + textFragmentShaderHead + paintSamplingGLSL + textFragmentShaderTail;
 
     quadShader.compile(quadVertexShader, quadFragmentSource);
+    shadowShader.compile(quadVertexShader, shadowFragmentSource);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -188,7 +192,11 @@ void Renderer::applyPaintUniforms(Shader& shader, const std::string& prefix, con
 }
 
 void Renderer::drawQuad(float w, float h) {
-    const float vertices[] = { 0, 0, w, 0, w, h, 0, 0, w, h, 0, h };
+    drawQuad(0.0f, 0.0f, w, h);
+}
+
+void Renderer::drawQuad(float x0, float y0, float x1, float y1) {
+    const float vertices[] = { x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1 };
     glBindVertexArray(quadVAO);
     glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
@@ -210,6 +218,35 @@ void Renderer::renderRectangle(RectangleWidget& rectangle) {
     quadShader.setFloat("uBorderWidth", rectangle.borderWidth());
 
     drawQuad(rectangle.displayedWidth(), rectangle.displayedHeight());
+}
+
+void Renderer::renderDropShadow(Widget& widget, const DropShadow& shadow) {
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    const float width = widget.displayedWidth();
+    const float height = widget.displayedHeight();
+    if (!radii || width <= 0.0f || height <= 0.0f)
+        return;
+
+    const Color color = shadow.color();
+    const float alpha = color.a * widget.effectiveOpacity();
+    if (alpha <= 0.0f)
+        return;
+
+    const float blur = std::max(0.0f, shadow.radius());
+    const float sigma = blur * 0.5f;
+    const float reach = std::max(shadow.spread(), 0.0f) + sigma * 3.0f + 1.0f;
+
+    shadowShader.use();
+    shadowShader.setMat4("world", widget.worldMatrix());
+    shadowShader.setVec2("uHalfSize", glm::vec2{width, height} * 0.5f);
+    shadowShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
+    shadowShader.setVec2("uOffset", glm::vec2{shadow.offsetX(), shadow.offsetY()});
+    shadowShader.setFloat("uSpread", shadow.spread());
+    shadowShader.setFloat("uSigma", sigma);
+    shadowShader.setVec4("uColor", glm::vec4{color.r, color.g, color.b, alpha});
+
+    drawQuad(shadow.offsetX() - reach, shadow.offsetY() - reach,
+             width + shadow.offsetX() + reach, height + shadow.offsetY() + reach);
 }
 
 void Renderer::renderImage(ImageWidget& image) {
@@ -427,6 +464,11 @@ void Renderer::renderText(TextWidget& text) {
 }
 
 void Renderer::renderWidget(Widget& widget) {
+    if (!m_capturingMask) {
+        for (const auto& effect : widget.effects())
+            effect->renderBehind(*this, widget);
+    }
+
     if (!widget.clip()) {
         widget.render(*this);
         return;

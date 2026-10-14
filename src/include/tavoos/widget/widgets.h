@@ -1,4 +1,5 @@
 #pragma once
+#include <tavoos/effects/dropshadow.h>
 #include <tavoos/widget/widget.h>
 #include <tavoos/widget/column.h>
 #include <tavoos/widget/flex.h>

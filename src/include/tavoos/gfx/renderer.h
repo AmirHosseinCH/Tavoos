@@ -13,6 +13,7 @@ namespace Tavoos {
 
 class Window;
 class Widget;
+class DropShadow;
 class RectangleWidget;
 class ImageWidget;
 class SVGWidget;
@@ -34,6 +35,7 @@ public:
     void renderSVG(SVGWidget& svg);
     void renderText(TextWidget& text);
     void renderWidget(Widget&);
+    void renderDropShadow(Widget&, const DropShadow&);
 
     bool isCapturingMask() const { return m_capturingMask; }
 
@@ -46,6 +48,7 @@ private:
     void applyPaintUniforms(Shader& shader, const std::string& prefix, const std::string& flatColorUniform,
                              const Paint& paint, float opacityMultiplier);
     void drawQuad(float w, float h);
+    void drawQuad(float x0, float y0, float x1, float y1);
 
     void ensureClipMask(Widget& widget, int texW, int texH);
 
@@ -61,6 +64,7 @@ private:
     GLuint quadVBO{0};
     GLuint quadVAO{0};
     Shader quadShader{};
+    Shader shadowShader;
 
     Shader imageShader;
     Shader svgShader;

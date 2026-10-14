@@ -163,6 +163,19 @@ void Widget::removeSelf() {
     detachAndDefer(this);
 }
 
+void Widget::removeEffect(GraphicalEffect& effect) {
+    const auto removed = std::erase_if(m_effects, [&effect](const auto& owned) { return owned.get() == &effect; });
+    if (removed > 0)
+        requestRepaint();
+}
+
+void Widget::clearEffects() {
+    if (m_effects.empty())
+        return;
+    m_effects.clear();
+    requestRepaint();
+}
+
 void Widget::removeChild(Widget* child) {
     if (child->parent() != this)
         return;

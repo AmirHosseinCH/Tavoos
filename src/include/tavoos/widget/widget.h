@@ -2,6 +2,7 @@
 
 #include <tavoos/animation/animation.h>
 #include <tavoos/component/componentbase.h>
+#include <tavoos/effects/graphicaleffect.h>
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
@@ -10,6 +11,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <concepts>
+#include <memory>
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -24,6 +28,7 @@ class Window;
 class TAVOOS_EXPORT Widget : public Object {
     friend class Renderer;
     friend class Window;
+    friend class GraphicalEffect;
     friend class Builder;
     friend class ColumnWidget;
     friend class RowWidget;
@@ -379,6 +384,7 @@ public:
 
     virtual bool isLayouter() const { return false; }
     virtual bool isOverlay() const { return false; }
+    virtual std::optional<CornerRadii> shapeRadii() const { return std::nullopt; }
 
     bool participatesInLayout() const { return visible() && !isOverlay(); }
 
@@ -408,6 +414,27 @@ public:
         raw->requestRelayout();
         return raw;
     }
+
+    template<std::derived_from<GraphicalEffect> E>
+    E& addEffect(std::function<void(E&)> setup = {}) {
+        auto effect = std::make_unique<E>(*this);
+        E* const raw = effect.get();
+        if (setup)
+            setup(*raw);
+        m_effects.push_back(std::move(effect));
+        requestRepaint();
+        return *raw;
+    }
+
+    template<std::derived_from<GraphicalEffect> E>
+    decltype(auto) effect(this auto&& self, std::function<void(E&)> setup = {}) {
+        self.template addEffect<E>(std::move(setup));
+        return std::forward<decltype(self)>(self);
+    }
+
+    void removeEffect(GraphicalEffect& effect);
+    void clearEffects();
+    const std::vector<std::unique_ptr<GraphicalEffect>>& effects() const noexcept { return m_effects; }
 
     void removeSelf();
     void removeChild(Widget* child);
@@ -620,6 +647,7 @@ private:
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};
     bool m_built{false};
+    std::vector<std::unique_ptr<GraphicalEffect>> m_effects;
     static bool s_isBuilding;
 };
 

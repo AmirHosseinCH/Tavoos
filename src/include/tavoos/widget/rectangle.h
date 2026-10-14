@@ -62,6 +62,11 @@ public:
     float borderWidth() const { return m_borderWidth; }
     Paint borderColor() const { return m_borderColor; }
 
+    std::optional<CornerRadii> shapeRadii() const override {
+        return CornerRadii{static_cast<float>(m_radius.topLeft()), static_cast<float>(m_radius.topRight()),
+                           static_cast<float>(m_radius.bottomRight()), static_cast<float>(m_radius.bottomLeft())};
+    }
+
 protected:
     void render(Renderer& r) override;
 
