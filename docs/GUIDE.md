@@ -1433,7 +1433,7 @@ they do not appear in `children()`.
 ### `DropShadow`
 
 A soft shadow behind a widget. For now it is drawn for `RectangleWidget`; adding it to any other
-widget is allowed but draws nothing.
+widget is allowed but draws nothing. `InnerShadow` (below) has the same properties.
 
 | Property | Type | Notes |
 |---|---|---|
@@ -1457,6 +1457,26 @@ The shadow follows the rectangle's corner radii, opacity, scale and rotation. Th
 widget itself is left clear, so a translucent or transparent rectangle does not show its shadow
 through its own fill. A rectangle with `clip(true)` keeps its shadow, but a shadow is still
 cropped by any ancestor that clips.
+
+### `InnerShadow`
+
+A shadow drawn inside a widget, along its edges, as if the surface were recessed. It has the same
+five properties as `DropShadow`, with two differences in meaning: the offset moves the shadow
+inside the shape, and a positive `spread` grows the shadow inward. For now it is drawn for
+`RectangleWidget`; on any other widget it draws nothing.
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& well) {
+    well.width(240).height(120).radius(14).color(Tavoos::Color::rgba(235, 237, 242))
+        .effect<Tavoos::InnerShadow>([](Tavoos::InnerShadow& s) {
+            s.offsetY(3).radius(10).color(Tavoos::Color::rgba(0, 0, 0, 90));
+        });
+});
+```
+
+An inner shadow is painted over the widget's own fill and under its children, so children are
+never darkened by it. It covers the whole shape, including the border. A widget can carry both
+kinds at once: the drop shadow is drawn behind the widget and the inner shadow over its fill.
 
 ## Dragging
 

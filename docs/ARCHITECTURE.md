@@ -1383,9 +1383,17 @@ chain. Adding, removing, or changing any property an effect registered with
 `bindInvalidateTriggers(...)` calls `GraphicalEffect::invalidate()`, which requests a repaint of
 the owner exactly like `bindRepaintTriggers` does for a widget's own properties.
 
-Rendering reaches an effect through one virtual, `renderBehind(Renderer&, Widget&)`, which
-`Renderer` calls from `renderWidget` for every effect in list order, before the widget's own
-`clip()` branch:
+Rendering reaches an effect through virtuals that each name a stage of the widget's drawing. An
+effect overrides the one for its stage, so ordering between kinds of effect is fixed by the
+stages, and list order only matters between effects of the same stage:
+
+- `renderBehind(Renderer&, Widget&)` runs before the widget draws anything. `Renderer` calls it
+  from `renderWidget` for every effect in list order, before the widget's own `clip()` branch.
+- `renderInside(Renderer&, Widget&)` runs after the widget's own drawing and before its
+  children. The widget calls it itself, through the protected `Widget::renderInnerEffects()`,
+  at that point in its `render()`.
+
+The first stage looks like this:
 
 ```cpp
 void Renderer::renderWidget(Widget& widget) {
@@ -1438,9 +1446,27 @@ color alpha times the widget's `effectiveOpacity()`, and the quad is placed with
 `worldMatrix()`, so scale and rotation apply to the shadow and offsets are in the widget's local
 logical pixels.
 
-Effects are painted in list order, so the first one added is the lowest. Other kinds of effect
-need other points in the draw order (after a widget's own drawing, around it, or reading what is
-behind it), and each will add its own virtual next to `renderBehind` when it is introduced.
+`DropShadow` and `InnerShadow` share a base, `ShadowBase`, which holds the five properties
+(`offsetX`, `offsetY`, `radius`, `spread`, `color`), the fluent setters and the repaint wiring.
+Each derived class only overrides its stage hook and calls the matching `Renderer` function.
+
+`InnerShadow` draws inside the widget's shape, after the fill and before the children, so it
+never affects them. `RectangleWidget::render()` is `renderRectangle`, then `renderInnerEffects`,
+then `renderChildren`; `renderInnerEffects` returns immediately while a clip mask is being
+captured. `innerShadowFragmentShader` runs over a quad exactly the size of the widget and reuses
+the same Gaussian code as the drop shadow, which lives in one shared GLSL string,
+`blurredBoxGLSL`:
+
+- The shadow is the complement of a blurred hole: the widget's box moved by the offset and
+  shrunk by `spread`, so a positive spread grows the shadow inward.
+- Coverage is `1 - blurredBox(hole)` multiplied by the widget's own inside mask, so nothing is
+  drawn outside the rounded shape.
+- With a radius of zero the hole's anti-aliased signed-distance edge is used instead.
+- The shadow covers the whole shape, including the border.
+
+Effects of one stage are painted in list order, so the first one added is the lowest. Further
+kinds of effect that need another point in the draw order (around a widget's own drawing, or
+reading what is behind it) will each add a virtual for their stage.
 
 ## Animation system
 
