@@ -29,6 +29,7 @@ document is where the "why" behind non-obvious code lives instead.
 6. [Rendering pipeline](#rendering-pipeline)
    - [Per-frame sequence](#per-frame-sequence)
    - [Clipping](#clipping)
+   - [Graphical effects](#graphical-effects)
 7. [Animation system](#animation-system)
    - [`AnimatableBase` / `AnimationManager`](#animatablebase--animationmanager)
    - [`AnimatedState<T>`](#animatedstatet)
@@ -1357,6 +1358,89 @@ clipping the composite wrapper itself.
 A `Control` can also clip itself if its `render()` draws a shape while the mask is being
 captured: `FlickAreaBase` renders its `background` slot through `renderer.renderWidget(...)` in
 that case, so the clip takes the shape of the background (see [Flick areas](#flick-areas)).
+
+### Graphical effects
+
+A `GraphicalEffect` (`src/include/tavoos/effects/graphicaleffect.h`) decorates a widget's drawing
+without being part of the widget tree. It is not an `Object`: it has no parent, takes no part in
+layout, focus or hit-testing, and holds only a reference to the `Widget` that owns it. Every
+`Widget` owns an ordered `std::vector<std::unique_ptr<GraphicalEffect>>`:
+
+```cpp
+template<std::derived_from<GraphicalEffect> E>
+E& addEffect(std::function<void(E&)> setup = {});
+
+template<std::derived_from<GraphicalEffect> E>
+decltype(auto) effect(this auto&& self, std::function<void(E&)> setup = {});
+
+void removeEffect(GraphicalEffect& effect);
+void clearEffects();
+```
+
+`addEffect` constructs `E(*this)`, runs `setup`, appends it and returns a reference that stays
+valid until that effect is removed. `effect<E>()` is the fluent form for use inside a builder
+chain. Adding, removing, or changing any property an effect registered with
+`bindInvalidateTriggers(...)` calls `GraphicalEffect::invalidate()`, which requests a repaint of
+the owner exactly like `bindRepaintTriggers` does for a widget's own properties.
+
+Rendering reaches an effect through one virtual, `renderBehind(Renderer&, Widget&)`, which
+`Renderer` calls from `renderWidget` for every effect in list order, before the widget's own
+`clip()` branch:
+
+```cpp
+void Renderer::renderWidget(Widget& widget) {
+    if (!m_capturingMask) {
+        for (const auto& effect : widget.effects())
+            effect->renderBehind(*this, widget);
+    }
+
+    if (!widget.clip()) {
+        widget.render(*this);
+        return;
+    }
+    ...
+}
+```
+
+Running before the `clip()` branch is what lets a clipped widget keep its own shadow: the clip
+layer is a texture exactly the size of the widget, so anything drawn inside it would be cropped.
+An ancestor's clip still crops the shadow, because the ancestor's layer is the render target at
+that point. While a clip mask is being captured the hook is skipped, since only the widget's
+shape belongs in a mask. Effects do not touch layout or hit-testing, so a shadow can extend past
+the widget's box without changing where anything is placed or what receives a click.
+
+A shape is needed to compute a shadow analytically, and only some widgets have one.
+`virtual std::optional<CornerRadii> Widget::shapeRadii() const` returns the four corner radii
+(`topLeft`, `topRight`, `bottomRight`, `bottomLeft`) of a rounded box covering the widget's displayed
+size, or `std::nullopt` for a widget with no such shape. `RectangleWidget` overrides it; every
+other widget inherits `nullopt`, and an effect that needs a shape draws nothing for it.
+
+`DropShadow` is drawn by its own shader (`shadowFragmentShader`) over a quad larger than the
+widget: the box moved by the offset, grown by `spread`, and padded by three standard deviations
+(`sigma = radius / 2`) plus one pixel. The vertex shader is the rectangle's, and the rounded-box
+distance function is shared between the two fragment shaders as `roundedBoxGLSL`. The blur is the
+exact Gaussian convolution of a rounded box, computed per pixel without an offscreen pass:
+
+- For one horizontal row of the box, the covered span is known in closed form, with the corner
+  arcs shortening it near the top and bottom, so the row's contribution at a point is a
+  difference of two error functions. The shader has no `erf`, so `erfApprox` uses a polynomial
+  approximation.
+- The vertical blur is the same row integral, sampled eight times between plus and minus three
+  standard deviations and weighted by a Gaussian.
+- Spread adds to each corner radius (clamped to zero and to the box), and each side of a row uses
+  its own corner radius, so per-corner radii work.
+- With a radius of zero (`sigma` below `0.01`) the shader uses the box's signed distance with
+  an anti-aliased edge instead.
+
+The widget's own shape is cut out of the shadow with the same distance function, so a
+translucent or transparent widget does not show its shadow through itself. Alpha is the effect's
+color alpha times the widget's `effectiveOpacity()`, and the quad is placed with the widget's
+`worldMatrix()`, so scale and rotation apply to the shadow and offsets are in the widget's local
+logical pixels.
+
+Effects are painted in list order, so the first one added is the lowest. Other kinds of effect
+need other points in the draw order (after a widget's own drawing, around it, or reading what is
+behind it), and each will add its own virtual next to `renderBehind` when it is introduced.
 
 ## Animation system
 

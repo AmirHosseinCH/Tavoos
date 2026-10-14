@@ -40,10 +40,12 @@ quick-start example in [README.md](../README.md).
 6. [Theme & styling](#theme--styling)
 7. [Custom controls](#custom-controls)
 8. [Components](#components)
-9. [Dragging](#dragging)
-10. [Animation](#animation)
-11. [Resource embedding](#resource-embedding)
-12. [Keyboard & focus](#keyboard--focus)
+9. [Graphical effects](#graphical-effects)
+   - [`DropShadow`](#dropshadow)
+10. [Dragging](#dragging)
+11. [Animation](#animation)
+12. [Resource embedding](#resource-embedding)
+13. [Keyboard & focus](#keyboard--focus)
 
 ## Core concepts
 
@@ -145,6 +147,7 @@ Plus, on every widget:
 
 - **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window.
 - **`focus()`** - programmatically focuses this widget.
+- **Effects** - `effect<E>()`, `addEffect<E>()`, `removeEffect()`, `clearEffects()` and `effects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects).
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
 
 ### Dynamic children
@@ -1393,6 +1396,67 @@ To create a component after the window is built, use `addChild<T>`, which builds
 ```cpp
 someContainer.addChild<Counter>([](Counter& c) { c.step(5); });
 ```
+
+## Graphical effects
+
+An effect decorates how a widget is drawn without being a child of it. Every widget carries an
+ordered list of effects. `effect<E>()` adds one inside a builder chain and takes a lambda that
+configures it; `addEffect<E>()` does the same and returns a reference you can keep:
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& card) {
+    card.width(240).height(140).radius(12).color(Tavoos::Color::White)
+        .effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+            s.offsetY(6).radius(18).color(Tavoos::Color::rgba(0, 0, 0, 60));
+        })
+        .effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+            s.offsetY(1).radius(2).color(Tavoos::Color::rgba(0, 0, 0, 40));
+        });
+});
+```
+
+```cpp
+auto& glow = card.addEffect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+    s.radius(20).color(Tavoos::Color::Blue);
+});
+
+glow.color(Tavoos::Color::Red);
+card.removeEffect(glow);
+card.clearEffects();
+```
+
+A reference returned by `addEffect` stays valid until that effect is removed, and must not be
+used after `removeEffect` or `clearEffects`. Effects are drawn in the order they were added, the
+first one at the bottom. They do not affect layout or hit-testing, and they are not children, so
+they do not appear in `children()`.
+
+### `DropShadow`
+
+A soft shadow behind a widget. For now it is drawn for `RectangleWidget`; adding it to any other
+widget is allowed but draws nothing.
+
+| Property | Type | Notes |
+|---|---|---|
+| `offsetX()`, `offsetY()` | `float` | Where the shadow sits relative to the widget, in logical pixels. `offset(x, y)` sets both. Default `0`. |
+| `radius()` | `float` | Blur radius. `0` gives a hard-edged shadow. Default `0`. |
+| `spread()` | `float` | Grows (positive) or shrinks (negative) the shadow's shape before blurring. Default `0`. |
+| `color()` | `Color` | Including its alpha. Default black at 25% alpha. |
+
+Every property takes a value or a `State`, like any other property, so a shadow can be bound to
+application state or animated with an `AnimatedState` (see [Animation](#animation)):
+
+```cpp
+Tavoos::AnimatedState<float> lift{4.0f};
+
+card.effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) { s.offsetY(lift).radius(lift); });
+
+lift.animateTo(12.0f, 0.15f, Tavoos::Easing::easeOutQuad);
+```
+
+The shadow follows the rectangle's corner radii, opacity, scale and rotation. The area under the
+widget itself is left clear, so a translucent or transparent rectangle does not show its shadow
+through its own fill. A rectangle with `clip(true)` keeps its shadow, but a shadow is still
+cropped by any ancestor that clips.
 
 ## Dragging
 
