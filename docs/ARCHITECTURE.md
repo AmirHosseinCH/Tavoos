@@ -1367,21 +1367,35 @@ layout, focus or hit-testing, and holds only a reference to the `Widget` that ow
 `Widget` owns an ordered `std::vector<std::unique_ptr<GraphicalEffect>>`:
 
 ```cpp
-template<std::derived_from<GraphicalEffect> E>
-E& addEffect(std::function<void(E&)> setup = {});
+DropShadow& addDropShadow(std::function<void(DropShadow&)> setup = {});
+InnerShadow& addInnerShadow(std::function<void(InnerShadow&)> setup = {});
 
-template<std::derived_from<GraphicalEffect> E>
-decltype(auto) effect(this auto&& self, std::function<void(E&)> setup = {});
+decltype(auto) dropShadow(this auto&& self, std::function<void(DropShadow&)> setup = {});
+decltype(auto) innerShadow(this auto&& self, std::function<void(InnerShadow&)> setup = {});
 
 void removeEffect(GraphicalEffect& effect);
 void clearEffects();
 ```
 
-`addEffect` constructs `E(*this)`, runs `setup`, appends it and returns a reference that stays
-valid until that effect is removed. `effect<E>()` is the fluent form for use inside a builder
-chain. Adding, removing, or changing any property an effect registered with
-`bindInvalidateTriggers(...)` calls `GraphicalEffect::invalidate()`, which requests a repaint of
-the owner exactly like `bindRepaintTriggers` does for a widget's own properties.
+The public API is typed on purpose. Each `add*` function constructs the effect with the widget,
+runs `setup`, appends it through a private `attachEffect<E>()` and returns a reference that stays
+valid until that effect is removed; the `dropShadow()` and `innerShadow()` forms are the fluent
+versions for a builder chain. Naming each kind in the API keeps the cardinality of each kind
+visible: shadows stack, while the blurs planned later (a layer blur and a background blur) are at
+most one each and will be ordinary properties of `Widget`, not entries in this list. Adding,
+removing, or changing any property an effect registered with `bindInvalidateTriggers(...)` calls
+`GraphicalEffect::invalidate()`, which requests a repaint of the owner exactly like
+`bindRepaintTriggers` does for a widget's own properties.
+
+Controls and layouts do not accept effects. `Control`, `ColumnWidget`, `RowWidget`, `GridWidget`
+and `FlexWidget` derive from `EffectlessWidget` (`widget/effectlesswidget.h`), a thin `Widget`
+subclass that hides `dropShadow`, `innerShadow`, `addDropShadow` and `addInnerShadow` behind a
+`static_assert` (`detail::rejectEffect`). These widgets are made of other widgets and have no
+drawing of their own to cast from, so there is no single shape to attach a shadow to. The parts are
+ordinary widgets with their own effect lists, so the shadow goes on the one that should carry it,
+for example inside a control's `background(...)` slot or on a `RectangleWidget` wrapped around a
+layout. The block is compile-time only and applies through the named type, so a component whose
+root is one of these widgets inherits it.
 
 Rendering reaches an effect through virtuals that each name a stage of the widget's drawing. An
 effect overrides the one for its stage, so ordering between kinds of effect is fixed by the
@@ -1417,11 +1431,12 @@ that point. While a clip mask is being captured the hook is skipped, since only 
 shape belongs in a mask. Effects do not touch layout or hit-testing, so a shadow can extend past
 the widget's box without changing where anything is placed or what receives a click.
 
-A shape is needed to compute a shadow analytically, and only some widgets have one.
-`virtual std::optional<CornerRadii> Widget::shapeRadii() const` returns the four corner radii
-(`topLeft`, `topRight`, `bottomRight`, `bottomLeft`) of a rounded box covering the widget's displayed
-size, or `std::nullopt` for a widget with no such shape. `RectangleWidget` overrides it; every
-other widget inherits `nullopt`, and an effect that needs a shape draws nothing for it.
+A shadow can be computed in two ways, and `virtual std::optional<CornerRadii> Widget::shapeRadii()
+const` picks between them. It returns the four corner radii (`topLeft`, `topRight`,
+`bottomRight`, `bottomLeft`) of a rounded box covering the widget's displayed size, or
+`std::nullopt` for a widget with no such shape. `RectangleWidget` overrides it and gets the
+analytic path described next; every other widget inherits `nullopt` and gets the
+[alpha-based path](#alpha-based-shadows).
 
 `DropShadow` is drawn by its own shader (`shadowFragmentShader`) over a quad larger than the
 widget: the box moved by the offset, grown by `spread`, and padded by three standard deviations
@@ -1452,7 +1467,8 @@ Each derived class only overrides its stage hook and calls the matching `Rendere
 
 `InnerShadow` draws inside the widget's shape, after the fill and before the children, so it
 never affects them. `RectangleWidget::render()` is `renderRectangle`, then `renderInnerEffects`,
-then `renderChildren`; `renderInnerEffects` returns immediately while a clip mask is being
+then `renderChildren`, and `TextWidget`, `ImageWidget` and `SVGWidget` follow the same pattern;
+`renderInnerEffects` returns immediately while a clip mask or a widget's own drawing is being
 captured. `innerShadowFragmentShader` runs over a quad exactly the size of the widget and reuses
 the same Gaussian code as the drop shadow, which lives in one shared GLSL string,
 `blurredBoxGLSL`:
@@ -1467,6 +1483,43 @@ the same Gaussian code as the drop shadow, which lives in one shared GLSL string
 Effects of one stage are painted in list order, so the first one added is the lowest. Further
 kinds of effect that need another point in the draw order (around a widget's own drawing, or
 reading what is behind it) will each add a virtual for their stage.
+
+#### Alpha-based shadows
+
+A widget without a rounded-box shape (text, an image, an SVG) has its shadow computed
+from the alpha of its own drawing, in a few offscreen passes. `Renderer::renderDropShadow` and
+`renderInnerShadow` fall through to `renderAlphaShadow` when `shapeRadii()` is `nullopt`:
+
+1. **Capture.** `captureOwnDrawing` renders the widget's own `render()` into a transparent
+   texture padded on every side by `ceil(3 * sigma) + |spread| + 1` pixels. It sets
+   `m_capturingOwn`, which `Renderer::isCapturingOwn()` reports together with mask capture;
+   `renderChildren` and `renderInnerEffects` use it to skip children and effects, so the capture
+   contains only what the widget itself draws. Unlike mask capture it keeps normal colors. A
+   container with no drawing of its own captures nothing and casts no shadow, in line with effects
+   never propagating to children.
+2. **Spread.** A nonzero `spread` runs a separable square max filter (dilation) or min filter
+   (erosion), `effectMorphFragmentShader`, over the alpha. A drop shadow dilates for a positive
+   spread; an inner shadow erodes its hole for a positive spread, so the shadow grows inward.
+3. **Blur.** `effectBlurFragmentShader` runs a horizontal and a vertical Gaussian pass with
+   `ceil(3 * sigma)` taps either side.
+4. **Composite.** `alphaDropShadowFragmentShader` draws the blurred alpha, moved by the offset and
+   tinted with the shadow color, with the widget's own alpha cut out of it.
+   `alphaInnerShadowFragmentShader` draws `1 - blurred hole`, times the widget's own alpha, over
+   the widget's area.
+
+The captured alpha already contains the widget's opacity, so the composite shaders divide it back
+out (`uOpacity`) before cutting out the shape and multiply the color alpha by it afterward; this
+makes the result agree with the analytic path for a translucent widget. Intermediate textures come
+from a small pool inside `Renderer` (`acquireTexture` / `releaseTexture`), keyed by size and
+trimmed when it grows past a fixed count, so nothing is added to `Widget`. Each pass renders
+through the same framebuffer helpers the clip layers use, which save and restore the previous
+target, so the passes also work while an ancestor's clip layer is being rendered. The capture is
+made at one texture pixel per logical pixel, so a scaled widget gets a correspondingly softer
+shadow.
+
+The square structuring element for spread is cheap but not exact: dilating a rounded shape by a
+large amount makes its corners slightly squarer than the analytic path does. Everything else
+matches the analytic path up to a pixel of anti-aliasing at the shape's edge.
 
 ## Animation system
 

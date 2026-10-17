@@ -147,7 +147,7 @@ Plus, on every widget:
 
 - **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window.
 - **`focus()`** - programmatically focuses this widget.
-- **Effects** - `effect<E>()`, `addEffect<E>()`, `removeEffect()`, `clearEffects()` and `effects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects).
+- **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects).
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
 
 ### Dynamic children
@@ -1400,23 +1400,24 @@ someContainer.addChild<Counter>([](Counter& c) { c.step(5); });
 ## Graphical effects
 
 An effect decorates how a widget is drawn without being a child of it. Every widget carries an
-ordered list of effects. `effect<E>()` adds one inside a builder chain and takes a lambda that
-configures it; `addEffect<E>()` does the same and returns a reference you can keep:
+ordered list of effects. `dropShadow()` and `innerShadow()` add one inside a builder chain and take
+a lambda that configures it; `addDropShadow()` and `addInnerShadow()` do the same and return a
+reference you can keep:
 
 ```cpp
 TB::Rectangle([](Tavoos::RectangleWidget& card) {
     card.width(240).height(140).radius(12).color(Tavoos::Color::White)
-        .effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+        .dropShadow([](Tavoos::DropShadow& s) {
             s.offsetY(6).radius(18).color(Tavoos::Color::rgba(0, 0, 0, 60));
         })
-        .effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+        .dropShadow([](Tavoos::DropShadow& s) {
             s.offsetY(1).radius(2).color(Tavoos::Color::rgba(0, 0, 0, 40));
         });
 });
 ```
 
 ```cpp
-auto& glow = card.addEffect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) {
+auto& glow = card.addDropShadow([](Tavoos::DropShadow& s) {
     s.radius(20).color(Tavoos::Color::Blue);
 });
 
@@ -1425,15 +1426,36 @@ card.removeEffect(glow);
 card.clearEffects();
 ```
 
-A reference returned by `addEffect` stays valid until that effect is removed, and must not be
-used after `removeEffect` or `clearEffects`. Effects are drawn in the order they were added, the
-first one at the bottom. They do not affect layout or hit-testing, and they are not children, so
-they do not appear in `children()`.
+A reference returned by `addDropShadow` or `addInnerShadow` stays valid until that effect is
+removed, and must not be used after `removeEffect` or `clearEffects`. Effects are drawn in the
+order they were added, the first one at the bottom. They do not affect layout or hit-testing, and
+they are not children, so they do not appear in `children()`.
+
+Controls and layouts do not take effects directly: calling `dropShadow()` or `innerShadow()` on a
+button, scroll area, `ColumnWidget`, `RowWidget`, `GridWidget`, `FlexWidget` or any other control
+is a compile error. A control is made of several parts (a background, content, and indicators such
+as a slider's thumb), and a layout has nothing to draw of its own, so you decide which part carries
+the shadow. For a control, add it inside that part's slot:
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.background([](Tavoos::RectangleWidget& box) {
+        box.radius(10).color(Tavoos::Color::rgba(60, 130, 255))
+            .dropShadow([](Tavoos::DropShadow& s) { s.offsetY(4).radius(10); });
+    });
+});
+```
+
+A slot shadow is cropped by its control when the control clips its content, which scroll and list
+views do by default, so a shadow for such a control belongs on a wrapper around it instead. For a
+layout, put the shadow on a `RectangleWidget` that holds it.
 
 ### `DropShadow`
 
-A soft shadow behind a widget. For now it is drawn for `RectangleWidget`; adding it to any other
-widget is allowed but draws nothing. `InnerShadow` (below) has the same properties.
+A soft shadow behind a widget. It works on any widget that draws something of its own:
+rectangles, text, images and SVGs. The shadow follows the widget's actual drawing, so a glyph or an
+SVG shape casts a shadow of its own outline. A container with nothing of its own to draw casts
+none. `InnerShadow` (below) has the same properties.
 
 | Property | Type | Notes |
 |---|---|---|
@@ -1448,7 +1470,7 @@ application state or animated with an `AnimatedState` (see [Animation](#animatio
 ```cpp
 Tavoos::AnimatedState<float> lift{4.0f};
 
-card.effect<Tavoos::DropShadow>([](Tavoos::DropShadow& s) { s.offsetY(lift).radius(lift); });
+card.dropShadow([](Tavoos::DropShadow& s) { s.offsetY(lift).radius(lift); });
 
 lift.animateTo(12.0f, 0.15f, Tavoos::Easing::easeOutQuad);
 ```
@@ -1462,13 +1484,13 @@ cropped by any ancestor that clips.
 
 A shadow drawn inside a widget, along its edges, as if the surface were recessed. It has the same
 five properties as `DropShadow`, with two differences in meaning: the offset moves the shadow
-inside the shape, and a positive `spread` grows the shadow inward. For now it is drawn for
-`RectangleWidget`; on any other widget it draws nothing.
+inside the shape, and a positive `spread` grows the shadow inward. It works on rectangles, text,
+images and SVGs.
 
 ```cpp
 TB::Rectangle([](Tavoos::RectangleWidget& well) {
     well.width(240).height(120).radius(14).color(Tavoos::Color::rgba(235, 237, 242))
-        .effect<Tavoos::InnerShadow>([](Tavoos::InnerShadow& s) {
+        .innerShadow([](Tavoos::InnerShadow& s) {
             s.offsetY(3).radius(10).color(Tavoos::Color::rgba(0, 0, 0, 90));
         });
 });
