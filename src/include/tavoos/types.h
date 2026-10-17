@@ -14,6 +14,13 @@ struct Point {
     float y{0.0f};
 };
 
+struct CornerRadii {
+    float topLeft{0.0f};
+    float topRight{0.0f};
+    float bottomRight{0.0f};
+    float bottomLeft{0.0f};
+};
+
 struct DragAxis {
     bool enabled{true};
     int min{std::numeric_limits<int>::min()};

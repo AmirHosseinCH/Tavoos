@@ -41,6 +41,19 @@ vec4 samplePaintExplicit(vec2 uv, vec4 flatColor, int kind, int stopCount,
 }
 )";
 
+inline const char*roundedBoxGLSL = R"(
+float sdRoundedBox(vec2 p, vec2 halfSize, vec4 radius) {
+    float r;
+    if (p.x < 0.0) {
+        r = (p.y < 0.0) ? radius.x : radius.w;
+    } else {
+        r = (p.y < 0.0) ? radius.y : radius.z;
+    }
+    vec2 q = abs(p) - halfSize + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+)";
+
 inline const char*quadVertexShader = R"(
 #version 460 core
 
@@ -90,17 +103,6 @@ uniform float uBorderStopPositions[MAX_GRADIENT_STOPS];
 uniform float uBorderGradientAngle;
 uniform vec2 uBorderGradientCenter;
 uniform float uBorderGradientRadius;
-
-float sdRoundedBox(vec2 p, vec2 halfSize, vec4 radius) {
-    float r;
-    if (p.x < 0.0) {
-        r = (p.y < 0.0) ? radius.x : radius.w;
-    } else {
-        r = (p.y < 0.0) ? radius.y : radius.z;
-    }
-    vec2 q = abs(p) - halfSize + r;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-}
 )";
 
 inline const char*quadFragmentShaderTail = R"(
@@ -140,6 +142,221 @@ void main() {
     float alpha = outerAlpha * mixedAlpha;
 
     fragColor = vec4(rgb, alpha);
+}
+)";
+
+inline const char*blurredBoxGLSL = R"(
+float erfApprox(float x) {
+    float a = abs(x);
+    float t = 1.0 / (1.0 + 0.3275911 * a);
+    float poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+    return sign(x) * (1.0 - poly * exp(-a * a));
+}
+
+float gaussian(float x, float sigma) {
+    return exp(-(x * x) / (2.0 * sigma * sigma)) / (2.50662827463 * sigma);
+}
+
+float rowCoverage(float x, float rowY, float sigma, vec2 halfSize, vec4 radius) {
+    float rowLeft = rowY < 0.0 ? radius.x : radius.w;
+    float rowRight = rowY < 0.0 ? radius.y : radius.z;
+    float deltaLeft = min(halfSize.y - rowLeft - abs(rowY), 0.0);
+    float deltaRight = min(halfSize.y - rowRight - abs(rowY), 0.0);
+    float left = halfSize.x - rowLeft + sqrt(max(0.0, rowLeft * rowLeft - deltaLeft * deltaLeft));
+    float right = halfSize.x - rowRight + sqrt(max(0.0, rowRight * rowRight - deltaRight * deltaRight));
+    float k = 0.70710678 / sigma;
+    return 0.5 * (erfApprox((x + left) * k) - erfApprox((x - right) * k));
+}
+
+float blurredBox(vec2 p, vec2 halfSize, vec4 radius, float sigma) {
+    float low = p.y - halfSize.y;
+    float high = p.y + halfSize.y;
+    float start = clamp(-3.0 * sigma, low, high);
+    float stop = clamp(3.0 * sigma, low, high);
+    float step = (stop - start) / 8.0;
+    float y = start + step * 0.5;
+    float value = 0.0;
+    for (int i = 0; i < 8; i++) {
+        value += rowCoverage(p.x, p.y - y, sigma, halfSize, radius) * gaussian(y, sigma) * step;
+        y += step;
+    }
+    return value;
+}
+)";
+
+inline const char*shadowFragmentShader = R"(
+in vec2 vLocalPos;
+
+out vec4 fragColor;
+
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform vec2 uOffset;
+uniform float uSpread;
+uniform float uSigma;
+uniform vec4 uColor;
+
+void main() {
+    vec2 shadowHalf = max(uHalfSize + vec2(uSpread), vec2(0.0));
+    vec4 shadowRadius = clamp(uRadius + vec4(uSpread), vec4(0.0), vec4(min(shadowHalf.x, shadowHalf.y)));
+    vec2 p = vLocalPos - uOffset;
+
+    float coverage;
+    if (uSigma > 0.01) {
+        coverage = clamp(blurredBox(p, shadowHalf, shadowRadius, uSigma), 0.0, 1.0);
+    } else {
+        float dist = sdRoundedBox(p, shadowHalf, shadowRadius);
+        float aa = max(length(vec2(dFdx(dist), dFdy(dist))), 0.0001);
+        coverage = 1.0 - smoothstep(-aa, aa, dist);
+    }
+
+    float ownDist = sdRoundedBox(vLocalPos, uHalfSize, uRadius);
+    float ownAa = max(length(vec2(dFdx(ownDist), dFdy(ownDist))), 0.0001);
+    coverage *= smoothstep(-ownAa, ownAa, ownDist);
+
+    fragColor = vec4(uColor.rgb, uColor.a * coverage);
+}
+)";
+
+inline const char*innerShadowFragmentShader = R"(
+in vec2 vLocalPos;
+
+out vec4 fragColor;
+
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform vec2 uOffset;
+uniform float uSpread;
+uniform float uSigma;
+uniform vec4 uColor;
+
+void main() {
+    vec2 holeHalf = max(uHalfSize - vec2(uSpread), vec2(0.0));
+    vec4 holeRadius = clamp(uRadius - vec4(uSpread), vec4(0.0), vec4(min(holeHalf.x, holeHalf.y)));
+    vec2 p = vLocalPos - uOffset;
+
+    float hole;
+    if (uSigma > 0.01) {
+        hole = clamp(blurredBox(p, holeHalf, holeRadius, uSigma), 0.0, 1.0);
+    } else {
+        float dist = sdRoundedBox(p, holeHalf, holeRadius);
+        float aa = max(length(vec2(dFdx(dist), dFdy(dist))), 0.0001);
+        hole = 1.0 - smoothstep(-aa, aa, dist);
+    }
+
+    float ownDist = sdRoundedBox(vLocalPos, uHalfSize, uRadius);
+    float ownAa = max(length(vec2(dFdx(ownDist), dFdy(ownDist))), 0.0001);
+    float inside = 1.0 - smoothstep(-ownAa, ownAa, ownDist);
+
+    fragColor = vec4(uColor.rgb, uColor.a * (1.0 - hole) * inside);
+}
+)";
+
+inline const char*effectBlurFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform float uSigma;
+uniform int uTaps;
+
+void main() {
+    float sum = 0.0;
+    float weights = 0.0;
+    for (int i = -uTaps; i <= uTaps; ++i) {
+        float w = exp(-float(i * i) / (2.0 * uSigma * uSigma));
+        sum += texture(uSource, vUV + uStep * float(i)).a * w;
+        weights += w;
+    }
+    fragColor = vec4(0.0, 0.0, 0.0, sum / weights);
+}
+)";
+
+inline const char*effectMorphFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform int uRadius;
+uniform int uErode;
+
+void main() {
+    float value = uErode == 1 ? 1.0 : 0.0;
+    for (int i = -uRadius; i <= uRadius; ++i) {
+        float a = texture(uSource, vUV + uStep * float(i)).a;
+        value = uErode == 1 ? min(value, a) : max(value, a);
+    }
+    fragColor = vec4(0.0, 0.0, 0.0, value);
+}
+)";
+
+inline const char*effectCompositeVertexShader = R"(
+#version 460 core
+
+layout(location = 0) in vec2 aPos;
+
+layout(std140, binding = 0) uniform camera {
+    mat4 projection;
+};
+
+uniform mat4 world;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform vec2 uOffset;
+
+out vec2 vOwnUV;
+out vec2 vBlurUV;
+
+void main() {
+    vOwnUV = (aPos + uPad) / uRectSize;
+    vBlurUV = (aPos - uOffset + uPad) / uRectSize;
+    gl_Position = projection * world * vec4(aPos, 0.0, 1.0);
+}
+)";
+
+inline const char*alphaDropShadowFragmentShader = R"(
+#version 460 core
+
+in vec2 vOwnUV;
+in vec2 vBlurUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform sampler2D uOwn;
+uniform vec4 uColor;
+uniform float uOpacity;
+
+void main() {
+    float scale = 1.0 / max(uOpacity, 0.0001);
+    float shadow = min(texture(uBlurred, vBlurUV).a * scale, 1.0);
+    float own = min(texture(uOwn, vOwnUV).a * scale, 1.0);
+    fragColor = vec4(uColor.rgb, uColor.a * uOpacity * shadow * (1.0 - own));
+}
+)";
+
+inline const char*alphaInnerShadowFragmentShader = R"(
+#version 460 core
+
+in vec2 vOwnUV;
+in vec2 vBlurUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform sampler2D uOwn;
+uniform vec4 uColor;
+uniform float uOpacity;
+
+void main() {
+    float scale = 1.0 / max(uOpacity, 0.0001);
+    float hole = min(texture(uBlurred, vBlurUV).a * scale, 1.0);
+    float own = min(texture(uOwn, vOwnUV).a * scale, 1.0);
+    fragColor = vec4(uColor.rgb, uColor.a * uOpacity * (1.0 - hole) * own);
 }
 )";
 

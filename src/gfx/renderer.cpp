@@ -1,3 +1,6 @@
+#include <tavoos/effects/dropshadow.h>
+#include <tavoos/effects/innershadow.h>
+#include <tavoos/effects/shadowbase.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/gfx/shader_sources.h>
 #include <tavoos/text/text.h>
@@ -12,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -40,11 +44,19 @@ void Renderer::init() {
     glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &projection, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, cameraUBO);
 
-    std::string quadFragmentSource = std::string(fragmentShaderPrelude) + quadFragmentShaderHead + paintSamplingGLSL + quadFragmentShaderTail;
+    std::string quadFragmentSource = std::string(fragmentShaderPrelude) + quadFragmentShaderHead + roundedBoxGLSL + paintSamplingGLSL + quadFragmentShaderTail;
+    std::string shadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + blurredBoxGLSL + shadowFragmentShader;
+    std::string innerShadowFragmentSource = std::string(fragmentShaderPrelude) + roundedBoxGLSL + blurredBoxGLSL + innerShadowFragmentShader;
     std::string svgFragmentSource  = std::string(fragmentShaderPrelude) + svgFragmentShaderHead  + paintSamplingGLSL + svgFragmentShaderTail;
     std::string textFragmentSource = std::string(fragmentShaderPrelude) + textFragmentShaderHead + paintSamplingGLSL + textFragmentShaderTail;
 
     quadShader.compile(quadVertexShader, quadFragmentSource);
+    shadowShader.compile(quadVertexShader, shadowFragmentSource);
+    innerShadowShader.compile(quadVertexShader, innerShadowFragmentSource);
+    effectBlurShader.compile(clipCompositeVertexShader, effectBlurFragmentShader);
+    effectMorphShader.compile(clipCompositeVertexShader, effectMorphFragmentShader);
+    alphaDropShadowShader.compile(effectCompositeVertexShader, alphaDropShadowFragmentShader);
+    alphaInnerShadowShader.compile(effectCompositeVertexShader, alphaInnerShadowFragmentShader);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -188,7 +200,11 @@ void Renderer::applyPaintUniforms(Shader& shader, const std::string& prefix, con
 }
 
 void Renderer::drawQuad(float w, float h) {
-    const float vertices[] = { 0, 0, w, 0, w, h, 0, 0, w, h, 0, h };
+    drawQuad(0.0f, 0.0f, w, h);
+}
+
+void Renderer::drawQuad(float x0, float y0, float x1, float y1) {
+    const float vertices[] = { x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1 };
     glBindVertexArray(quadVAO);
     glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
@@ -210,6 +226,67 @@ void Renderer::renderRectangle(RectangleWidget& rectangle) {
     quadShader.setFloat("uBorderWidth", rectangle.borderWidth());
 
     drawQuad(rectangle.displayedWidth(), rectangle.displayedHeight());
+}
+
+void Renderer::renderDropShadow(Widget& widget, const DropShadow& shadow) {
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    const float width = widget.displayedWidth();
+    const float height = widget.displayedHeight();
+    if (!radii) {
+        renderAlphaShadow(widget, shadow, false);
+        return;
+    }
+    if (width <= 0.0f || height <= 0.0f)
+        return;
+
+    const Color color = shadow.color();
+    const float alpha = color.a * widget.effectiveOpacity();
+    if (alpha <= 0.0f)
+        return;
+
+    const float blur = std::max(0.0f, shadow.radius());
+    const float sigma = blur * 0.5f;
+    const float reach = std::max(shadow.spread(), 0.0f) + sigma * 3.0f + 1.0f;
+
+    shadowShader.use();
+    shadowShader.setMat4("world", widget.worldMatrix());
+    shadowShader.setVec2("uHalfSize", glm::vec2{width, height} * 0.5f);
+    shadowShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
+    shadowShader.setVec2("uOffset", glm::vec2{shadow.offsetX(), shadow.offsetY()});
+    shadowShader.setFloat("uSpread", shadow.spread());
+    shadowShader.setFloat("uSigma", sigma);
+    shadowShader.setVec4("uColor", glm::vec4{color.r, color.g, color.b, alpha});
+
+    drawQuad(shadow.offsetX() - reach, shadow.offsetY() - reach,
+             width + shadow.offsetX() + reach, height + shadow.offsetY() + reach);
+}
+
+void Renderer::renderInnerShadow(Widget& widget, const InnerShadow& shadow) {
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    const float width = widget.displayedWidth();
+    const float height = widget.displayedHeight();
+    if (!radii) {
+        renderAlphaShadow(widget, shadow, true);
+        return;
+    }
+    if (width <= 0.0f || height <= 0.0f)
+        return;
+
+    const Color color = shadow.color();
+    const float alpha = color.a * widget.effectiveOpacity();
+    if (alpha <= 0.0f)
+        return;
+
+    innerShadowShader.use();
+    innerShadowShader.setMat4("world", widget.worldMatrix());
+    innerShadowShader.setVec2("uHalfSize", glm::vec2{width, height} * 0.5f);
+    innerShadowShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
+    innerShadowShader.setVec2("uOffset", glm::vec2{shadow.offsetX(), shadow.offsetY()});
+    innerShadowShader.setFloat("uSpread", shadow.spread());
+    innerShadowShader.setFloat("uSigma", std::max(0.0f, shadow.radius()) * 0.5f);
+    innerShadowShader.setVec4("uColor", glm::vec4{color.r, color.g, color.b, alpha});
+
+    drawQuad(width, height);
 }
 
 void Renderer::renderImage(ImageWidget& image) {
@@ -427,6 +504,11 @@ void Renderer::renderText(TextWidget& text) {
 }
 
 void Renderer::renderWidget(Widget& widget) {
+    if (!isCapturingOwn()) {
+        for (const auto& effect : widget.effects())
+            effect->renderBehind(*this, widget);
+    }
+
     if (!widget.clip()) {
         widget.render(*this);
         return;
@@ -459,7 +541,8 @@ struct ScopeExit {
 template <typename F> ScopeExit(F) -> ScopeExit<F>;
 
 static SavedRenderTarget beginClipTarget(GLuint clipFBO, GLuint cameraUBO, glm::mat4& projectionRef,
-                                          GLuint texture, int texW, int texH, const glm::mat4& worldMatrix) {
+                                          GLuint texture, int texW, int texH, const glm::mat4& worldMatrix,
+                                          float padding = 0.0f) {
     SavedRenderTarget saved;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &saved.fbo);
     glGetIntegerv(GL_VIEWPORT, saved.viewport);
@@ -477,8 +560,8 @@ static SavedRenderTarget beginClipTarget(GLuint clipFBO, GLuint cameraUBO, glm::
         spdlog::warn("clip framebuffer incomplete ({}x{})", texW, texH);
     glViewport(0, 0, texW, texH);
 
-    projectionRef = glm::ortho(0.0f, static_cast<float>(texW),
-                                0.0f, static_cast<float>(texH),
+    projectionRef = glm::ortho(-padding, static_cast<float>(texW) - padding,
+                                -padding, static_cast<float>(texH) - padding,
                                 -1.0f, 1.0f) * glm::inverse(worldMatrix);
     glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &projectionRef);
@@ -609,7 +692,201 @@ void Renderer::compositeClipLayer(Widget& widget, int texW, int texH) {
                          static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
 }
 
+GLuint Renderer::acquireTexture(int w, int h) {
+    constexpr std::size_t kMaxPooledTextures = 24;
+
+    for (PooledTexture& entry : m_texturePool) {
+        if (!entry.busy && entry.width == w && entry.height == h) {
+            entry.busy = true;
+            return entry.id;
+        }
+    }
+
+    if (m_texturePool.size() >= kMaxPooledTextures) {
+        std::erase_if(m_texturePool, [](const PooledTexture& entry) {
+            if (entry.busy)
+                return false;
+            glDeleteTextures(1, &entry.id);
+            return true;
+        });
+    }
+
+    PooledTexture entry;
+    entry.width = w;
+    entry.height = h;
+    entry.busy = true;
+    glGenTextures(1, &entry.id);
+    glBindTexture(GL_TEXTURE_2D, entry.id);
+    setClipTextureParams();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    m_texturePool.push_back(entry);
+    return entry.id;
+}
+
+void Renderer::releaseTexture(GLuint texture) {
+    for (PooledTexture& entry : m_texturePool) {
+        if (entry.id == texture)
+            entry.busy = false;
+    }
+}
+
+void Renderer::captureOwnDrawing(Widget& widget, GLuint texture, int texW, int texH, int pad) {
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, texture, texW, texH,
+                                                    widget.worldMatrix(), static_cast<float>(pad));
+    ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    GLint prevSrcRGB, prevDstRGB, prevSrcAlpha, prevDstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevDstAlpha);
+
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+    const bool prevCapturingOwn = m_capturingOwn;
+    m_capturingOwn = true;
+    ScopeExit restoreState{[&] {
+        m_capturingOwn = prevCapturingOwn;
+        glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB), static_cast<GLenum>(prevDstRGB),
+                             static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
+    }};
+
+    widget.render(*this);
+}
+
+void Renderer::runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
+                       const std::function<void(Shader&)>& setup) {
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, target, w, h, glm::mat4{1.0f});
+    ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
+
+    const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+    glDisable(GL_BLEND);
+    ScopeExit restoreBlend{[&] {
+        if (blendWasEnabled)
+            glEnable(GL_BLEND);
+    }};
+
+    shader.use();
+    shader.setMat4("world", glm::mat4{1.0f});
+    shader.setVec2("uRectSize", glm::vec2{static_cast<float>(w), static_cast<float>(h)});
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, source);
+    shader.setInt("uSource", 0);
+    setup(shader);
+
+    drawQuad(static_cast<float>(w), static_cast<float>(h));
+}
+
+GLuint Renderer::blurAlpha(GLuint source, int w, int h, float sigma, int taps) {
+    const GLuint horizontal = acquireTexture(w, h);
+    runPass(effectBlurShader, source, horizontal, w, h, [&](Shader& shader) {
+        shader.setVec2("uStep", glm::vec2{1.0f / static_cast<float>(w), 0.0f});
+        shader.setFloat("uSigma", sigma);
+        shader.setInt("uTaps", taps);
+    });
+
+    const GLuint result = acquireTexture(w, h);
+    runPass(effectBlurShader, horizontal, result, w, h, [&](Shader& shader) {
+        shader.setVec2("uStep", glm::vec2{0.0f, 1.0f / static_cast<float>(h)});
+        shader.setFloat("uSigma", sigma);
+        shader.setInt("uTaps", taps);
+    });
+    releaseTexture(horizontal);
+    return result;
+}
+
+GLuint Renderer::morphAlpha(GLuint source, int w, int h, int radius, bool erode) {
+    const GLuint horizontal = acquireTexture(w, h);
+    runPass(effectMorphShader, source, horizontal, w, h, [&](Shader& shader) {
+        shader.setVec2("uStep", glm::vec2{1.0f / static_cast<float>(w), 0.0f});
+        shader.setInt("uRadius", radius);
+        shader.setInt("uErode", erode ? 1 : 0);
+    });
+
+    const GLuint result = acquireTexture(w, h);
+    runPass(effectMorphShader, horizontal, result, w, h, [&](Shader& shader) {
+        shader.setVec2("uStep", glm::vec2{0.0f, 1.0f / static_cast<float>(h)});
+        shader.setInt("uRadius", radius);
+        shader.setInt("uErode", erode ? 1 : 0);
+    });
+    releaseTexture(horizontal);
+    return result;
+}
+
+void Renderer::renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner) {
+    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
+    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    const Color color = shadow.color();
+    const float opacity = widget.effectiveOpacity();
+    if (width <= 0 || height <= 0 || color.a <= 0.0f || opacity <= 0.0f)
+        return;
+
+    const float sigma = std::max(0.0f, shadow.radius()) * 0.5f;
+    const bool blurred = sigma > 0.01f;
+    const int taps = blurred ? static_cast<int>(std::ceil(sigma * 3.0f)) : 0;
+    const int spread = static_cast<int>(std::lround(shadow.spread()));
+    const int pad = taps + std::abs(spread) + 1;
+    const int texW = width + 2 * pad;
+    const int texH = height + 2 * pad;
+
+    const GLuint own = acquireTexture(texW, texH);
+    captureOwnDrawing(widget, own, texW, texH, pad);
+
+    GLuint shape = own;
+    GLuint grown = 0;
+    GLuint softened = 0;
+    if (spread != 0) {
+        const bool erode = inner ? spread > 0 : spread < 0;
+        grown = morphAlpha(shape, texW, texH, std::abs(spread), erode);
+        shape = grown;
+    }
+    if (blurred) {
+        softened = blurAlpha(shape, texW, texH, sigma, taps);
+        shape = softened;
+    }
+
+    Shader& shader = inner ? alphaInnerShadowShader : alphaDropShadowShader;
+    shader.use();
+    shader.setMat4("world", widget.worldMatrix());
+    shader.setVec2("uRectSize", glm::vec2{static_cast<float>(texW), static_cast<float>(texH)});
+    shader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+    shader.setVec2("uOffset", glm::vec2{shadow.offsetX(), shadow.offsetY()});
+    shader.setVec4("uColor", glm::vec4{color.r, color.g, color.b, color.a});
+    shader.setFloat("uOpacity", opacity);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, shape);
+    shader.setInt("uBlurred", 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, own);
+    shader.setInt("uOwn", 1);
+    glActiveTexture(GL_TEXTURE0);
+
+    if (inner) {
+        drawQuad(widget.displayedWidth(), widget.displayedHeight());
+    } else {
+        const float x0 = shadow.offsetX() - static_cast<float>(pad);
+        const float y0 = shadow.offsetY() - static_cast<float>(pad);
+        drawQuad(x0, y0, x0 + static_cast<float>(texW), y0 + static_cast<float>(texH));
+    }
+
+    if (softened != 0)
+        releaseTexture(softened);
+    if (grown != 0)
+        releaseTexture(grown);
+    releaseTexture(own);
+}
+
 void Renderer::shutdown() {
+    for (const PooledTexture& entry : m_texturePool)
+        glDeleteTextures(1, &entry.id);
+    m_texturePool.clear();
+
     glDeleteBuffers(1, &quadVBO);
     glDeleteBuffers(1, &textVBO);
     glDeleteBuffers(1, &cameraUBO);
@@ -619,6 +896,12 @@ void Renderer::shutdown() {
     svgShader.release();
     textShader.release();
     clipCompositeShader.release();
+    shadowShader.release();
+    innerShadowShader.release();
+    effectBlurShader.release();
+    effectMorphShader.release();
+    alphaDropShadowShader.release();
+    alphaInnerShadowShader.release();
 
     quadVAO = quadVBO = 0;
     textVAO = textVBO = 0;

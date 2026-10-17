@@ -5,7 +5,7 @@
 
 namespace Tavoos {
 
-FlexWidget::FlexWidget(Object* parent) : Widget{parent} {
+FlexWidget::FlexWidget(Object* parent) : EffectlessWidget{parent} {
     bindRelayoutTriggers(m_direction, m_wrap, m_justifyContent, m_alignItems,
                          m_alignContent, m_rowGap, m_columnGap);
 }

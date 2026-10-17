@@ -2,11 +2,12 @@
 
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
+#include <tavoos/widget/effectlesswidget.h>
 #include <tavoos/widget/widget.h>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT ColumnWidget : public Widget {
+class TAVOOS_EXPORT ColumnWidget : public EffectlessWidget {
 public:
     ColumnWidget(Object*);
 

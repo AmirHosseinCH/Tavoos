@@ -2,13 +2,14 @@
 
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
+#include <tavoos/widget/effectlesswidget.h>
 #include <tavoos/widget/widget.h>
 
 #include <vector>
 
 namespace Tavoos {
 
-class TAVOOS_EXPORT FlexWidget : public Widget {
+class TAVOOS_EXPORT FlexWidget : public EffectlessWidget {
 public:
     FlexWidget(Object*);
 

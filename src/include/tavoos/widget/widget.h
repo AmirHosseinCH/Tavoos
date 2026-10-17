@@ -2,6 +2,8 @@
 
 #include <tavoos/animation/animation.h>
 #include <tavoos/component/componentbase.h>
+#include <tavoos/effects/graphicaleffect.h>
+#include <tavoos/effects/shadowstyle.h>
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
@@ -10,6 +12,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <concepts>
+#include <memory>
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -20,10 +25,13 @@ namespace Tavoos {
 
 class Renderer;
 class Window;
+class DropShadow;
+class InnerShadow;
 
 class TAVOOS_EXPORT Widget : public Object {
     friend class Renderer;
     friend class Window;
+    friend class GraphicalEffect;
     friend class Builder;
     friend class ColumnWidget;
     friend class RowWidget;
@@ -379,6 +387,7 @@ public:
 
     virtual bool isLayouter() const { return false; }
     virtual bool isOverlay() const { return false; }
+    virtual std::optional<CornerRadii> shapeRadii() const { return std::nullopt; }
 
     bool participatesInLayout() const { return visible() && !isOverlay(); }
 
@@ -408,6 +417,35 @@ public:
         raw->requestRelayout();
         return raw;
     }
+
+    DropShadow& addDropShadow(const ShadowStyle& style = {});
+    DropShadow& addDropShadow(State<ShadowStyle>& style);
+    InnerShadow& addInnerShadow(const ShadowStyle& style = {});
+    InnerShadow& addInnerShadow(State<ShadowStyle>& style);
+
+    decltype(auto) dropShadow(this auto&& self, const ShadowStyle& style = {}) {
+        self.addDropShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dropShadow(this auto&& self, State<ShadowStyle>& style) {
+        self.addDropShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) innerShadow(this auto&& self, const ShadowStyle& style = {}) {
+        self.addInnerShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) innerShadow(this auto&& self, State<ShadowStyle>& style) {
+        self.addInnerShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    void removeEffect(GraphicalEffect& effect);
+    void clearEffects();
+    const std::vector<std::unique_ptr<GraphicalEffect>>& effects() const noexcept { return m_effects; }
 
     void removeSelf();
     void removeChild(Widget* child);
@@ -477,6 +515,7 @@ protected:
     void syncDisplayedGeometry();
     void notifyResolvedSizeIfChanged();
     void requestRepaint();
+    void renderInnerEffects(Renderer& renderer);
     void detachAndDefer(Widget* child);
     template<typename... Props>
     void bindRepaintTriggers(Props&... props) {
@@ -613,6 +652,9 @@ private:
     Widget* hitTestTree(float px, float py) const;
     void updateEffectiveOpacity();
 
+    template<typename E>
+    E& attachEffect();
+
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 
     bool m_layoutDirty{true};
@@ -620,6 +662,7 @@ private:
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};
     bool m_built{false};
+    std::vector<std::unique_ptr<GraphicalEffect>> m_effects;
     static bool s_isBuilding;
 };
 

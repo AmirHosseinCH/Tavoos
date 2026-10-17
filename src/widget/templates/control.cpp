@@ -2,7 +2,7 @@
 
 namespace Tavoos {
 
-Control::Control(Object* parent) : Widget{parent} {
+Control::Control(Object* parent) : EffectlessWidget{parent} {
     m_enabled.onChange([this](const bool& enabled) { m_enabledState.setIfChanged(enabled); });
 }
 

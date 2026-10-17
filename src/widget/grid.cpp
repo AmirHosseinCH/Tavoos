@@ -5,7 +5,7 @@
 
 namespace Tavoos {
 
-GridWidget::GridWidget(Object* parent) : Widget{parent} {
+GridWidget::GridWidget(Object* parent) : EffectlessWidget{parent} {
     bindRelayoutTriggers(m_columns, m_columnSpacing, m_rowSpacing);
 }
 

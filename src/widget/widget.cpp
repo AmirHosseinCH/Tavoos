@@ -1,3 +1,5 @@
+#include <tavoos/effects/dropshadow.h>
+#include <tavoos/effects/innershadow.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/widget/widget.h>
 #include <tavoos/window.h>
@@ -46,7 +48,7 @@ std::vector<Widget*> Widget::zOrderedChildren(const Object& parent) {
 }
 
 void Widget::renderChildren(Renderer& renderer) {
-    if (renderer.isCapturingMask())
+    if (renderer.isCapturingOwn())
         return;
 
     for (Widget* const widget : zOrderedChildren(*this)) {
@@ -161,6 +163,60 @@ void Widget::detachAndDefer(Widget* child) {
 
 void Widget::removeSelf() {
     detachAndDefer(this);
+}
+
+void Widget::renderInnerEffects(Renderer& renderer) {
+    if (renderer.isCapturingOwn())
+        return;
+
+    for (const auto& effect : m_effects)
+        effect->renderInside(renderer, *this);
+}
+
+template<typename E>
+E& Widget::attachEffect() {
+    auto effect = std::make_unique<E>(*this);
+    E* const raw = effect.get();
+    m_effects.push_back(std::move(effect));
+    requestRepaint();
+    return *raw;
+}
+
+DropShadow& Widget::addDropShadow(const ShadowStyle& style) {
+    DropShadow& shadow = attachEffect<DropShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+DropShadow& Widget::addDropShadow(State<ShadowStyle>& style) {
+    DropShadow& shadow = attachEffect<DropShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+InnerShadow& Widget::addInnerShadow(const ShadowStyle& style) {
+    InnerShadow& shadow = attachEffect<InnerShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+InnerShadow& Widget::addInnerShadow(State<ShadowStyle>& style) {
+    InnerShadow& shadow = attachEffect<InnerShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+void Widget::removeEffect(GraphicalEffect& effect) {
+    const auto removed = std::erase_if(m_effects, [&effect](const auto& owned) { return owned.get() == &effect; });
+    if (removed > 0)
+        requestRepaint();
+}
+
+void Widget::clearEffects() {
+    if (m_effects.empty())
+        return;
+    m_effects.clear();
+    requestRepaint();
 }
 
 void Widget::removeChild(Widget* child) {
