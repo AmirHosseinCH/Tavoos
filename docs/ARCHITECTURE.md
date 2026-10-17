@@ -1367,25 +1367,37 @@ layout, focus or hit-testing, and holds only a reference to the `Widget` that ow
 `Widget` owns an ordered `std::vector<std::unique_ptr<GraphicalEffect>>`:
 
 ```cpp
-DropShadow& addDropShadow(std::function<void(DropShadow&)> setup = {});
-InnerShadow& addInnerShadow(std::function<void(InnerShadow&)> setup = {});
+DropShadow& addDropShadow(const ShadowStyle& style = {});
+DropShadow& addDropShadow(State<ShadowStyle>& style);
+InnerShadow& addInnerShadow(const ShadowStyle& style = {});
+InnerShadow& addInnerShadow(State<ShadowStyle>& style);
 
-decltype(auto) dropShadow(this auto&& self, std::function<void(DropShadow&)> setup = {});
-decltype(auto) innerShadow(this auto&& self, std::function<void(InnerShadow&)> setup = {});
+decltype(auto) dropShadow(this auto&& self, const ShadowStyle& style = {});
+decltype(auto) dropShadow(this auto&& self, State<ShadowStyle>& style);
+decltype(auto) innerShadow(this auto&& self, const ShadowStyle& style = {});
+decltype(auto) innerShadow(this auto&& self, State<ShadowStyle>& style);
 
 void removeEffect(GraphicalEffect& effect);
 void clearEffects();
 ```
 
 The public API is typed on purpose. Each `add*` function constructs the effect with the widget,
-runs `setup`, appends it through a private `attachEffect<E>()` and returns a reference that stays
-valid until that effect is removed; the `dropShadow()` and `innerShadow()` forms are the fluent
-versions for a builder chain. Naming each kind in the API keeps the cardinality of each kind
+appends it through a private `attachEffect<E>()`, applies the given `ShadowStyle` and returns a
+reference that stays valid until that effect is removed; the `dropShadow()` and `innerShadow()`
+forms are the fluent versions for a builder chain. Naming each kind in the API keeps the cardinality of each kind
 visible: shadows stack, while the blurs planned later (a layer blur and a background blur) are at
 most one each and will be ordinary properties of `Widget`, not entries in this list. Adding,
 removing, or changing any property an effect registered with `bindInvalidateTriggers(...)` calls
 `GraphicalEffect::invalidate()`, which requests a repaint of the owner exactly like
 `bindRepaintTriggers` does for a widget's own properties.
+
+`ShadowStyle` (`effects/shadowstyle.h`) is a plain aggregate of the five shadow values, with a
+`lerp` so that an `AnimatedState<ShadowStyle>` can animate a whole shadow, and it is the same
+shape a style struct would carry when a widget class installs a default shadow. `ShadowBase`
+keeps its five `Property` members and a `BindableState<ShadowStyle>` in front of them, the same
+arrangement as `ScrollAreaSkin`: `style()` sets that state from a value or binds it to a
+`State<ShadowStyle>`, and its change callback writes the five properties. Writing a property
+unbinds it, so a style applied later replaces any earlier per-property binding.
 
 Controls and layouts do not accept effects. `Control`, `ColumnWidget`, `RowWidget`, `GridWidget`
 and `FlexWidget` derive from `EffectlessWidget` (`widget/effectlesswidget.h`), a thin `Widget`

@@ -26,26 +26,48 @@ class TAVOOS_EXPORT EffectlessWidget : public Widget {
 public:
     using Widget::Widget;
 
-    template<typename... Args>
-    decltype(auto) dropShadow(this auto&& self, Args&&...) {
-        detail::rejectEffect<Args...>();
-        return std::forward<decltype(self)>(self);
+    template<typename Self>
+    decltype(auto) dropShadow(this Self&& self, const ShadowStyle& = {}) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
     }
 
-    template<typename... Args>
-    decltype(auto) innerShadow(this auto&& self, Args&&...) {
-        detail::rejectEffect<Args...>();
-        return std::forward<decltype(self)>(self);
+    template<typename Self>
+    decltype(auto) dropShadow(this Self&& self, State<ShadowStyle>&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
     }
 
-    template<typename... Args>
-    void addDropShadow(Args&&...) {
-        detail::rejectEffect<Args...>();
+    template<typename Self>
+    decltype(auto) innerShadow(this Self&& self, const ShadowStyle& = {}) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
     }
 
-    template<typename... Args>
-    void addInnerShadow(Args&&...) {
-        detail::rejectEffect<Args...>();
+    template<typename Self>
+    decltype(auto) innerShadow(this Self&& self, State<ShadowStyle>&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    void addDropShadow(this Self&&, const ShadowStyle& = {}) {
+        detail::rejectEffect<Self>();
+    }
+
+    template<typename Self>
+    void addDropShadow(this Self&&, State<ShadowStyle>&) {
+        detail::rejectEffect<Self>();
+    }
+
+    template<typename Self>
+    void addInnerShadow(this Self&&, const ShadowStyle& = {}) {
+        detail::rejectEffect<Self>();
+    }
+
+    template<typename Self>
+    void addInnerShadow(this Self&&, State<ShadowStyle>&) {
+        detail::rejectEffect<Self>();
     }
 };
 

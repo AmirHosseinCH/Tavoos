@@ -82,6 +82,7 @@ target_sources(Tavoos
     include/tavoos/component/component.h
     include/tavoos/types.h
     include/tavoos/effects/graphicaleffect.h
+    include/tavoos/effects/shadowstyle.h
     include/tavoos/effects/shadowbase.h
     include/tavoos/effects/dropshadow.h
     include/tavoos/effects/innershadow.h

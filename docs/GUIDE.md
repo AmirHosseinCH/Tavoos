@@ -1401,30 +1401,29 @@ someContainer.addChild<Counter>([](Counter& c) { c.step(5); });
 
 An effect decorates how a widget is drawn without being a child of it. Every widget carries an
 ordered list of effects. `dropShadow()` and `innerShadow()` add one inside a builder chain and take
-a lambda that configures it; `addDropShadow()` and `addInnerShadow()` do the same and return a
-reference you can keep:
+a `ShadowStyle`; `addDropShadow()` and `addInnerShadow()` do the same and return a reference you
+can keep:
 
 ```cpp
 TB::Rectangle([](Tavoos::RectangleWidget& card) {
     card.width(240).height(140).radius(12).color(Tavoos::Color::White)
-        .dropShadow([](Tavoos::DropShadow& s) {
-            s.offsetY(6).radius(18).color(Tavoos::Color::rgba(0, 0, 0, 60));
-        })
-        .dropShadow([](Tavoos::DropShadow& s) {
-            s.offsetY(1).radius(2).color(Tavoos::Color::rgba(0, 0, 0, 40));
-        });
+        .dropShadow({ .offsetY = 6, .radius = 18, .color = Tavoos::Color::rgba(0, 0, 0, 60) })
+        .dropShadow({ .offsetY = 1, .radius = 2, .color = Tavoos::Color::rgba(0, 0, 0, 40) });
 });
 ```
 
 ```cpp
-auto& glow = card.addDropShadow([](Tavoos::DropShadow& s) {
-    s.radius(20).color(Tavoos::Color::Blue);
-});
+auto& glow = card.addDropShadow({ .radius = 20, .color = Tavoos::Color::Blue });
 
 glow.color(Tavoos::Color::Red);
 card.removeEffect(glow);
 card.clearEffects();
 ```
+
+`ShadowStyle` is a plain struct with `offsetX`, `offsetY`, `radius`, `spread` and `color`, all
+optional. Because it is an aggregate initialized with designated initializers, the fields you give
+must appear in that declaration order (`offsetX`, `offsetY`, `radius`, `spread`, `color`); you can
+skip any of them, but not reorder them.
 
 A reference returned by `addDropShadow` or `addInnerShadow` stays valid until that effect is
 removed, and must not be used after `removeEffect` or `clearEffects`. Effects are drawn in the
@@ -1441,7 +1440,7 @@ the shadow. For a control, add it inside that part's slot:
 TB::Button([](Tavoos::ButtonWidget& b) {
     b.background([](Tavoos::RectangleWidget& box) {
         box.radius(10).color(Tavoos::Color::rgba(60, 130, 255))
-            .dropShadow([](Tavoos::DropShadow& s) { s.offsetY(4).radius(10); });
+            .dropShadow({ .offsetY = 4, .radius = 10 });
     });
 });
 ```
@@ -1464,16 +1463,23 @@ none. `InnerShadow` (below) has the same properties.
 | `spread()` | `float` | Grows (positive) or shrinks (negative) the shadow's shape before blurring. Default `0`. |
 | `color()` | `Color` | Including its alpha. Default black at 25% alpha. |
 
-Every property takes a value or a `State`, like any other property, so a shadow can be bound to
-application state or animated with an `AnimatedState` (see [Animation](#animation)):
+Both `dropShadow()` and `addDropShadow()` also accept a `State<ShadowStyle>&`, so the whole shadow
+can be bound to application state or animated as one value with an `AnimatedState` (see
+[Animation](#animation)); `ShadowStyle` interpolates all five values:
 
 ```cpp
-Tavoos::AnimatedState<float> lift{4.0f};
+Tavoos::AnimatedState<Tavoos::ShadowStyle> lift{Tavoos::ShadowStyle{.offsetY = 2, .radius = 4}};
 
-card.dropShadow([](Tavoos::DropShadow& s) { s.offsetY(lift).radius(lift); });
+card.dropShadow(lift);
 
-lift.animateTo(12.0f, 0.15f, Tavoos::Easing::easeOutQuad);
+lift.animateTo({ .offsetY = 10, .radius = 18 }, 0.15f, Tavoos::Easing::easeOutQuad);
 ```
+
+The reference returned by `addDropShadow()` has a fluent setter for each property
+(`offsetX()`, `offsetY()`, `offset(x, y)`, `radius()`, `spread()` and `color()`), and each accepts
+a value or a single `State`, for when one property needs its own binding. It also has `style()`,
+which applies a whole `ShadowStyle` at once. A bound `State<ShadowStyle>` sets all five
+properties each time it changes, so it replaces any individual setting made before it.
 
 The shadow follows the rectangle's corner radii, opacity, scale and rotation. The area under the
 widget itself is left clear, so a translucent or transparent rectangle does not show its shadow
@@ -1490,9 +1496,7 @@ images and SVGs.
 ```cpp
 TB::Rectangle([](Tavoos::RectangleWidget& well) {
     well.width(240).height(120).radius(14).color(Tavoos::Color::rgba(235, 237, 242))
-        .innerShadow([](Tavoos::InnerShadow& s) {
-            s.offsetY(3).radius(10).color(Tavoos::Color::rgba(0, 0, 0, 90));
-        });
+        .innerShadow({ .offsetY = 3, .radius = 10, .color = Tavoos::Color::rgba(0, 0, 0, 90) });
 });
 ```
 

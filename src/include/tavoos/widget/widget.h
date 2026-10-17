@@ -3,6 +3,7 @@
 #include <tavoos/animation/animation.h>
 #include <tavoos/component/componentbase.h>
 #include <tavoos/effects/graphicaleffect.h>
+#include <tavoos/effects/shadowstyle.h>
 #include <tavoos/events/events.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
@@ -417,16 +418,28 @@ public:
         return raw;
     }
 
-    DropShadow& addDropShadow(std::function<void(DropShadow&)> setup = {});
-    InnerShadow& addInnerShadow(std::function<void(InnerShadow&)> setup = {});
+    DropShadow& addDropShadow(const ShadowStyle& style = {});
+    DropShadow& addDropShadow(State<ShadowStyle>& style);
+    InnerShadow& addInnerShadow(const ShadowStyle& style = {});
+    InnerShadow& addInnerShadow(State<ShadowStyle>& style);
 
-    decltype(auto) dropShadow(this auto&& self, std::function<void(DropShadow&)> setup = {}) {
-        self.addDropShadow(std::move(setup));
+    decltype(auto) dropShadow(this auto&& self, const ShadowStyle& style = {}) {
+        self.addDropShadow(style);
         return std::forward<decltype(self)>(self);
     }
 
-    decltype(auto) innerShadow(this auto&& self, std::function<void(InnerShadow&)> setup = {}) {
-        self.addInnerShadow(std::move(setup));
+    decltype(auto) dropShadow(this auto&& self, State<ShadowStyle>& style) {
+        self.addDropShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) innerShadow(this auto&& self, const ShadowStyle& style = {}) {
+        self.addInnerShadow(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) innerShadow(this auto&& self, State<ShadowStyle>& style) {
+        self.addInnerShadow(style);
         return std::forward<decltype(self)>(self);
     }
 
@@ -640,7 +653,7 @@ private:
     void updateEffectiveOpacity();
 
     template<typename E>
-    E& attachEffect(std::function<void(E&)> setup);
+    E& attachEffect();
 
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 

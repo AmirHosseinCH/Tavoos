@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tavoos/effects/graphicaleffect.h>
+#include <tavoos/effects/shadowstyle.h>
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/types.h>
@@ -42,6 +43,18 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) style(this auto&& self, const ShadowStyle& value) {
+        self.m_style.set(value);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) style(this auto&& self, State<ShadowStyle>& value) {
+        self.m_style.set(value);
+        return std::forward<decltype(self)>(self);
+    }
+
+    ShadowStyle style() const { return { m_offsetX, m_offsetY, m_radius, m_spread, m_color }; }
+
     float offsetX() const { return m_offsetX; }
     float offsetY() const { return m_offsetY; }
     float radius() const { return m_radius; }
@@ -52,6 +65,9 @@ protected:
     explicit ShadowBase(Widget& owner);
 
 private:
+    void applyStyle(const ShadowStyle& value);
+
+    BindableState<ShadowStyle> m_style;
     Property<float> m_offsetX{0.0f};
     Property<float> m_offsetY{0.0f};
     Property<float> m_radius{0.0f};

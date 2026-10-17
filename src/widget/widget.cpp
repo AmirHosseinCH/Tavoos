@@ -174,22 +174,36 @@ void Widget::renderInnerEffects(Renderer& renderer) {
 }
 
 template<typename E>
-E& Widget::attachEffect(std::function<void(E&)> setup) {
+E& Widget::attachEffect() {
     auto effect = std::make_unique<E>(*this);
     E* const raw = effect.get();
-    if (setup)
-        setup(*raw);
     m_effects.push_back(std::move(effect));
     requestRepaint();
     return *raw;
 }
 
-DropShadow& Widget::addDropShadow(std::function<void(DropShadow&)> setup) {
-    return attachEffect<DropShadow>(std::move(setup));
+DropShadow& Widget::addDropShadow(const ShadowStyle& style) {
+    DropShadow& shadow = attachEffect<DropShadow>();
+    shadow.style(style);
+    return shadow;
 }
 
-InnerShadow& Widget::addInnerShadow(std::function<void(InnerShadow&)> setup) {
-    return attachEffect<InnerShadow>(std::move(setup));
+DropShadow& Widget::addDropShadow(State<ShadowStyle>& style) {
+    DropShadow& shadow = attachEffect<DropShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+InnerShadow& Widget::addInnerShadow(const ShadowStyle& style) {
+    InnerShadow& shadow = attachEffect<InnerShadow>();
+    shadow.style(style);
+    return shadow;
+}
+
+InnerShadow& Widget::addInnerShadow(State<ShadowStyle>& style) {
+    InnerShadow& shadow = attachEffect<InnerShadow>();
+    shadow.style(style);
+    return shadow;
 }
 
 void Widget::removeEffect(GraphicalEffect& effect) {
