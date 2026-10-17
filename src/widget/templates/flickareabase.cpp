@@ -122,7 +122,7 @@ void FlickAreaBase::scrollToRight() {
 }
 
 void FlickAreaBase::render(Renderer& renderer) {
-    if (renderer.isCapturingOwn()) {
+    if (renderer.isCapturingMask()) {
         if (Widget* const shape = backgroundSlot())
             renderer.renderWidget(*shape);
         return;

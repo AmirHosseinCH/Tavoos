@@ -24,6 +24,8 @@ namespace Tavoos {
 
 class Renderer;
 class Window;
+class DropShadow;
+class InnerShadow;
 
 class TAVOOS_EXPORT Widget : public Object {
     friend class Renderer;
@@ -415,20 +417,16 @@ public:
         return raw;
     }
 
-    template<std::derived_from<GraphicalEffect> E>
-    E& addEffect(std::function<void(E&)> setup = {}) {
-        auto effect = std::make_unique<E>(*this);
-        E* const raw = effect.get();
-        if (setup)
-            setup(*raw);
-        m_effects.push_back(std::move(effect));
-        requestRepaint();
-        return *raw;
+    DropShadow& addDropShadow(std::function<void(DropShadow&)> setup = {});
+    InnerShadow& addInnerShadow(std::function<void(InnerShadow&)> setup = {});
+
+    decltype(auto) dropShadow(this auto&& self, std::function<void(DropShadow&)> setup = {}) {
+        self.addDropShadow(std::move(setup));
+        return std::forward<decltype(self)>(self);
     }
 
-    template<std::derived_from<GraphicalEffect> E>
-    decltype(auto) effect(this auto&& self, std::function<void(E&)> setup = {}) {
-        self.template addEffect<E>(std::move(setup));
+    decltype(auto) innerShadow(this auto&& self, std::function<void(InnerShadow&)> setup = {}) {
+        self.addInnerShadow(std::move(setup));
         return std::forward<decltype(self)>(self);
     }
 
@@ -640,6 +638,9 @@ private:
     bool hitTest(float px, float py) const;
     Widget* hitTestTree(float px, float py) const;
     void updateEffectiveOpacity();
+
+    template<typename E>
+    E& attachEffect(std::function<void(E&)> setup);
 
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 

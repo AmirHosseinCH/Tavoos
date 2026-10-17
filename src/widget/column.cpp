@@ -3,7 +3,7 @@
 
 namespace Tavoos {
 
-ColumnWidget::ColumnWidget(Object* parent) : Widget{parent} {
+ColumnWidget::ColumnWidget(Object* parent) : EffectlessWidget{parent} {
     bindRelayoutTriggers(m_spacing);
 }
 

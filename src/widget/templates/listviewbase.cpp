@@ -145,7 +145,7 @@ void ListViewBase::onBuilt() {
 }
 
 void ListViewBase::render(Renderer& renderer) {
-    if (!renderer.isCapturingOwn())
+    if (!renderer.isCapturingMask())
         syncRows();
     ScrollAreaBase::render(renderer);
 }

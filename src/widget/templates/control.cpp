@@ -1,18 +1,12 @@
-#include <tavoos/gfx/renderer.h>
 #include <tavoos/widget/templates/control.h>
 
 namespace Tavoos {
 
-Control::Control(Object* parent) : Widget{parent} {
+Control::Control(Object* parent) : EffectlessWidget{parent} {
     m_enabled.onChange([this](const bool& enabled) { m_enabledState.setIfChanged(enabled); });
 }
 
 void Control::render(Renderer& renderer) {
-    if (renderer.isCapturingOwn()) {
-        if (Widget* const shape = backgroundSlot())
-            renderer.renderWidget(*shape);
-        return;
-    }
     renderChildren(renderer);
 }
 

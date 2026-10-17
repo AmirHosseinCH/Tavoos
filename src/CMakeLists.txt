@@ -86,6 +86,7 @@ target_sources(Tavoos
     include/tavoos/effects/dropshadow.h
     include/tavoos/effects/innershadow.h
     include/tavoos/widget/widget.h
+    include/tavoos/widget/effectlesswidget.h
     include/tavoos/widget/templates/templates.h
     include/tavoos/widget/templates/control.h
     include/tavoos/widget/rectangle.h

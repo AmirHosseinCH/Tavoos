@@ -1,3 +1,5 @@
+#include <tavoos/effects/dropshadow.h>
+#include <tavoos/effects/innershadow.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/widget/widget.h>
 #include <tavoos/window.h>
@@ -169,6 +171,25 @@ void Widget::renderInnerEffects(Renderer& renderer) {
 
     for (const auto& effect : m_effects)
         effect->renderInside(renderer, *this);
+}
+
+template<typename E>
+E& Widget::attachEffect(std::function<void(E&)> setup) {
+    auto effect = std::make_unique<E>(*this);
+    E* const raw = effect.get();
+    if (setup)
+        setup(*raw);
+    m_effects.push_back(std::move(effect));
+    requestRepaint();
+    return *raw;
+}
+
+DropShadow& Widget::addDropShadow(std::function<void(DropShadow&)> setup) {
+    return attachEffect<DropShadow>(std::move(setup));
+}
+
+InnerShadow& Widget::addInnerShadow(std::function<void(InnerShadow&)> setup) {
+    return attachEffect<InnerShadow>(std::move(setup));
 }
 
 void Widget::removeEffect(GraphicalEffect& effect) {
