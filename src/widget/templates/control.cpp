@@ -1,3 +1,4 @@
+#include <tavoos/gfx/renderer.h>
 #include <tavoos/widget/templates/control.h>
 
 namespace Tavoos {
@@ -7,6 +8,11 @@ Control::Control(Object* parent) : Widget{parent} {
 }
 
 void Control::render(Renderer& renderer) {
+    if (renderer.isCapturingOwn()) {
+        if (Widget* const shape = backgroundSlot())
+            renderer.renderWidget(*shape);
+        return;
+    }
     renderChildren(renderer);
 }
 

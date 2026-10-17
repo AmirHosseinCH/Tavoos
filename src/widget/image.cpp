@@ -58,6 +58,7 @@ Widget::Size ImageWidget::computeIntrinsicSize() {
 
 void ImageWidget::render(Renderer& r) {
     r.renderImage(*this);
+    renderInnerEffects(r);
     renderChildren(r);
 }
 

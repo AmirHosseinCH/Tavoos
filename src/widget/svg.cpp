@@ -77,6 +77,7 @@ Widget::Size SVGWidget::computeIntrinsicSize() {
 void SVGWidget::render(Renderer& r) {
     ensureRasterized();
     r.renderSVG(*this);
+    renderInnerEffects(r);
     renderChildren(r);
 }
 

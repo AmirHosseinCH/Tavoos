@@ -252,6 +252,114 @@ void main() {
 }
 )";
 
+inline const char*effectBlurFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform float uSigma;
+uniform int uTaps;
+
+void main() {
+    float sum = 0.0;
+    float weights = 0.0;
+    for (int i = -uTaps; i <= uTaps; ++i) {
+        float w = exp(-float(i * i) / (2.0 * uSigma * uSigma));
+        sum += texture(uSource, vUV + uStep * float(i)).a * w;
+        weights += w;
+    }
+    fragColor = vec4(0.0, 0.0, 0.0, sum / weights);
+}
+)";
+
+inline const char*effectMorphFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform int uRadius;
+uniform int uErode;
+
+void main() {
+    float value = uErode == 1 ? 1.0 : 0.0;
+    for (int i = -uRadius; i <= uRadius; ++i) {
+        float a = texture(uSource, vUV + uStep * float(i)).a;
+        value = uErode == 1 ? min(value, a) : max(value, a);
+    }
+    fragColor = vec4(0.0, 0.0, 0.0, value);
+}
+)";
+
+inline const char*effectCompositeVertexShader = R"(
+#version 460 core
+
+layout(location = 0) in vec2 aPos;
+
+layout(std140, binding = 0) uniform camera {
+    mat4 projection;
+};
+
+uniform mat4 world;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform vec2 uOffset;
+
+out vec2 vOwnUV;
+out vec2 vBlurUV;
+
+void main() {
+    vOwnUV = (aPos + uPad) / uRectSize;
+    vBlurUV = (aPos - uOffset + uPad) / uRectSize;
+    gl_Position = projection * world * vec4(aPos, 0.0, 1.0);
+}
+)";
+
+inline const char*alphaDropShadowFragmentShader = R"(
+#version 460 core
+
+in vec2 vOwnUV;
+in vec2 vBlurUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform sampler2D uOwn;
+uniform vec4 uColor;
+uniform float uOpacity;
+
+void main() {
+    float scale = 1.0 / max(uOpacity, 0.0001);
+    float shadow = min(texture(uBlurred, vBlurUV).a * scale, 1.0);
+    float own = min(texture(uOwn, vOwnUV).a * scale, 1.0);
+    fragColor = vec4(uColor.rgb, uColor.a * uOpacity * shadow * (1.0 - own));
+}
+)";
+
+inline const char*alphaInnerShadowFragmentShader = R"(
+#version 460 core
+
+in vec2 vOwnUV;
+in vec2 vBlurUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform sampler2D uOwn;
+uniform vec4 uColor;
+uniform float uOpacity;
+
+void main() {
+    float scale = 1.0 / max(uOpacity, 0.0001);
+    float hole = min(texture(uBlurred, vBlurUV).a * scale, 1.0);
+    float own = min(texture(uOwn, vOwnUV).a * scale, 1.0);
+    fragColor = vec4(uColor.rgb, uColor.a * uOpacity * (1.0 - hole) * own);
+}
+)";
+
 inline const char*imageVertexShader = R"(
 #version 460 core
 

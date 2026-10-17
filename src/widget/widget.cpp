@@ -46,7 +46,7 @@ std::vector<Widget*> Widget::zOrderedChildren(const Object& parent) {
 }
 
 void Widget::renderChildren(Renderer& renderer) {
-    if (renderer.isCapturingMask())
+    if (renderer.isCapturingOwn())
         return;
 
     for (Widget* const widget : zOrderedChildren(*this)) {
@@ -164,7 +164,7 @@ void Widget::removeSelf() {
 }
 
 void Widget::renderInnerEffects(Renderer& renderer) {
-    if (renderer.isCapturingMask())
+    if (renderer.isCapturingOwn())
         return;
 
     for (const auto& effect : m_effects)

@@ -118,6 +118,7 @@ std::size_t TextWidget::byteIndexForXOffset(float x) {
 
 void TextWidget::render(Renderer& r) {
     r.renderText(*this);
+    renderInnerEffects(r);
     renderChildren(r);
 }
 

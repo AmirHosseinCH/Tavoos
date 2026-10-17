@@ -4,8 +4,10 @@
 #include <tavoos/third_party/glad/glad.h>
 #include <tavoos/types.h>
 
+#include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -15,6 +17,7 @@ class Window;
 class Widget;
 class DropShadow;
 class InnerShadow;
+class ShadowBase;
 class RectangleWidget;
 class ImageWidget;
 class SVGWidget;
@@ -40,6 +43,7 @@ public:
     void renderInnerShadow(Widget&, const InnerShadow&);
 
     bool isCapturingMask() const { return m_capturingMask; }
+    bool isCapturingOwn() const { return m_capturingMask || m_capturingOwn; }
 
     bool isInit() const { return m_isInit; }
 
@@ -58,6 +62,15 @@ private:
 
     void compositeClipLayer(Widget& widget, int texW, int texH);
 
+    void renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner);
+    void captureOwnDrawing(Widget& widget, GLuint texture, int texW, int texH, int pad);
+    void runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
+                 const std::function<void(Shader&)>& setup);
+    GLuint blurAlpha(GLuint source, int w, int h, float sigma, int taps);
+    GLuint morphAlpha(GLuint source, int w, int h, int radius, bool erode);
+    GLuint acquireTexture(int w, int h);
+    void releaseTexture(GLuint texture);
+
     void ensureWindowResources(Window& window);
     void releaseWindowResources(Window& window);
 
@@ -68,6 +81,13 @@ private:
     Shader quadShader{};
     Shader shadowShader;
     Shader innerShadowShader;
+    Shader effectBlurShader;
+    Shader effectMorphShader;
+    Shader alphaDropShadowShader;
+    Shader alphaInnerShadowShader;
+
+    struct PooledTexture { GLuint id{0}; int width{0}; int height{0}; bool busy{false}; };
+    std::vector<PooledTexture> m_texturePool;
 
     Shader imageShader;
     Shader svgShader;
@@ -79,6 +99,7 @@ private:
     GLuint clipFBO{0};
     Shader clipCompositeShader;
     bool m_capturingMask{false};
+    bool m_capturingOwn{false};
 
     GLuint cameraUBO{0};
     glm::mat4 projection{1.0f};

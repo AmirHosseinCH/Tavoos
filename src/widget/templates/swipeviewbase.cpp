@@ -87,7 +87,7 @@ float SwipeViewBase::pageSize() const {
 }
 
 void SwipeViewBase::render(Renderer& renderer) {
-    if (renderer.isCapturingMask()) {
+    if (renderer.isCapturingOwn()) {
         if (Widget* const shape = backgroundSlot())
             renderer.renderWidget(*shape);
         return;
