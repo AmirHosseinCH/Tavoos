@@ -407,6 +407,56 @@ void main() {
 }
 )";
 
+inline const char*backdropResampleFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform mat4 uMvp;
+uniform vec4 uViewport;
+uniform vec4 uRegion;
+
+void main() {
+    vec2 localPos = vUV * uRectSize - uPad;
+    vec4 clip = uMvp * vec4(localPos, 0.0, 1.0);
+    vec2 ndc = clip.xy / clip.w;
+    vec2 pixel = uViewport.xy + (ndc * 0.5 + 0.5) * uViewport.zw;
+    fragColor = texture(uSource, (pixel - uRegion.xy) / uRegion.zw);
+}
+)";
+
+inline const char*backgroundBlurCompositeFragmentShader = R"(
+in vec2 vOwnUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform sampler2D uMask;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform vec2 uBoxSize;
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform int uMaskMode;
+uniform float uOpacity;
+
+void main() {
+    vec2 pos = vOwnUV * uRectSize - uPad;
+    float mask;
+    if (uMaskMode == 0) {
+        float dist = sdRoundedBox(pos - uHalfSize, uHalfSize, uRadius);
+        float aa = max(length(vec2(dFdx(dist), dFdy(dist))), 0.0001);
+        mask = 1.0 - smoothstep(-aa, aa, dist);
+    } else {
+        mask = texture(uMask, pos / uBoxSize).r;
+    }
+    fragColor = texture(uBlurred, vOwnUV) * (mask * uOpacity);
+}
+)";
+
 inline const char*imageVertexShader = R"(
 #version 460 core
 

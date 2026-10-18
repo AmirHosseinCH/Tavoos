@@ -217,6 +217,21 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) backgroundBlur(this auto&& self, const BlurStyle& style) {
+        self.m_backgroundBlur.set(style);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) backgroundBlur(this auto&& self, State<BlurStyle>& style) {
+        PropertyArg<BlurStyle>{style}.applyTo(self.m_backgroundBlur);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) backgroundBlur(this auto&& self, float radius) {
+        self.m_backgroundBlur.set(BlurStyle{radius, radius, 0.0f});
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) z(this auto&& self, PropertyArg<int> z) {
         z.applyTo(self.m_z);
         return std::forward<decltype(self)>(self);
@@ -391,6 +406,7 @@ public:
     DragAxis dragYAxis() const { return m_dragYAxis; }
     float opacity() const { return m_opacity; }
     BlurStyle layerBlur() const { return m_layerBlur; }
+    BlurStyle backgroundBlur() const { return m_backgroundBlur; }
     float effectiveOpacity() const { return m_effectiveOpacity; }
     int z() const { return m_z; }
 
@@ -609,6 +625,7 @@ private:
     Property<DragAxis> m_dragYAxis{DragAxis{}};
     Property<float> m_opacity{1.0f};
     Property<BlurStyle> m_layerBlur{BlurStyle{}};
+    Property<BlurStyle> m_backgroundBlur{BlurStyle{}};
     Property<int> m_z{0};
 
     float m_effectiveOpacity{1.0f};
