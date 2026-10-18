@@ -15,7 +15,7 @@ A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builde
 - **Text, images, and SVG** - font loading with weight/family fallback, JPEG/PNG images, and SVG rendering, all through the same widget model.
 - **Resource embedding** - `tavoos_add_resources()` compiles assets (fonts, images) directly into the binary at build time, loaded via `resource:/` paths - no loose files to ship.
 - **Animation** - property animations with easing, and transitions for popups and page changes.
-- **Graphical effects** - drop and inner shadows for rectangles, text, images, and SVGs, stackable and animatable, through `dropShadow()` and `innerShadow()` on any widget that draws something of its own.
+- **Graphical effects** - drop shadows, inner shadows, and layer blur, either uniform or progressive.
 
 A sample login form app built with Tavoos:
 

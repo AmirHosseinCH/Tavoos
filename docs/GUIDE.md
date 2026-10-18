@@ -42,6 +42,8 @@ quick-start example in [README.md](../README.md).
 8. [Components](#components)
 9. [Graphical effects](#graphical-effects)
    - [`DropShadow`](#dropshadow)
+   - [`InnerShadow`](#innershadow)
+   - [Layer blur](#layer-blur)
 10. [Dragging](#dragging)
 11. [Animation](#animation)
 12. [Resource embedding](#resource-embedding)
@@ -135,6 +137,7 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | `margin()`, `marginLeft/Top/Right/Bottom()` | `float` | Space around this widget, respected by its parent container. |
 | `rotation()`, `scale()` | `float` | Degrees / scale factor, applied around the widget's own center for rendering and hit-testing. |
 | `opacity()` | `float` | `0`-`1`; multiplies with ancestors' opacity for the effective value used at render time. |
+| `layerBlur()` | `float` or `BlurStyle` | Blurs the widget together with its children - see [Layer blur](#layer-blur). |
 | `z()` | `int` | Stacking order among this widget's siblings, for both rendering and hit-testing - higher paints on top and receives clicks first on overlap. Default `0`; ties keep document order. Does **not** affect layout position - siblings with different `z()` still lay out exactly as if `z()` were unset. |
 | `visible()` | `bool` | Hidden widgets are skipped for layout, rendering, and hit-testing. |
 | `focusable()` | `bool` | Whether Tab/Shift+Tab can focus this widget - see [Keyboard & focus](#keyboard--focus). |
@@ -1503,6 +1506,49 @@ TB::Rectangle([](Tavoos::RectangleWidget& well) {
 An inner shadow is painted over the widget's own fill and under its children, so children are
 never darkened by it. It covers the whole shape, including the border. A widget can carry both
 kinds at once: the drop shadow is drawn behind the widget and the inner shadow over its fill.
+
+### Layer blur
+
+`layerBlur()` blurs a widget as a whole: the widget draws itself and its children, and the result
+is blurred. It works on any widget, including layouts and controls, unlike the shadows. It is a
+property of the widget, not an entry in its effect list, and there is only one per widget.
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& card) {
+    card.width(240).height(140).radius(16).color(Tavoos::Color::rgba(220, 60, 50)).layerBlur(8);
+});
+```
+
+`layerBlur(8)` is a uniform blur with a radius of 8, using the same radius as shadows. For a
+progressive blur, whose radius changes across the widget, pass a `BlurStyle`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `startRadius` | `float` | The blur radius at the start edge of the widget's box. Default `0`. |
+| `endRadius` | `float` | The blur radius at the opposite edge. Default `0`. |
+| `direction` | `float` | The direction from start to end, in degrees, with the same convention as gradient angles: `0` runs left to right and `90` runs top to bottom. Default `0`. |
+
+```cpp
+well.layerBlur({ .startRadius = 0, .endRadius = 20, .direction = 90 });
+```
+
+The radius varies smoothly between the two ends. A uniform blur is the case where both are equal.
+Like `ShadowStyle`, `BlurStyle` can be bound or animated as one value:
+
+```cpp
+Tavoos::AnimatedState<Tavoos::BlurStyle> focus{Tavoos::BlurStyle{}};
+
+card.layerBlur(focus);
+
+focus.animateTo({ .startRadius = 12, .endRadius = 12 }, 0.2f);
+```
+
+The blur works on the real drawing. A rounded rectangle stays a soft rounded rectangle, text and
+SVGs blur only where they have color, and no gray halo appears at the edges. The blurred result
+can extend past the widget's box. The widget's own drop shadow is not part of the layer and stays
+sharp, while an inner shadow is part of the widget's drawing and is blurred with it. A widget with
+`clip(true)` is clipped first and then blurred. Overlays such as popups are drawn by the window,
+not as children, so they are not blurred. Rotation, scale and opacity apply to the blurred result.
 
 ## Dragging
 
