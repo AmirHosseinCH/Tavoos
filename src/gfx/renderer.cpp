@@ -1,3 +1,4 @@
+#include <tavoos/effects/blurstyle.h>
 #include <tavoos/effects/dropshadow.h>
 #include <tavoos/effects/innershadow.h>
 #include <tavoos/effects/shadowbase.h>
@@ -57,6 +58,8 @@ void Renderer::init() {
     effectMorphShader.compile(clipCompositeVertexShader, effectMorphFragmentShader);
     alphaDropShadowShader.compile(effectCompositeVertexShader, alphaDropShadowFragmentShader);
     alphaInnerShadowShader.compile(effectCompositeVertexShader, alphaInnerShadowFragmentShader);
+    layerBlurShader.compile(clipCompositeVertexShader, layerBlurFragmentShader);
+    layerBlurCompositeShader.compile(effectCompositeVertexShader, layerBlurCompositeFragmentShader);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -509,6 +512,18 @@ void Renderer::renderWidget(Widget& widget) {
             effect->renderBehind(*this, widget);
     }
 
+    if (!isCapturingOwn()) {
+        const BlurStyle blur = widget.layerBlur();
+        if (std::max(blur.startRadius, blur.endRadius) > 0.01f) {
+            renderLayerBlur(widget, blur);
+            return;
+        }
+    }
+
+    renderWidgetContents(widget);
+}
+
+void Renderer::renderWidgetContents(Widget& widget) {
     if (!widget.clip()) {
         widget.render(*this);
         return;
@@ -731,7 +746,7 @@ void Renderer::releaseTexture(GLuint texture) {
     }
 }
 
-void Renderer::captureOwnDrawing(Widget& widget, GLuint texture, int texW, int texH, int pad) {
+void Renderer::captureWidget(Widget& widget, GLuint texture, int texW, int texH, int pad, bool ownOnly) {
     const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, texture, texW, texH,
                                                     widget.worldMatrix(), static_cast<float>(pad));
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
@@ -748,14 +763,17 @@ void Renderer::captureOwnDrawing(Widget& widget, GLuint texture, int texW, int t
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
     const bool prevCapturingOwn = m_capturingOwn;
-    m_capturingOwn = true;
+    m_capturingOwn = ownOnly;
     ScopeExit restoreState{[&] {
         m_capturingOwn = prevCapturingOwn;
         glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB), static_cast<GLenum>(prevDstRGB),
                              static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
     }};
 
-    widget.render(*this);
+    if (ownOnly)
+        widget.render(*this);
+    else
+        renderWidgetContents(widget);
 }
 
 void Renderer::runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
@@ -818,6 +836,71 @@ GLuint Renderer::morphAlpha(GLuint source, int w, int h, int radius, bool erode)
     return result;
 }
 
+void Renderer::renderLayerBlur(Widget& widget, const BlurStyle& blur) {
+    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
+    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    if (width <= 0 || height <= 0)
+        return;
+
+    const float startSigma = std::max(0.0f, blur.startRadius) * 0.5f;
+    const float endSigma = std::max(0.0f, blur.endRadius) * 0.5f;
+    const int taps = static_cast<int>(std::ceil(std::max(startSigma, endSigma) * 3.0f));
+    const int pad = taps + 1;
+    const int texW = width + 2 * pad;
+    const int texH = height + 2 * pad;
+
+    const GLuint layer = acquireTexture(texW, texH);
+    captureWidget(widget, layer, texW, texH, pad, false);
+
+    const float angle = glm::radians(blur.direction);
+    const glm::vec2 direction{std::cos(angle), std::sin(angle)};
+    auto configure = [&](Shader& shader, const glm::vec2& step) {
+        shader.setVec2("uStep", step);
+        shader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+        shader.setVec2("uBoxSize", glm::vec2{static_cast<float>(width), static_cast<float>(height)});
+        shader.setVec2("uSigmas", glm::vec2{startSigma, endSigma});
+        shader.setVec2("uDirection", direction);
+        shader.setInt("uMaxTaps", taps);
+    };
+
+    const GLuint horizontal = acquireTexture(texW, texH);
+    runPass(layerBlurShader, layer, horizontal, texW, texH, [&](Shader& shader) {
+        configure(shader, glm::vec2{1.0f / static_cast<float>(texW), 0.0f});
+    });
+
+    const GLuint result = acquireTexture(texW, texH);
+    runPass(layerBlurShader, horizontal, result, texW, texH, [&](Shader& shader) {
+        configure(shader, glm::vec2{0.0f, 1.0f / static_cast<float>(texH)});
+    });
+
+    layerBlurCompositeShader.use();
+    layerBlurCompositeShader.setMat4("world", widget.worldMatrix());
+    layerBlurCompositeShader.setVec2("uRectSize", glm::vec2{static_cast<float>(texW), static_cast<float>(texH)});
+    layerBlurCompositeShader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+    layerBlurCompositeShader.setVec2("uOffset", glm::vec2{0.0f, 0.0f});
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, result);
+    layerBlurCompositeShader.setInt("uLayer", 0);
+
+    GLint prevSrcRGB, prevDstRGB, prevSrcAlpha, prevDstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevDstAlpha);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+    const float origin = -static_cast<float>(pad);
+    drawQuad(origin, origin, origin + static_cast<float>(texW), origin + static_cast<float>(texH));
+
+    glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB), static_cast<GLenum>(prevDstRGB),
+                         static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
+
+    releaseTexture(result);
+    releaseTexture(horizontal);
+    releaseTexture(layer);
+}
+
 void Renderer::renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner) {
     const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
     const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
@@ -835,7 +918,7 @@ void Renderer::renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool 
     const int texH = height + 2 * pad;
 
     const GLuint own = acquireTexture(texW, texH);
-    captureOwnDrawing(widget, own, texW, texH, pad);
+    captureWidget(widget, own, texW, texH, pad, true);
 
     GLuint shape = own;
     GLuint grown = 0;
@@ -902,6 +985,8 @@ void Renderer::shutdown() {
     effectMorphShader.release();
     alphaDropShadowShader.release();
     alphaInnerShadowShader.release();
+    layerBlurShader.release();
+    layerBlurCompositeShader.release();
 
     quadVAO = quadVBO = 0;
     textVAO = textVBO = 0;

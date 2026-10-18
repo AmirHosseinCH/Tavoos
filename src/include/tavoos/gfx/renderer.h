@@ -18,6 +18,7 @@ class Widget;
 class DropShadow;
 class InnerShadow;
 class ShadowBase;
+struct BlurStyle;
 class RectangleWidget;
 class ImageWidget;
 class SVGWidget;
@@ -63,7 +64,9 @@ private:
     void compositeClipLayer(Widget& widget, int texW, int texH);
 
     void renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner);
-    void captureOwnDrawing(Widget& widget, GLuint texture, int texW, int texH, int pad);
+    void renderWidgetContents(Widget& widget);
+    void renderLayerBlur(Widget& widget, const BlurStyle& blur);
+    void captureWidget(Widget& widget, GLuint texture, int texW, int texH, int pad, bool ownOnly);
     void runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
                  const std::function<void(Shader&)>& setup);
     GLuint blurAlpha(GLuint source, int w, int h, float sigma, int taps);
@@ -85,6 +88,8 @@ private:
     Shader effectMorphShader;
     Shader alphaDropShadowShader;
     Shader alphaInnerShadowShader;
+    Shader layerBlurShader;
+    Shader layerBlurCompositeShader;
 
     struct PooledTexture { GLuint id{0}; int width{0}; int height{0}; bool busy{false}; };
     std::vector<PooledTexture> m_texturePool;

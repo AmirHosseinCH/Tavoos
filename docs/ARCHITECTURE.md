@@ -1533,6 +1533,39 @@ The square structuring element for spread is cheap but not exact: dilating a rou
 large amount makes its corners slightly squarer than the analytic path does. Everything else
 matches the analytic path up to a pixel of anti-aliasing at the shape's edge.
 
+#### Layer blur
+
+`layerBlur` is a `Property<BlurStyle>` on `Widget` rather than an effect, because there is at most
+one and it wraps the widget's whole drawing instead of decorating it. `BlurStyle`
+(`effects/blurstyle.h`) holds a start radius, an end radius and a direction, with a `lerp`. The
+setters follow the shadow API: a `const BlurStyle&`, a `State<BlurStyle>&`, and a `float` shorthand
+for a uniform blur. A change requests a repaint.
+
+`Renderer::renderWidget` draws the widget's behind-effects (the drop shadows) first, outside the
+blur, and then dispatches on the layer blur. When the larger radius is above a small threshold and
+no own-drawing or mask capture is in progress, `renderLayerBlur` runs; otherwise the widget is drawn
+normally. The old body of `renderWidget` (the `clip()` branch) is now `renderWidgetContents`, so the
+blur can capture exactly what a normal render would draw:
+
+1. **Capture.** `captureWidget(..., ownOnly = false)` renders `renderWidgetContents` into a texture
+   padded by `ceil(3 * max sigma) + 1` pixels, using the same padded render target and texture
+   pool as the alpha-based shadows. This includes the children, a `clip(true)` layer, nested blurs
+   and nested clip layers. Because the capture uses the clip-layer blend state, the texture holds
+   premultiplied RGBA.
+2. **Blur.** `layerBlurFragmentShader` runs a horizontal and then a vertical pass over all four
+   premultiplied channels, so transparent pixels contribute no color and no halo appears. The
+   radius is computed per output pixel: the pixel's position in the widget's box is projected on the
+   direction, the same way a linear gradient paint does, and `sigma = radius / 2` is interpolated
+   between the start and end values. Only taps within three sigma of that pixel are read. A uniform
+   blur is the case of equal radii, and a progressive one is an approximation, because each pass
+   uses the output pixel's sigma for its own axis.
+3. **Composite.** `layerBlurCompositeFragmentShader` draws the result at the widget's world matrix
+   with premultiplied alpha blending, over a quad that includes the padding. The captured pixels
+   already carry the widget's opacity, so no further opacity is applied.
+
+Layout and hit-testing are unaffected, and so are overlays, which the window draws separately.
+Nothing is cached: each frame re-renders the subtree into the texture and blurs it.
+
 ## Animation system
 
 `src/include/tavoos/animation/`.
