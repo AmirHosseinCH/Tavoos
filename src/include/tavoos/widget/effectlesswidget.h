@@ -16,7 +16,7 @@ template<typename... Args>
 void rejectEffect() {
     static_assert(kEffectsRejected<Args...>,
                   "This widget is made of other widgets, so effects are added to those parts instead: "
-                  "put the shadow on the widget that draws, for example inside background(...) or on a "
+                  "put the effect on the widget that draws, for example inside background(...) or on a "
                   "RectangleWidget child.");
 }
 
@@ -46,6 +46,24 @@ public:
 
     template<typename Self>
     decltype(auto) innerShadow(this Self&& self, State<ShadowStyle>&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    decltype(auto) backgroundBlur(this Self&& self, const BlurStyle&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    decltype(auto) backgroundBlur(this Self&& self, State<BlurStyle>&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    decltype(auto) backgroundBlur(this Self&& self, float) {
         detail::rejectEffect<Self>();
         return std::forward<Self>(self);
     }

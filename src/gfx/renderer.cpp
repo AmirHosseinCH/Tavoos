@@ -60,6 +60,10 @@ void Renderer::init() {
     alphaInnerShadowShader.compile(effectCompositeVertexShader, alphaInnerShadowFragmentShader);
     layerBlurShader.compile(clipCompositeVertexShader, layerBlurFragmentShader);
     layerBlurCompositeShader.compile(effectCompositeVertexShader, layerBlurCompositeFragmentShader);
+    backdropResampleShader.compile(clipCompositeVertexShader, backdropResampleFragmentShader);
+    backgroundBlurCompositeShader.compile(
+        effectCompositeVertexShader,
+        std::string(fragmentShaderPrelude) + roundedBoxGLSL + backgroundBlurCompositeFragmentShader);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -508,6 +512,10 @@ void Renderer::renderText(TextWidget& text) {
 
 void Renderer::renderWidget(Widget& widget) {
     if (!isCapturingOwn()) {
+        const BlurStyle backdrop = widget.backgroundBlur();
+        if (std::max(backdrop.startRadius, backdrop.endRadius) > 0.01f)
+            renderBackgroundBlur(widget, backdrop);
+
         for (const auto& effect : widget.effects())
             effect->renderBehind(*this, widget);
     }
@@ -776,6 +784,29 @@ void Renderer::captureWidget(Widget& widget, GLuint texture, int texW, int texH,
         renderWidgetContents(widget);
 }
 
+void Renderer::captureCoverage(Widget& widget, GLuint texture, int texW, int texH) {
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, texture, texW, texH,
+                                                    widget.worldMatrix());
+    ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
+
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    GLint prevEquation;
+    glGetIntegerv(GL_BLEND_EQUATION_RGB, &prevEquation);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_MAX);
+
+    const bool prevCapturingMask = m_capturingMask;
+    m_capturingMask = true;
+    ScopeExit restoreState{[&] {
+        m_capturingMask = prevCapturingMask;
+        glBlendEquation(static_cast<GLenum>(prevEquation));
+    }};
+
+    widget.render(*this);
+}
+
 void Renderer::runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
                        const std::function<void(Shader&)>& setup) {
     const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, target, w, h, glm::mat4{1.0f});
@@ -836,6 +867,135 @@ GLuint Renderer::morphAlpha(GLuint source, int w, int h, int radius, bool erode)
     return result;
 }
 
+GLuint Renderer::blurLayerTexture(GLuint source, int texW, int texH, int width, int height, int pad, int taps,
+                                  const BlurStyle& blur) {
+    const float startSigma = std::max(0.0f, blur.startRadius) * 0.5f;
+    const float endSigma = std::max(0.0f, blur.endRadius) * 0.5f;
+    const float angle = glm::radians(blur.direction);
+    const glm::vec2 direction{std::cos(angle), std::sin(angle)};
+    auto configure = [&](Shader& shader, const glm::vec2& step) {
+        shader.setVec2("uStep", step);
+        shader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+        shader.setVec2("uBoxSize", glm::vec2{static_cast<float>(width), static_cast<float>(height)});
+        shader.setVec2("uSigmas", glm::vec2{startSigma, endSigma});
+        shader.setVec2("uDirection", direction);
+        shader.setInt("uMaxTaps", taps);
+    };
+
+    const GLuint horizontal = acquireTexture(texW, texH);
+    runPass(layerBlurShader, source, horizontal, texW, texH, [&](Shader& shader) {
+        configure(shader, glm::vec2{1.0f / static_cast<float>(texW), 0.0f});
+    });
+
+    const GLuint result = acquireTexture(texW, texH);
+    runPass(layerBlurShader, horizontal, result, texW, texH, [&](Shader& shader) {
+        configure(shader, glm::vec2{0.0f, 1.0f / static_cast<float>(texH)});
+    });
+    releaseTexture(horizontal);
+    return result;
+}
+
+void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
+    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
+    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    const float opacity = widget.effectiveOpacity();
+    if (width <= 0 || height <= 0 || opacity <= 0.0f)
+        return;
+
+    const float maxSigma = std::max(std::max(0.0f, blur.startRadius), std::max(0.0f, blur.endRadius)) * 0.5f;
+    const int taps = static_cast<int>(std::ceil(maxSigma * 3.0f));
+    const int pad = taps + 1;
+    const int texW = width + 2 * pad;
+    const int texH = height + 2 * pad;
+
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    const glm::mat4 mvp = projection * widget.worldMatrix();
+
+    const float lo = -static_cast<float>(pad);
+    const glm::vec2 corners[4] = {
+        {lo, lo}, {lo + static_cast<float>(texW), lo},
+        {lo + static_cast<float>(texW), lo + static_cast<float>(texH)}, {lo, lo + static_cast<float>(texH)},
+    };
+    float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
+    for (const glm::vec2& corner : corners) {
+        const glm::vec4 clip = mvp * glm::vec4{corner, 0.0f, 1.0f};
+        const float px = static_cast<float>(viewport[0]) + (clip.x / clip.w * 0.5f + 0.5f) * static_cast<float>(viewport[2]);
+        const float py = static_cast<float>(viewport[1]) + (clip.y / clip.w * 0.5f + 0.5f) * static_cast<float>(viewport[3]);
+        minX = std::min(minX, px);
+        maxX = std::max(maxX, px);
+        minY = std::min(minY, py);
+        maxY = std::max(maxY, py);
+    }
+    const int regionX = std::max(viewport[0], static_cast<int>(std::floor(minX)));
+    const int regionY = std::max(viewport[1], static_cast<int>(std::floor(minY)));
+    const int regionW = std::min(viewport[0] + viewport[2], static_cast<int>(std::ceil(maxX))) - regionX;
+    const int regionH = std::min(viewport[1] + viewport[3], static_cast<int>(std::ceil(maxY))) - regionY;
+    if (regionW <= 0 || regionH <= 0)
+        return;
+
+    const GLuint backdrop = acquireTexture(regionW, regionH);
+    glBindTexture(GL_TEXTURE_2D, backdrop);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, regionX, regionY, regionW, regionH);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    const GLuint local = acquireTexture(texW, texH);
+    runPass(backdropResampleShader, backdrop, local, texW, texH, [&](Shader& shader) {
+        shader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+        shader.setMat4("uMvp", mvp);
+        shader.setVec4("uViewport", glm::vec4{static_cast<float>(viewport[0]), static_cast<float>(viewport[1]),
+                                              static_cast<float>(viewport[2]), static_cast<float>(viewport[3])});
+        shader.setVec4("uRegion", glm::vec4{static_cast<float>(regionX), static_cast<float>(regionY),
+                                            static_cast<float>(regionW), static_cast<float>(regionH)});
+    });
+
+    const GLuint blurred = blurLayerTexture(local, texW, texH, width, height, pad, taps, blur);
+
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    GLuint mask = 0;
+    if (!radii) {
+        mask = acquireTexture(width, height);
+        captureCoverage(widget, mask, width, height);
+    }
+
+    backgroundBlurCompositeShader.use();
+    backgroundBlurCompositeShader.setMat4("world", widget.worldMatrix());
+    backgroundBlurCompositeShader.setVec2("uRectSize", glm::vec2{static_cast<float>(texW), static_cast<float>(texH)});
+    backgroundBlurCompositeShader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+    backgroundBlurCompositeShader.setVec2("uOffset", glm::vec2{0.0f, 0.0f});
+    backgroundBlurCompositeShader.setVec2("uBoxSize", glm::vec2{static_cast<float>(width), static_cast<float>(height)});
+    backgroundBlurCompositeShader.setVec2("uHalfSize", glm::vec2{widget.displayedWidth(), widget.displayedHeight()} * 0.5f);
+    backgroundBlurCompositeShader.setVec4("uRadius", radii ? glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft} : glm::vec4{0.0f});
+    backgroundBlurCompositeShader.setInt("uMaskMode", radii ? 0 : 1);
+    backgroundBlurCompositeShader.setFloat("uOpacity", opacity);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, blurred);
+    backgroundBlurCompositeShader.setInt("uBlurred", 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, mask != 0 ? mask : blurred);
+    backgroundBlurCompositeShader.setInt("uMask", 1);
+    glActiveTexture(GL_TEXTURE0);
+
+    GLint prevSrcRGB, prevDstRGB, prevSrcAlpha, prevDstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevDstAlpha);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+    drawQuad(widget.displayedWidth(), widget.displayedHeight());
+
+    glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB), static_cast<GLenum>(prevDstRGB),
+                         static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
+
+    if (mask != 0)
+        releaseTexture(mask);
+    releaseTexture(blurred);
+    releaseTexture(local);
+    releaseTexture(backdrop);
+}
+
 void Renderer::renderLayerBlur(Widget& widget, const BlurStyle& blur) {
     const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
     const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
@@ -852,26 +1012,7 @@ void Renderer::renderLayerBlur(Widget& widget, const BlurStyle& blur) {
     const GLuint layer = acquireTexture(texW, texH);
     captureWidget(widget, layer, texW, texH, pad, false);
 
-    const float angle = glm::radians(blur.direction);
-    const glm::vec2 direction{std::cos(angle), std::sin(angle)};
-    auto configure = [&](Shader& shader, const glm::vec2& step) {
-        shader.setVec2("uStep", step);
-        shader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
-        shader.setVec2("uBoxSize", glm::vec2{static_cast<float>(width), static_cast<float>(height)});
-        shader.setVec2("uSigmas", glm::vec2{startSigma, endSigma});
-        shader.setVec2("uDirection", direction);
-        shader.setInt("uMaxTaps", taps);
-    };
-
-    const GLuint horizontal = acquireTexture(texW, texH);
-    runPass(layerBlurShader, layer, horizontal, texW, texH, [&](Shader& shader) {
-        configure(shader, glm::vec2{1.0f / static_cast<float>(texW), 0.0f});
-    });
-
-    const GLuint result = acquireTexture(texW, texH);
-    runPass(layerBlurShader, horizontal, result, texW, texH, [&](Shader& shader) {
-        configure(shader, glm::vec2{0.0f, 1.0f / static_cast<float>(texH)});
-    });
+    const GLuint result = blurLayerTexture(layer, texW, texH, width, height, pad, taps, blur);
 
     layerBlurCompositeShader.use();
     layerBlurCompositeShader.setMat4("world", widget.worldMatrix());
@@ -897,7 +1038,6 @@ void Renderer::renderLayerBlur(Widget& widget, const BlurStyle& blur) {
                          static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
 
     releaseTexture(result);
-    releaseTexture(horizontal);
     releaseTexture(layer);
 }
 
@@ -987,6 +1127,8 @@ void Renderer::shutdown() {
     alphaInnerShadowShader.release();
     layerBlurShader.release();
     layerBlurCompositeShader.release();
+    backdropResampleShader.release();
+    backgroundBlurCompositeShader.release();
 
     quadVAO = quadVBO = 0;
     textVAO = textVBO = 0;

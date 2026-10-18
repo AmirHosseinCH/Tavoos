@@ -1566,6 +1566,39 @@ blur can capture exactly what a normal render would draw:
 Layout and hit-testing are unaffected, and so are overlays, which the window draws separately.
 Nothing is cached: each frame re-renders the subtree into the texture and blurs it.
 
+#### Background blur
+
+`backgroundBlur` is a second `Property<BlurStyle>` on `Widget`, with the same setters as
+`layerBlur`. `Renderer::renderWidget` handles it first, before the drop shadows, so the widget's own
+shadow is not part of what is blurred. When the larger radius is above the threshold and no
+own-drawing or mask capture is in progress, `renderBackgroundBlur` runs:
+
+1. **Copy the backdrop.** The widget's box, padded by the blur reach, is projected through the
+   current `projection` and the current viewport to find its bounding rectangle in pixels of the
+   active render target, clamped to the viewport. That region is copied out of the framebuffer with
+   `glCopyTexSubImage2D` into a pooled texture. Going through the projection and viewport makes the
+   same code correct for the window (including HiDPI, where the viewport is in physical pixels), for
+   clip layers and layer-blur captures (whose projection is relative to their texture), and for
+   rotated or scaled widgets.
+2. **Resample into the widget's space.** `backdropResampleFragmentShader` fills a texture laid out
+   like the layer-blur capture, padded around the widget's box, by mapping each texel's local
+   position through the saved widget-to-clip matrix back to a pixel of the copied region. This makes
+   the next step independent of rotation and of the window's pixel density.
+3. **Blur.** `blurLayerTexture`, the same function layer blur uses, runs the two-pass per-pixel-sigma
+   Gaussian on that texture, so uniform and progressive blur are shared with layer blur.
+4. **Composite.** `backgroundBlurCompositeFragmentShader` draws the widget's box with the blurred
+   texture, multiplied by a mask and by the widget's opacity, with premultiplied alpha blending. A
+   widget with `shapeRadii()` uses the analytic rounded-box mask; any other widget is rendered
+   through the clip-mask machinery by `captureCoverage` (`m_capturingMask`, max blending, the
+   shaders' mask mode) and the red channel is the mask. That mode writes pure shape coverage, so the
+   mask is independent of the fill color's alpha, unlike the own-drawing capture the alpha-based
+   shadows use, whose alpha includes it.
+
+The copy reads whatever the current render target holds at that moment, so inside a clip layer or an
+ancestor's layer blur it sees only that texture's content so far. `EffectlessWidget` also hides
+`backgroundBlur`, for the same reason it hides the shadows: a control or layout has no single shape
+to mask to, and the blur goes on the slot or child that draws.
+
 ## Animation system
 
 `src/include/tavoos/animation/`.

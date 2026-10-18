@@ -44,6 +44,7 @@ quick-start example in [README.md](../README.md).
    - [`DropShadow`](#dropshadow)
    - [`InnerShadow`](#innershadow)
    - [Layer blur](#layer-blur)
+   - [Background blur](#background-blur)
 10. [Dragging](#dragging)
 11. [Animation](#animation)
 12. [Resource embedding](#resource-embedding)
@@ -138,6 +139,7 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | `rotation()`, `scale()` | `float` | Degrees / scale factor, applied around the widget's own center for rendering and hit-testing. |
 | `opacity()` | `float` | `0`-`1`; multiplies with ancestors' opacity for the effective value used at render time. |
 | `layerBlur()` | `float` or `BlurStyle` | Blurs the widget together with its children - see [Layer blur](#layer-blur). |
+| `backgroundBlur()` | `float` or `BlurStyle` | Blurs what is drawn behind the widget, inside its shape - see [Background blur](#background-blur). |
 | `z()` | `int` | Stacking order among this widget's siblings, for both rendering and hit-testing - higher paints on top and receives clicks first on overlap. Default `0`; ties keep document order. Does **not** affect layout position - siblings with different `z()` still lay out exactly as if `z()` were unset. |
 | `visible()` | `bool` | Hidden widgets are skipped for layout, rendering, and hit-testing. |
 | `focusable()` | `bool` | Whether Tab/Shift+Tab can focus this widget - see [Keyboard & focus](#keyboard--focus). |
@@ -1433,9 +1435,10 @@ removed, and must not be used after `removeEffect` or `clearEffects`. Effects ar
 order they were added, the first one at the bottom. They do not affect layout or hit-testing, and
 they are not children, so they do not appear in `children()`.
 
-Controls and layouts do not take effects directly: calling `dropShadow()` or `innerShadow()` on a
-button, scroll area, `ColumnWidget`, `RowWidget`, `GridWidget`, `FlexWidget` or any other control
-is a compile error. A control is made of several parts (a background, content, and indicators such
+Controls and layouts do not take shadows or a background blur directly: calling `dropShadow()`,
+`innerShadow()` or `backgroundBlur()` on a button, scroll area, `ColumnWidget`, `RowWidget`,
+`GridWidget`, `FlexWidget` or any other control is a compile error. Layer blur is allowed on any
+widget. A control is made of several parts (a background, content, and indicators such
 as a slider's thumb), and a layout has nothing to draw of its own, so you decide which part carries
 the shadow. For a control, add it inside that part's slot:
 
@@ -1549,6 +1552,46 @@ can extend past the widget's box. The widget's own drop shadow is not part of th
 sharp, while an inner shadow is part of the widget's drawing and is blurred with it. A widget with
 `clip(true)` is clipped first and then blurred. Overlays such as popups are drawn by the window,
 not as children, so they are not blurred. Rotation, scale and opacity apply to the blurred result.
+
+### Background blur
+
+`backgroundBlur()` blurs whatever is already drawn behind a widget, inside the widget's own shape.
+The widget's own fill is drawn on top as usual, so a translucent fill on a widget with a background
+blur gives a frosted-glass look. It takes the same values as `layerBlur()`: a radius for a uniform
+blur, a `BlurStyle` for a progressive one, or a `State<BlurStyle>`.
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& panel) {
+    panel.width(240).height(140).radius(16)
+        .color(Tavoos::Color::rgba(255, 255, 255, 80))
+        .backgroundBlur(12);
+});
+```
+
+The blurred backdrop is masked to the widget's shape. A rectangle uses its rounded outline, with
+its corner radii, and text, images and SVGs use the coverage of their own shape, so a glyph shows
+blur only where the glyph is. The mask does not depend on the fill color's alpha, so text or an SVG
+with a faint translucent fill still shows the full blur behind it. The mask is multiplied by the
+widget's opacity. The blur also reads
+real pixels just outside the widget's edge, so the edges do not darken or smear. The widget's own
+drop shadow is drawn afterwards and is not blurred.
+
+Like the shadows, background blur is not accepted by controls and layouts: calling
+`backgroundBlur()` on a button or a `ColumnWidget` is a compile error. A frosted control puts it
+inside the slot that should carry it:
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.background([](Tavoos::RectangleWidget& box) {
+        box.radius(12).color(Tavoos::Color::rgba(255, 255, 255, 80)).backgroundBlur(8);
+    });
+});
+```
+
+A background blur only sees what has been drawn into the same render target so far. Inside a
+clipping ancestor, such as a scroll area, or inside an ancestor's layer blur, that target is the
+ancestor's own offscreen texture, so the blur sees the ancestor's content and not the window behind
+it.
 
 ## Dragging
 

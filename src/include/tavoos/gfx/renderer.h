@@ -66,7 +66,11 @@ private:
     void renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner);
     void renderWidgetContents(Widget& widget);
     void renderLayerBlur(Widget& widget, const BlurStyle& blur);
+    void renderBackgroundBlur(Widget& widget, const BlurStyle& blur);
+    GLuint blurLayerTexture(GLuint source, int texW, int texH, int width, int height, int pad, int taps,
+                            const BlurStyle& blur);
     void captureWidget(Widget& widget, GLuint texture, int texW, int texH, int pad, bool ownOnly);
+    void captureCoverage(Widget& widget, GLuint texture, int texW, int texH);
     void runPass(Shader& shader, GLuint source, GLuint target, int w, int h,
                  const std::function<void(Shader&)>& setup);
     GLuint blurAlpha(GLuint source, int w, int h, float sigma, int taps);
@@ -90,6 +94,8 @@ private:
     Shader alphaInnerShadowShader;
     Shader layerBlurShader;
     Shader layerBlurCompositeShader;
+    Shader backdropResampleShader;
+    Shader backgroundBlurCompositeShader;
 
     struct PooledTexture { GLuint id{0}; int width{0}; int height{0}; bool busy{false}; };
     std::vector<PooledTexture> m_texturePool;
