@@ -360,6 +360,53 @@ void main() {
 }
 )";
 
+inline const char*layerBlurFragmentShader = R"(
+#version 460 core
+
+in vec2 vUV;
+out vec4 fragColor;
+
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform vec2 uBoxSize;
+uniform vec2 uSigmas;
+uniform vec2 uDirection;
+uniform int uMaxTaps;
+
+void main() {
+    vec2 local = vUV * uRectSize - uPad;
+    float t = clamp(dot(local / uBoxSize - vec2(0.5), uDirection) + 0.5, 0.0, 1.0);
+    float sigma = max(mix(uSigmas.x, uSigmas.y, t), 0.0001);
+    int taps = int(ceil(sigma * 3.0));
+
+    vec4 sum = vec4(0.0);
+    float weights = 0.0;
+    for (int i = -uMaxTaps; i <= uMaxTaps; ++i) {
+        if (abs(i) > taps)
+            continue;
+        float w = exp(-float(i * i) / (2.0 * sigma * sigma));
+        sum += texture(uSource, vUV + uStep * float(i)) * w;
+        weights += w;
+    }
+    fragColor = sum / weights;
+}
+)";
+
+inline const char*layerBlurCompositeFragmentShader = R"(
+#version 460 core
+
+in vec2 vOwnUV;
+out vec4 fragColor;
+
+uniform sampler2D uLayer;
+
+void main() {
+    fragColor = texture(uLayer, vOwnUV);
+}
+)";
+
 inline const char*imageVertexShader = R"(
 #version 460 core
 
