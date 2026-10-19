@@ -1615,17 +1615,28 @@ TB::Rectangle([](Tavoos::RectangleWidget& pane) {
 |---|---|---|
 | `lightAngle` | `float` | Where the light comes from, in degrees: `0` is from the top, `-45` from the top-left, `90` from the right. It decides which edges carry the highlight. Default `-45`. |
 | `lightIntensity` | `float` | The brightness of the edge highlight, `0` to `1`. Default `0.8`. |
-| `refraction` | `float` | How strongly the backdrop is bent at the edge, `0` to `1`. At `0` there is no distortion. Default `0.8`. |
-| `depth` | `float` | How far the curved bevel reaches inward from the border, in pixels, at least `1`. A larger depth gives a rounder, thicker look and a wider distorted band. Default `20`. |
+| `refraction` | `float` | How strongly the backdrop is bent at the edge, `-1` to `1`. At `0` there is no distortion. Positive values pull in content from deeper inside the glass, so the rim shows what is under the glass. Negative values pull in content from outside it. Default `0.8`. |
+| `depth` | `float` | How far the curved bevel reaches inward from the border, in pixels, at least `1`. A larger depth gives a wider distorted band. Default `20`. |
 | `dispersion` | `float` | How strongly the edge splits light into colors, `0` to `1`. Default `0.2`. |
 | `frost` | `float` | The blur radius of the backdrop, in pixels, with the same meaning as for blurs. `0` leaves it sharp. Default `4`. |
 | `splay` | `float` | How widely the highlight spreads, `0` to `1`: at `0` it is a thin rim near the lit edges, and at `1` it is a broad glow reaching into the glass. Default `0`. |
+| `zoom` | `float` | Scales everything seen through the glass about the center of the shape. Below `1` shrinks what is behind, `1` leaves it unchanged, and above `1` magnifies it. Default `1`. |
+| `thickness` | `float` | How strongly the bevel bends the backdrop, separately from how wide it is. A thin bevel with a large thickness gives a narrow, strongly curved rim. Default `1`. |
+| `bevel` | `float` | The shape of the bend across the bevel. At `1` the bend fades gradually from the edge inward. Larger values keep the bend strong across most of the bevel and drop it sharply at the inner edge, which gives a crisp rim. Default `1`. |
+| `rimWidth` | `float` | The width of the bright edge line, in pixels. Default `1.5`. |
 | `tint` | `Color` | A translucent color over the glass. The default is fully transparent. |
 | `saturation` | `float` | Multiplies the saturation of the backdrop. `1` leaves it unchanged. |
 | `brightness` | `float` | Multiplies the brightness of the backdrop. `1` leaves it unchanged. |
 
 As with the other style structs, the fields you give must appear in the order shown, and any of
-them can be skipped. `glass()` also takes a `State<GlassStyle>&`, so a whole glass can be bound or
+them can be skipped. For a rim that pulls the content behind it into a thin band along the edge, with a rounded,
+tapering curve where an edge behind the glass meets that band, try a `depth` around a third of
+the shape's height, a `thickness` around 2 and a `bevel` of 2, with a `zoom` slightly below 1. A
+`bevel` of 1 spreads the bend into a wide, soft band and can hide the band altogether on a shape
+with a large gap behind it, and a `bevel` of 3 or more gives a harder rim with more pointed joins.
+On a small shape the same curve is only a few pixels across and shows the pixel grid, so give it at
+least a pixel of `frost`, which smooths the stair-steps, and a wider `depth` rounds the curve
+further. `glass()` also takes a `State<GlassStyle>&`, so a whole glass can be bound or
 animated with an `AnimatedState<GlassStyle>`. Animating `lightAngle` moves the highlight, and
 animating `lightIntensity` or `refraction` gives a press or hover response. `clearGlass()` turns
 the effect off again.

@@ -1610,8 +1610,8 @@ to mask to, and the blur goes on the slot or child that draws.
 
 `glass` is a `Property<GlassStyle>` plus a `Property<bool>` that says whether it is on, because a
 default style is a valid glass. `GlassStyle` (`effects/glassstyle.h`) has `lightAngle`,
-`lightIntensity`, `refraction`, `depth`, `dispersion`, `frost`, `splay`, and the optional `tint`,
-`saturation` and `brightness`, with a `lerp`. It follows the same setter pattern as the blurs, and
+`lightIntensity`, `refraction`, `depth`, `dispersion`, `frost`, `splay`, `zoom`, `thickness`,
+`bevel`, `rimWidth`, and the optional `tint`, `saturation` and `brightness`, with a `lerp`. It follows the same setter pattern as the blurs, and
 `EffectlessWidget` rejects `glass` and `clearGlass`.
 
 `renderWidget` checks glass before background blur and, when the widget has glass and a
@@ -1626,21 +1626,33 @@ and pills):
 - **Edge normal.** The outward normal is the normalized gradient of the signed distance, taken by
   central differences. `inside = max(-distance, 0)` is how far in from the edge a pixel is.
 - **Refraction.** The bevel is modelled as a circular arc of width `depth`. With `s = inside / depth`
-  clamped to 0..1, the surface normal is tilted from the view direction by an angle `theta` with
-  `sin(theta) = 1 - s`. The refracted angle follows Snell's law with an index `n = 1 + 0.8 *
-  refraction`, `sin(theta_r) = sin(theta) / n`, and the backdrop is sampled displaced inward along
-  the normal by `depth * tan(theta - theta_r)`. The shift is largest at the edge, falls smoothly to
-  zero at `depth`, and is zero everywhere when `refraction` is 0 because then `n = 1`.
+  clamped to 0..1 and raised to the power `bevel`, the surface normal is tilted from the view
+  direction by an angle `theta` with `sin(theta) = 1 - s`. The refracted angle follows Snell's law
+  with an index `n = 1 + 0.8 * |refraction|`, `sin(theta_r) = sin(theta) / n`, and the backdrop is
+  sampled displaced along the normal by `depth * thickness * tan(theta - theta_r)`: inward for a
+  positive `refraction`, outward for a negative one. The shift is largest at the edge, falls to zero
+  at `depth`, and is zero everywhere when `refraction` is 0 because then `n = 1`. The shift is also
+  multiplied by `1 - smoothstep(0.35, 1, s)`, so it reaches zero with zero slope at the inner edge of
+  the bevel; without that, the bent image has a crease there, which shows as a sharp corner where an
+  edge behind the glass meets the rim. A `bevel` above 1 keeps the shift near its edge value across
+  most of the bevel and drops it sharply near the inner edge, which gives a harder inner contour, and
+  `thickness` scales the shift without changing the bevel's width.
+- **Zoom.** Every sample position is also moved by `p * (1 / zoom - 1)`, where `p` is the pixel's
+  position relative to the center of the shape, which scales the whole backdrop about that center.
 - **Dispersion.** The three color channels use displacements scaled by `1 - spread`, `1` and
   `1 + spread` with `spread = dispersion * 0.25`, which separates them near the edge.
 - **Color and tint.** Saturation mixes between the luminance and the color, brightness multiplies
   it, and the tint is mixed in by its alpha.
 - **Highlight.** The light direction is `(sin(lightAngle), -cos(lightAngle))`, so 0 points to the top.
   The highlight is `lightIntensity * band * (0.15 + primary + secondary)`, where `band` falls off
-  exponentially with `inside` over a width that grows from 1.5 pixels to `0.45 * depth` with `splay`,
+  exponentially with `inside` over a width that grows from `rimWidth` to `0.45 * depth` with `splay`,
   `primary` is `max(dot(normal, light), 0)` raised to a power that falls from 6 to 1.5 with `splay`,
   and `secondary` is the same lobe on the opposite side at 60% strength. It is combined with a
   screen blend, so it brightens without exceeding white.
+
+The sampling margin around the widget grows with the largest possible shift, `depth * thickness *
+sqrt(n^2 - 1)`, and with the zoom reach, `|1 / zoom - 1|` times the half diagonal, so the displaced
+and zoomed reads always have real backdrop pixels to find.
 
 The mask is the analytic rounded box, multiplied by the widget's opacity. A glass inside a clip layer
 or a layer-blur capture sees only that texture's content, like a background blur.

@@ -1028,7 +1028,16 @@ void Renderer::renderGlass(Widget& widget, const GlassStyle& glass) {
     const float sigma = frost * 0.5f;
     const bool frosted = sigma > 0.01f;
     const int taps = frosted ? static_cast<int>(std::ceil(sigma * 3.0f)) : 0;
-    const int pad = taps + 1;
+
+    const float refraction = std::clamp(glass.refraction, -1.0f, 1.0f);
+    const float index = 1.0f + 0.8f * std::abs(refraction);
+    const float depth = std::max(glass.depth, 1.0f);
+    const float thickness = std::max(glass.thickness, 0.0f);
+    const float zoomScale = 1.0f / std::max(glass.zoom, 0.1f);
+    const float maxShift = depth * thickness * std::sqrt(index * index - 1.0f);
+    const float halfDiagonal = 0.5f * std::hypot(widget.displayedWidth(), widget.displayedHeight());
+    const float zoomReach = std::abs(zoomScale - 1.0f) * halfDiagonal;
+    const int pad = taps + static_cast<int>(std::ceil(maxShift)) + static_cast<int>(std::ceil(zoomReach)) + 2;
     const int texW = width + 2 * pad;
     const int texH = height + 2 * pad;
 
@@ -1045,8 +1054,6 @@ void Renderer::renderGlass(Widget& widget, const GlassStyle& glass) {
 
     const float angle = glm::radians(glass.lightAngle);
     const glm::vec2 light{std::sin(angle), -std::cos(angle)};
-    const float refraction = std::clamp(glass.refraction, 0.0f, 1.0f);
-
     glassCompositeShader.use();
     glassCompositeShader.setMat4("world", widget.worldMatrix());
     glassCompositeShader.setVec2("uRectSize", glm::vec2{static_cast<float>(texW), static_cast<float>(texH)});
@@ -1054,8 +1061,13 @@ void Renderer::renderGlass(Widget& widget, const GlassStyle& glass) {
     glassCompositeShader.setVec2("uOffset", glm::vec2{0.0f, 0.0f});
     glassCompositeShader.setVec2("uHalfSize", glm::vec2{widget.displayedWidth(), widget.displayedHeight()} * 0.5f);
     glassCompositeShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
-    glassCompositeShader.setFloat("uDepth", std::max(glass.depth, 1.0f));
-    glassCompositeShader.setFloat("uIndex", 1.0f + 0.8f * refraction);
+    glassCompositeShader.setFloat("uDepth", depth);
+    glassCompositeShader.setFloat("uIndex", index);
+    glassCompositeShader.setFloat("uDirection", refraction >= 0.0f ? -1.0f : 1.0f);
+    glassCompositeShader.setFloat("uBevel", std::max(glass.bevel, 0.1f));
+    glassCompositeShader.setFloat("uThickness", thickness);
+    glassCompositeShader.setFloat("uZoomScale", zoomScale);
+    glassCompositeShader.setFloat("uRimWidth", std::max(glass.rimWidth, 0.5f));
     glassCompositeShader.setFloat("uDispersion", std::clamp(glass.dispersion, 0.0f, 1.0f));
     glassCompositeShader.setVec2("uLight", light);
     glassCompositeShader.setFloat("uLightIntensity", std::clamp(glass.lightIntensity, 0.0f, 1.0f));

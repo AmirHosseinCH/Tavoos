@@ -470,6 +470,11 @@ uniform vec2 uHalfSize;
 uniform vec4 uRadius;
 uniform float uDepth;
 uniform float uIndex;
+uniform float uDirection;
+uniform float uThickness;
+uniform float uBevel;
+uniform float uZoomScale;
+uniform float uRimWidth;
 uniform float uDispersion;
 uniform vec2 uLight;
 uniform float uLightIntensity;
@@ -480,10 +485,12 @@ uniform float uBrightness;
 uniform float uOpacity;
 
 float lateralShift(float s) {
+    float fade = 1.0 - smoothstep(0.35, 1.0, s);
+    s = pow(s, uBevel);
     float sinTheta = 1.0 - s;
     float theta = asin(clamp(sinTheta, 0.0, 1.0));
     float thetaRefracted = asin(clamp(sinTheta / uIndex, 0.0, 1.0));
-    return uDepth * tan(theta - thetaRefracted);
+    return fade * uDepth * uThickness * tan(theta - thetaRefracted);
 }
 
 void main() {
@@ -503,19 +510,20 @@ void main() {
     float inside = max(-dist, 0.0);
     float s = clamp(inside / max(uDepth, 1.0), 0.0, 1.0);
     float shift = s < 1.0 ? lateralShift(s) : 0.0;
-    vec2 inward = -normalOut;
+    vec2 bend = normalOut * uDirection * shift;
+    vec2 zoomOffset = p * (uZoomScale - 1.0);
     float spread = uDispersion * 0.25;
 
-    vec4 green = texture(uBlurred, vOwnUV + inward * shift / uRectSize);
-    vec4 red = texture(uBlurred, vOwnUV + inward * shift * (1.0 - spread) / uRectSize);
-    vec4 blue = texture(uBlurred, vOwnUV + inward * shift * (1.0 + spread) / uRectSize);
+    vec4 green = texture(uBlurred, vOwnUV + (zoomOffset + bend) / uRectSize);
+    vec4 red = texture(uBlurred, vOwnUV + (zoomOffset + bend * (1.0 - spread)) / uRectSize);
+    vec4 blue = texture(uBlurred, vOwnUV + (zoomOffset + bend * (1.0 + spread)) / uRectSize);
     vec4 color = vec4(red.r, green.g, blue.b, green.a);
 
     float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
     color.rgb = mix(vec3(luminance), color.rgb, uSaturation) * uBrightness;
     color.rgb = mix(color.rgb, uTint.rgb, uTint.a);
 
-    float bandWidth = mix(1.5, 0.45 * uDepth, uSplay);
+    float bandWidth = mix(uRimWidth, max(0.45 * uDepth, uRimWidth), uSplay);
     float band = exp(-inside / max(bandWidth, 0.5));
     float lobe = mix(6.0, 1.5, uSplay);
     float facing = dot(normalOut, uLight);
