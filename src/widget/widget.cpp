@@ -32,7 +32,7 @@ Widget::Widget(Object* parent) : Object{parent} {
                          m_gridRow, m_gridColumn);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
-    bindRepaintTriggers(m_opacity, m_visible, m_clip, m_z, m_layerBlur, m_backgroundBlur);
+    bindRepaintTriggers(m_opacity, m_visible, m_clip, m_z, m_layerBlur, m_backgroundBlur, m_glass, m_glassEnabled);
 }
 
 std::vector<Widget*> Widget::zOrderedChildren(const Object& parent) {

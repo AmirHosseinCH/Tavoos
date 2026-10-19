@@ -19,6 +19,7 @@ class DropShadow;
 class InnerShadow;
 class ShadowBase;
 struct BlurStyle;
+struct GlassStyle;
 class RectangleWidget;
 class ImageWidget;
 class SVGWidget;
@@ -67,6 +68,8 @@ private:
     void renderWidgetContents(Widget& widget);
     void renderLayerBlur(Widget& widget, const BlurStyle& blur);
     void renderBackgroundBlur(Widget& widget, const BlurStyle& blur);
+    void renderGlass(Widget& widget, const GlassStyle& glass);
+    GLuint captureBackdrop(Widget& widget, int texW, int texH, int pad);
     GLuint blurLayerTexture(GLuint source, int texW, int texH, int width, int height, int pad, int taps,
                             const BlurStyle& blur);
     void captureWidget(Widget& widget, GLuint texture, int texW, int texH, int pad, bool ownOnly);
@@ -96,6 +99,7 @@ private:
     Shader layerBlurCompositeShader;
     Shader backdropResampleShader;
     Shader backgroundBlurCompositeShader;
+    Shader glassCompositeShader;
 
     struct PooledTexture { GLuint id{0}; int width{0}; int height{0}; bool busy{false}; };
     std::vector<PooledTexture> m_texturePool;

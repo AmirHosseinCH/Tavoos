@@ -69,6 +69,24 @@ public:
     }
 
     template<typename Self>
+    decltype(auto) glass(this Self&& self, const GlassStyle&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    decltype(auto) glass(this Self&& self, State<GlassStyle>&) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
+    decltype(auto) clearGlass(this Self&& self) {
+        detail::rejectEffect<Self>();
+        return std::forward<Self>(self);
+    }
+
+    template<typename Self>
     void addDropShadow(this Self&&, const ShadowStyle& = {}) {
         detail::rejectEffect<Self>();
     }
