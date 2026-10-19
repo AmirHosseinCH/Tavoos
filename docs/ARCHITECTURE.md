@@ -1594,10 +1594,56 @@ own-drawing or mask capture is in progress, `renderBackgroundBlur` runs:
    mask is independent of the fill color's alpha, unlike the own-drawing capture the alpha-based
    shadows use, whose alpha includes it.
 
+The copy and the resample pass live in `captureBackdrop`, which background blur and glass share. The
+resample shader forces alpha to 1 when the target is the window's framebuffer (`uOpaque`), because
+that alpha is not meaningful: the renderer's blend function also blends alpha with the source alpha,
+so antialiased edges leave it below 1, and the later premultiplied compositing would let the
+destination show through at those pixels. Inside a clip layer or a layer-blur capture the texture
+holds real premultiplied alpha, which is kept.
+
 The copy reads whatever the current render target holds at that moment, so inside a clip layer or an
 ancestor's layer blur it sees only that texture's content so far. `EffectlessWidget` also hides
 `backgroundBlur`, for the same reason it hides the shadows: a control or layout has no single shape
 to mask to, and the blur goes on the slot or child that draws.
+
+#### Glass
+
+`glass` is a `Property<GlassStyle>` plus a `Property<bool>` that says whether it is on, because a
+default style is a valid glass. `GlassStyle` (`effects/glassstyle.h`) has `lightAngle`,
+`lightIntensity`, `refraction`, `depth`, `dispersion`, `frost`, `splay`, and the optional `tint`,
+`saturation` and `brightness`, with a `lerp`. It follows the same setter pattern as the blurs, and
+`EffectlessWidget` rejects `glass` and `clearGlass`.
+
+`renderWidget` checks glass before background blur and, when the widget has glass and a
+`shapeRadii()`, calls `renderGlass` instead; a widget without a shape falls back to its background
+blur. `renderGlass` shares `captureBackdrop` and `blurLayerTexture` with background blur: the
+backdrop is copied and resampled into the widget's padded space, blurred with a uniform radius equal
+to `frost`, and then drawn by `glassCompositeFragmentShader` over the widget's box with premultiplied
+alpha blending and the widget's opacity. Everything specific to glass is in that shader, using the
+analytic rounded-box distance (with the radii clamped to half the smaller side, which gives circles
+and pills):
+
+- **Edge normal.** The outward normal is the normalized gradient of the signed distance, taken by
+  central differences. `inside = max(-distance, 0)` is how far in from the edge a pixel is.
+- **Refraction.** The bevel is modelled as a circular arc of width `depth`. With `s = inside / depth`
+  clamped to 0..1, the surface normal is tilted from the view direction by an angle `theta` with
+  `sin(theta) = 1 - s`. The refracted angle follows Snell's law with an index `n = 1 + 0.8 *
+  refraction`, `sin(theta_r) = sin(theta) / n`, and the backdrop is sampled displaced inward along
+  the normal by `depth * tan(theta - theta_r)`. The shift is largest at the edge, falls smoothly to
+  zero at `depth`, and is zero everywhere when `refraction` is 0 because then `n = 1`.
+- **Dispersion.** The three color channels use displacements scaled by `1 - spread`, `1` and
+  `1 + spread` with `spread = dispersion * 0.25`, which separates them near the edge.
+- **Color and tint.** Saturation mixes between the luminance and the color, brightness multiplies
+  it, and the tint is mixed in by its alpha.
+- **Highlight.** The light direction is `(sin(lightAngle), -cos(lightAngle))`, so 0 points to the top.
+  The highlight is `lightIntensity * band * (0.15 + primary + secondary)`, where `band` falls off
+  exponentially with `inside` over a width that grows from 1.5 pixels to `0.45 * depth` with `splay`,
+  `primary` is `max(dot(normal, light), 0)` raised to a power that falls from 6 to 1.5 with `splay`,
+  and `secondary` is the same lobe on the opposite side at 60% strength. It is combined with a
+  screen blend, so it brightens without exceeding white.
+
+The mask is the analytic rounded box, multiplied by the widget's opacity. A glass inside a clip layer
+or a layer-blur capture sees only that texture's content, like a background blur.
 
 ## Animation system
 

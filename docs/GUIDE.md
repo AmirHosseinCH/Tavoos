@@ -45,6 +45,7 @@ quick-start example in [README.md](../README.md).
    - [`InnerShadow`](#innershadow)
    - [Layer blur](#layer-blur)
    - [Background blur](#background-blur)
+   - [Glass](#glass)
 10. [Dragging](#dragging)
 11. [Animation](#animation)
 12. [Resource embedding](#resource-embedding)
@@ -140,6 +141,7 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | `opacity()` | `float` | `0`-`1`; multiplies with ancestors' opacity for the effective value used at render time. |
 | `layerBlur()` | `float` or `BlurStyle` | Blurs the widget together with its children - see [Layer blur](#layer-blur). |
 | `backgroundBlur()` | `float` or `BlurStyle` | Blurs what is drawn behind the widget, inside its shape - see [Background blur](#background-blur). |
+| `glass()` | `GlassStyle` | Draws the widget as a pane of glass over what is behind it - see [Glass](#glass). |
 | `z()` | `int` | Stacking order among this widget's siblings, for both rendering and hit-testing - higher paints on top and receives clicks first on overlap. Default `0`; ties keep document order. Does **not** affect layout position - siblings with different `z()` still lay out exactly as if `z()` were unset. |
 | `visible()` | `bool` | Hidden widgets are skipped for layout, rendering, and hit-testing. |
 | `focusable()` | `bool` | Whether Tab/Shift+Tab can focus this widget - see [Keyboard & focus](#keyboard--focus). |
@@ -1592,6 +1594,59 @@ A background blur only sees what has been drawn into the same render target so f
 clipping ancestor, such as a scroll area, or inside an ancestor's layer blur, that target is the
 ancestor's own offscreen texture, so the blur sees the ancestor's content and not the window behind
 it.
+
+### Glass
+
+`glass()` draws a widget as a pane of glass: the backdrop is blurred, bent at the edges as if seen
+through a curved bevel, split into colors there, and lit by an edge highlight. It builds on the
+background blur, so it only sees what is already drawn behind the widget, and it takes a
+`GlassStyle`.
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& pane) {
+    pane.width(240).height(120).radius(40)
+        .color(Tavoos::Color::rgba(255, 255, 255, 25))
+        .glass({ .lightAngle = -45, .lightIntensity = 0.8, .refraction = 0.8, .depth = 24,
+                 .dispersion = 0.3, .frost = 4 });
+});
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `lightAngle` | `float` | Where the light comes from, in degrees: `0` is from the top, `-45` from the top-left, `90` from the right. It decides which edges carry the highlight. Default `-45`. |
+| `lightIntensity` | `float` | The brightness of the edge highlight, `0` to `1`. Default `0.8`. |
+| `refraction` | `float` | How strongly the backdrop is bent at the edge, `0` to `1`. At `0` there is no distortion. Default `0.8`. |
+| `depth` | `float` | How far the curved bevel reaches inward from the border, in pixels, at least `1`. A larger depth gives a rounder, thicker look and a wider distorted band. Default `20`. |
+| `dispersion` | `float` | How strongly the edge splits light into colors, `0` to `1`. Default `0.2`. |
+| `frost` | `float` | The blur radius of the backdrop, in pixels, with the same meaning as for blurs. `0` leaves it sharp. Default `4`. |
+| `splay` | `float` | How widely the highlight spreads, `0` to `1`: at `0` it is a thin rim near the lit edges, and at `1` it is a broad glow reaching into the glass. Default `0`. |
+| `tint` | `Color` | A translucent color over the glass. The default is fully transparent. |
+| `saturation` | `float` | Multiplies the saturation of the backdrop. `1` leaves it unchanged. |
+| `brightness` | `float` | Multiplies the brightness of the backdrop. `1` leaves it unchanged. |
+
+As with the other style structs, the fields you give must appear in the order shown, and any of
+them can be skipped. `glass()` also takes a `State<GlassStyle>&`, so a whole glass can be bound or
+animated with an `AnimatedState<GlassStyle>`. Animating `lightAngle` moves the highlight, and
+animating `lightIntensity` or `refraction` gives a press or hover response. `clearGlass()` turns
+the effect off again.
+
+The widget's own fill is drawn on top of the glass, so a translucent fill adds to the look. Glass
+works on widgets that have a rounded-box shape: rectangles, including pills and circles, where a
+radius of at least half the size gives a full circle or pill. Text, images and SVGs ignore it. If a
+widget has both glass and a background blur, the glass wins and uses its own `frost`. Glass is not
+accepted by controls and layouts, so a glass button puts it inside its background slot:
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.background([](Tavoos::RectangleWidget& box) {
+        box.radius(16).color(Tavoos::Color::rgba(255, 255, 255, 30))
+            .glass({ .lightIntensity = 0.8, .refraction = 0.7, .depth = 14, .frost = 2 });
+    });
+});
+```
+
+Opacity, scale and rotation apply, and a drop shadow on the same widget stays outside the glass.
+Like the background blur, glass inside a clipping ancestor sees only that ancestor's content.
 
 ## Dragging
 
