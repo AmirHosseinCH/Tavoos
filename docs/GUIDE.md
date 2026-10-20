@@ -1743,6 +1743,17 @@ Then reference them with a `resource:/` path instead of a filesystem path:
 app.registerFont("Inter", "resource:/assets/fonts/Inter-Regular.ttf");
 ```
 
+Files are looked up relative to the `CMakeLists.txt` that makes the call, and the path you write
+is also its `resource:/` path. To embed files from another directory, such as a font folder shared
+by several targets, pass `BASE_DIR`. The paths stay relative to it, so the `resource:/` paths do
+not change:
+
+```cmake
+tavoos_add_resources(your_app
+    BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..
+    assets/fonts/Inter-Regular.ttf)
+```
+
 A plain path (or an explicit `file:` prefix) loads from the filesystem at runtime instead.
 
 A third scheme, `data:`, embeds content directly instead of referencing a file - mainly for a
