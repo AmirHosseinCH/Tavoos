@@ -1,1 +1,3 @@
-add_subdirectory(loginForm)
+add_subdirectory(controlCenter)
+add_subdirectory(dashboard)
+add_subdirectory(focus)

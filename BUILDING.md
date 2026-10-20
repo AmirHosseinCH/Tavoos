@@ -40,7 +40,7 @@ cmake --build build -j"$(nproc)"
 
 | Option | Default | Description |
 |---|---|---|
-| `TAVOOS_BUILD_EXAMPLES` | `ON` | Build the example app under `examples/` |
+| `TAVOOS_BUILD_EXAMPLES` | `ON` | Build the example apps under `examples/` |
 | `TAVOOS_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
 
 ## Installing / using Tavoos in another project
