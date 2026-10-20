@@ -1671,7 +1671,7 @@ TB::Rectangle([](Tavoos::RectangleWidget& r) {
 
 | Property | Type | Notes |
 |---|---|---|
-| `draggable()` | `bool` | When `true`, dragging moves the widget itself via `x()`/`y()`. |
+| `draggable()` | `bool` | When `true`, dragging moves the widget itself via `x()`/`y()`. A widget placed by `alignment()` or a fraction starts from where it is drawn and then keeps an explicit position. |
 | `dragThreshold()` | `float` | Pixels of movement before a drag starts (default `0`). |
 | `dragXAxis()`, `dragYAxis()` | `DragAxis{enabled, min, max}` | Locks and/or clamps movement along that axis. |
 

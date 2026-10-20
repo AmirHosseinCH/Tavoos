@@ -520,11 +520,11 @@ protected:
             const DragAxis& xAxis = m_dragXAxis.get();
             const DragAxis& yAxis = m_dragYAxis.get();
             if (xAxis.enabled) {
-                const int newX = x() + static_cast<int>(std::lround(event.dx()));
+                const int newX = dragBase(true) + static_cast<int>(std::lround(event.dx()));
                 x(std::clamp(newX, xAxis.min, xAxis.max));
             }
             if (yAxis.enabled) {
-                const int newY = y() + static_cast<int>(std::lround(event.dy()));
+                const int newY = dragBase(false) + static_cast<int>(std::lround(event.dy()));
                 y(std::clamp(newY, yAxis.min, yAxis.max));
             }
         }
@@ -558,6 +558,7 @@ protected:
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();
+    int dragBase(bool horizontal);
     virtual ContentArea contentAreaFor(const Widget& child) const;
     bool parentIsLayouter() const;
     bool isSizeBoundary() const;

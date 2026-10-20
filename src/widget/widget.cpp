@@ -275,6 +275,19 @@ Widget::ContentArea Widget::resolveContentArea() {
     return area;
 }
 
+int Widget::dragBase(bool horizontal) {
+    if (horizontal) {
+        if (!hasFlag(m_alignment.get(), HorizontalAlignment) && m_xFraction.get() < 0.0f)
+            return x();
+        m_xFraction.set(-1.0f);
+        return static_cast<int>(std::lround(m_resolvedX - resolveContentArea().x - marginLeft()));
+    }
+    if (!hasFlag(m_alignment.get(), VerticalAlignment) && m_yFraction.get() < 0.0f)
+        return y();
+    m_yFraction.set(-1.0f);
+    return static_cast<int>(std::lround(m_resolvedY - resolveContentArea().y - marginTop()));
+}
+
 void Widget::layout(bool force) {
     const bool wasDirty = consumeLayoutDirty();
     if (!wasDirty && !force) {

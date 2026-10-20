@@ -2327,11 +2327,11 @@ virtual void triggerDragMove(DragEvent& event) {
         const DragAxis& xAxis = m_dragXAxis.get();
         const DragAxis& yAxis = m_dragYAxis.get();
         if (xAxis.enabled) {
-            const int newX = x() + static_cast<int>(std::lround(event.dx()));
+            const int newX = dragBase(true) + static_cast<int>(std::lround(event.dx()));
             x(std::clamp(newX, xAxis.min, xAxis.max));
         }
         if (yAxis.enabled) {
-            const int newY = y() + static_cast<int>(std::lround(event.dy()));
+            const int newY = dragBase(false) + static_cast<int>(std::lround(event.dy()));
             y(std::clamp(newY, yAxis.min, yAxis.max));
         }
     }
@@ -2339,6 +2339,12 @@ virtual void triggerDragMove(DragEvent& event) {
         m_onDragMove(event);
 }
 ```
+
+`dragBase(horizontal)` returns the offset the delta is added to. For an axis with an explicit `x`/`y` it is
+just that property. For an axis placed by alignment or a fraction it is the widget's resolved position minus the
+parent's content origin and the widget's margin, which is what layout adds to `x`, so the widget starts moving
+from where it is drawn. It also clears the fraction on that axis, because layout prefers a fraction over `x`; the
+`x(...)`/`y(...)` call that follows replaces the alignment with the explicit position.
 
 The `m_onDragMove` callback always runs, independent of the `m_draggable` guard - so a widget
 can hook `onDragStart`/`onDragMove` *without* ever calling `draggable(true)`, receiving drag
