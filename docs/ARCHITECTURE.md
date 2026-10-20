@@ -2936,9 +2936,12 @@ first; `Middle` re-elides the line just before the gap).
 
 ## Resource embedding
 
-`cmake/TavoosResources.cmake`'s `tavoos_add_resources(target file...)` generates one `.cpp`
-per listed file at configure/build time (`GenerateResource.cmake`), each defining a `static`
-byte array and a static initializer that calls `ResourceRegistry::registerResource`:
+`cmake/TavoosResources.cmake`'s `tavoos_add_resources(target [BASE_DIR dir] file...)` generates
+one `.cpp` per listed file at configure/build time (`GenerateResource.cmake`), each defining a
+`static` byte array and a static initializer that calls `ResourceRegistry::registerResource`.
+The path as written in the call is the registered path, and the file itself is looked up
+relative to `BASE_DIR` (the calling `CMakeLists.txt`'s directory by default), so targets in
+different directories can embed one shared asset folder under the same `resource:/` paths:
 
 ```cpp
 // resourceregistry.cpp - a thread-safe, process-wide map

@@ -17,11 +17,15 @@ A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builde
 - **Animation** - property animations with easing, and transitions for popups and page changes.
 - **Graphical effects** - drop shadows, inner shadows, layer blur, background blur, and a glass effect, with blur either uniform or progressive.
 
-A sample login form app built with Tavoos:
+## Examples
 
-![Tavoos example app](examples/loginForm/screenshot.png)
+Three sample apps live in [examples/](examples/README.md) and are built along with the library:
 
-## Example
+| Control Center | Analytics dashboard | Focus |
+|---|---|---|
+| [![Control Center](examples/controlCenter/screenshot.png)](examples/controlCenter/main.cpp) | [![Analytics dashboard](examples/dashboard/screenshot.png)](examples/dashboard/main.cpp) | [![Focus](examples/focus/screenshot.png)](examples/focus/main.cpp) |
+
+## Quick example
 
 ```cpp
 #include <tavoos/application.h>

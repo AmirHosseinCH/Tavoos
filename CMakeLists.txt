@@ -6,7 +6,7 @@ project(Tavoos
     LANGUAGES C CXX
 )
 
-option(TAVOOS_BUILD_EXAMPLES "Build the Tavoos example app" ON)
+option(TAVOOS_BUILD_EXAMPLES "Build the Tavoos example apps" ON)
 option(TAVOOS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 set(CMAKE_CXX_STANDARD 23)
