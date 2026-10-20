@@ -1,5 +1,6 @@
 #include <tavoos/effects/blurstyle.h>
 #include <tavoos/effects/dropshadow.h>
+#include <tavoos/effects/glassstyle.h>
 #include <tavoos/effects/innershadow.h>
 #include <tavoos/effects/shadowbase.h>
 #include <tavoos/gfx/renderer.h>
@@ -64,6 +65,9 @@ void Renderer::init() {
     backgroundBlurCompositeShader.compile(
         effectCompositeVertexShader,
         std::string(fragmentShaderPrelude) + roundedBoxGLSL + backgroundBlurCompositeFragmentShader);
+    glassCompositeShader.compile(
+        effectCompositeVertexShader,
+        std::string(fragmentShaderPrelude) + roundedBoxGLSL + glassCompositeFragmentShader);
     imageShader.compile(imageVertexShader, imageFragmentShader);
     svgShader.compile(svgVertexShader, svgFragmentSource);
     textShader.compile(textVertexShader, textFragmentSource);
@@ -512,9 +516,13 @@ void Renderer::renderText(TextWidget& text) {
 
 void Renderer::renderWidget(Widget& widget) {
     if (!isCapturingOwn()) {
-        const BlurStyle backdrop = widget.backgroundBlur();
-        if (std::max(backdrop.startRadius, backdrop.endRadius) > 0.01f)
-            renderBackgroundBlur(widget, backdrop);
+        if (widget.hasGlass() && widget.shapeRadii()) {
+            renderGlass(widget, widget.glass());
+        } else {
+            const BlurStyle backdrop = widget.backgroundBlur();
+            if (std::max(backdrop.startRadius, backdrop.endRadius) > 0.01f)
+                renderBackgroundBlur(widget, backdrop);
+        }
 
         for (const auto& effect : widget.effects())
             effect->renderBehind(*this, widget);
@@ -895,19 +903,7 @@ GLuint Renderer::blurLayerTexture(GLuint source, int texW, int texH, int width, 
     return result;
 }
 
-void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
-    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
-    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
-    const float opacity = widget.effectiveOpacity();
-    if (width <= 0 || height <= 0 || opacity <= 0.0f)
-        return;
-
-    const float maxSigma = std::max(std::max(0.0f, blur.startRadius), std::max(0.0f, blur.endRadius)) * 0.5f;
-    const int taps = static_cast<int>(std::ceil(maxSigma * 3.0f));
-    const int pad = taps + 1;
-    const int texW = width + 2 * pad;
-    const int texH = height + 2 * pad;
-
+GLuint Renderer::captureBackdrop(Widget& widget, int texW, int texH, int pad) {
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
     const glm::mat4 mvp = projection * widget.worldMatrix();
@@ -932,7 +928,11 @@ void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
     const int regionW = std::min(viewport[0] + viewport[2], static_cast<int>(std::ceil(maxX))) - regionX;
     const int regionH = std::min(viewport[1] + viewport[3], static_cast<int>(std::ceil(maxY))) - regionY;
     if (regionW <= 0 || regionH <= 0)
-        return;
+        return 0;
+
+    GLint targetFramebuffer = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &targetFramebuffer);
+    const bool opaque = targetFramebuffer == 0;
 
     const GLuint backdrop = acquireTexture(regionW, regionH);
     glBindTexture(GL_TEXTURE_2D, backdrop);
@@ -947,7 +947,28 @@ void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
                                               static_cast<float>(viewport[2]), static_cast<float>(viewport[3])});
         shader.setVec4("uRegion", glm::vec4{static_cast<float>(regionX), static_cast<float>(regionY),
                                             static_cast<float>(regionW), static_cast<float>(regionH)});
+        shader.setInt("uOpaque", opaque ? 1 : 0);
     });
+    releaseTexture(backdrop);
+    return local;
+}
+
+void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
+    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
+    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    const float opacity = widget.effectiveOpacity();
+    if (width <= 0 || height <= 0 || opacity <= 0.0f)
+        return;
+
+    const float maxSigma = std::max(std::max(0.0f, blur.startRadius), std::max(0.0f, blur.endRadius)) * 0.5f;
+    const int taps = static_cast<int>(std::ceil(maxSigma * 3.0f));
+    const int pad = taps + 1;
+    const int texW = width + 2 * pad;
+    const int texH = height + 2 * pad;
+
+    const GLuint local = captureBackdrop(widget, texW, texH, pad);
+    if (local == 0)
+        return;
 
     const GLuint blurred = blurLayerTexture(local, texW, texH, width, height, pad, taps, blur);
 
@@ -993,7 +1014,88 @@ void Renderer::renderBackgroundBlur(Widget& widget, const BlurStyle& blur) {
         releaseTexture(mask);
     releaseTexture(blurred);
     releaseTexture(local);
-    releaseTexture(backdrop);
+}
+
+void Renderer::renderGlass(Widget& widget, const GlassStyle& glass) {
+    const std::optional<CornerRadii> radii = widget.shapeRadii();
+    const int width = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
+    const int height = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    const float opacity = widget.effectiveOpacity();
+    if (!radii || width <= 0 || height <= 0 || opacity <= 0.0f)
+        return;
+
+    const float frost = std::max(0.0f, glass.frost);
+    const float sigma = frost * 0.5f;
+    const bool frosted = sigma > 0.01f;
+    const int taps = frosted ? static_cast<int>(std::ceil(sigma * 3.0f)) : 0;
+
+    const float refraction = std::clamp(glass.refraction, -1.0f, 1.0f);
+    const float index = 1.0f + 0.8f * std::abs(refraction);
+    const float depth = std::max(glass.depth, 1.0f);
+    const float thickness = std::max(glass.thickness, 0.0f);
+    const float zoomScale = 1.0f / std::max(glass.zoom, 0.1f);
+    const float maxShift = depth * thickness * std::sqrt(index * index - 1.0f);
+    const float halfDiagonal = 0.5f * std::hypot(widget.displayedWidth(), widget.displayedHeight());
+    const float zoomReach = std::abs(zoomScale - 1.0f) * halfDiagonal;
+    const int pad = taps + static_cast<int>(std::ceil(maxShift)) + static_cast<int>(std::ceil(zoomReach)) + 2;
+    const int texW = width + 2 * pad;
+    const int texH = height + 2 * pad;
+
+    const GLuint local = captureBackdrop(widget, texW, texH, pad);
+    if (local == 0)
+        return;
+
+    GLuint source = local;
+    GLuint blurred = 0;
+    if (frosted) {
+        blurred = blurLayerTexture(local, texW, texH, width, height, pad, taps, BlurStyle{frost, frost, 0.0f});
+        source = blurred;
+    }
+
+    const float angle = glm::radians(glass.lightAngle);
+    const glm::vec2 light{std::sin(angle), -std::cos(angle)};
+    glassCompositeShader.use();
+    glassCompositeShader.setMat4("world", widget.worldMatrix());
+    glassCompositeShader.setVec2("uRectSize", glm::vec2{static_cast<float>(texW), static_cast<float>(texH)});
+    glassCompositeShader.setVec2("uPad", glm::vec2{static_cast<float>(pad), static_cast<float>(pad)});
+    glassCompositeShader.setVec2("uOffset", glm::vec2{0.0f, 0.0f});
+    glassCompositeShader.setVec2("uHalfSize", glm::vec2{widget.displayedWidth(), widget.displayedHeight()} * 0.5f);
+    glassCompositeShader.setVec4("uRadius", glm::vec4{radii->topLeft, radii->topRight, radii->bottomRight, radii->bottomLeft});
+    glassCompositeShader.setFloat("uDepth", depth);
+    glassCompositeShader.setFloat("uIndex", index);
+    glassCompositeShader.setFloat("uDirection", refraction >= 0.0f ? -1.0f : 1.0f);
+    glassCompositeShader.setFloat("uBevel", std::max(glass.bevel, 0.1f));
+    glassCompositeShader.setFloat("uThickness", thickness);
+    glassCompositeShader.setFloat("uZoomScale", zoomScale);
+    glassCompositeShader.setFloat("uRimWidth", std::max(glass.rimWidth, 0.5f));
+    glassCompositeShader.setFloat("uDispersion", std::clamp(glass.dispersion, 0.0f, 1.0f));
+    glassCompositeShader.setVec2("uLight", light);
+    glassCompositeShader.setFloat("uLightIntensity", std::clamp(glass.lightIntensity, 0.0f, 1.0f));
+    glassCompositeShader.setFloat("uSplay", std::clamp(glass.splay, 0.0f, 1.0f));
+    glassCompositeShader.setVec4("uTint", glm::vec4{glass.tint.r, glass.tint.g, glass.tint.b, glass.tint.a});
+    glassCompositeShader.setFloat("uSaturation", glass.saturation);
+    glassCompositeShader.setFloat("uBrightness", glass.brightness);
+    glassCompositeShader.setFloat("uOpacity", opacity);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, source);
+    glassCompositeShader.setInt("uBlurred", 0);
+
+    GLint prevSrcRGB, prevDstRGB, prevSrcAlpha, prevDstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevDstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &prevSrcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &prevDstAlpha);
+    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+    drawQuad(widget.displayedWidth(), widget.displayedHeight());
+
+    glBlendFuncSeparate(static_cast<GLenum>(prevSrcRGB), static_cast<GLenum>(prevDstRGB),
+                         static_cast<GLenum>(prevSrcAlpha), static_cast<GLenum>(prevDstAlpha));
+
+    if (blurred != 0)
+        releaseTexture(blurred);
+    releaseTexture(local);
 }
 
 void Renderer::renderLayerBlur(Widget& widget, const BlurStyle& blur) {
@@ -1129,6 +1231,7 @@ void Renderer::shutdown() {
     layerBlurCompositeShader.release();
     backdropResampleShader.release();
     backgroundBlurCompositeShader.release();
+    glassCompositeShader.release();
 
     quadVAO = quadVBO = 0;
     textVAO = textVBO = 0;

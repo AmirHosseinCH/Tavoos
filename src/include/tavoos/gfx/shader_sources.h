@@ -419,13 +419,15 @@ uniform vec2 uPad;
 uniform mat4 uMvp;
 uniform vec4 uViewport;
 uniform vec4 uRegion;
+uniform int uOpaque;
 
 void main() {
     vec2 localPos = vUV * uRectSize - uPad;
     vec4 clip = uMvp * vec4(localPos, 0.0, 1.0);
     vec2 ndc = clip.xy / clip.w;
     vec2 pixel = uViewport.xy + (ndc * 0.5 + 0.5) * uViewport.zw;
-    fragColor = texture(uSource, (pixel - uRegion.xy) / uRegion.zw);
+    vec4 color = texture(uSource, (pixel - uRegion.xy) / uRegion.zw);
+    fragColor = vec4(color.rgb, uOpaque == 1 ? 1.0 : color.a);
 }
 )";
 
@@ -454,6 +456,84 @@ void main() {
         mask = texture(uMask, pos / uBoxSize).r;
     }
     fragColor = texture(uBlurred, vOwnUV) * (mask * uOpacity);
+}
+)";
+
+inline const char*glassCompositeFragmentShader = R"(
+in vec2 vOwnUV;
+out vec4 fragColor;
+
+uniform sampler2D uBlurred;
+uniform vec2 uRectSize;
+uniform vec2 uPad;
+uniform vec2 uHalfSize;
+uniform vec4 uRadius;
+uniform float uDepth;
+uniform float uIndex;
+uniform float uDirection;
+uniform float uThickness;
+uniform float uBevel;
+uniform float uZoomScale;
+uniform float uRimWidth;
+uniform float uDispersion;
+uniform vec2 uLight;
+uniform float uLightIntensity;
+uniform float uSplay;
+uniform vec4 uTint;
+uniform float uSaturation;
+uniform float uBrightness;
+uniform float uOpacity;
+
+float lateralShift(float s) {
+    float fade = 1.0 - smoothstep(0.35, 1.0, s);
+    s = pow(s, uBevel);
+    float sinTheta = 1.0 - s;
+    float theta = asin(clamp(sinTheta, 0.0, 1.0));
+    float thetaRefracted = asin(clamp(sinTheta / uIndex, 0.0, 1.0));
+    return fade * uDepth * uThickness * tan(theta - thetaRefracted);
+}
+
+void main() {
+    vec2 pos = vOwnUV * uRectSize - uPad;
+    vec2 p = pos - uHalfSize;
+    float limit = min(uHalfSize.x, uHalfSize.y);
+    vec4 radius = clamp(uRadius, vec4(0.0), vec4(limit));
+
+    float dist = sdRoundedBox(p, uHalfSize, radius);
+    float aa = max(length(vec2(dFdx(dist), dFdy(dist))), 0.0001);
+    float mask = 1.0 - smoothstep(-aa, aa, dist);
+
+    vec2 grad = vec2(sdRoundedBox(p + vec2(0.5, 0.0), uHalfSize, radius) - sdRoundedBox(p - vec2(0.5, 0.0), uHalfSize, radius),
+                     sdRoundedBox(p + vec2(0.0, 0.5), uHalfSize, radius) - sdRoundedBox(p - vec2(0.0, 0.5), uHalfSize, radius));
+    vec2 normalOut = length(grad) > 0.00001 ? normalize(grad) : vec2(0.0, -1.0);
+
+    float inside = max(-dist, 0.0);
+    float s = clamp(inside / max(uDepth, 1.0), 0.0, 1.0);
+    float shift = s < 1.0 ? lateralShift(s) : 0.0;
+    vec2 bend = normalOut * uDirection * shift;
+    vec2 zoomOffset = p * (uZoomScale - 1.0);
+    float spread = uDispersion * 0.25;
+
+    vec4 green = texture(uBlurred, vOwnUV + (zoomOffset + bend) / uRectSize);
+    vec4 red = texture(uBlurred, vOwnUV + (zoomOffset + bend * (1.0 - spread)) / uRectSize);
+    vec4 blue = texture(uBlurred, vOwnUV + (zoomOffset + bend * (1.0 + spread)) / uRectSize);
+    vec4 color = vec4(red.r, green.g, blue.b, green.a);
+
+    float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+    color.rgb = mix(vec3(luminance), color.rgb, uSaturation) * uBrightness;
+    color.rgb = mix(color.rgb, uTint.rgb, uTint.a);
+
+    float bandWidth = mix(uRimWidth, max(0.45 * uDepth, uRimWidth), uSplay);
+    float band = exp(-inside / max(bandWidth, 0.5));
+    float lobe = mix(6.0, 1.5, uSplay);
+    float facing = dot(normalOut, uLight);
+    float primary = pow(max(facing, 0.0), lobe);
+    float secondary = 0.6 * pow(max(-facing, 0.0), lobe);
+    float rim = clamp(uLightIntensity * band * (0.15 + primary + secondary), 0.0, 1.0);
+    color.rgb = 1.0 - (1.0 - clamp(color.rgb, 0.0, 1.0)) * (1.0 - vec3(rim));
+    color.a = max(color.a, rim);
+
+    fragColor = color * (mask * uOpacity);
 }
 )";
 

@@ -3,6 +3,7 @@
 #include <tavoos/animation/animation.h>
 #include <tavoos/component/componentbase.h>
 #include <tavoos/effects/blurstyle.h>
+#include <tavoos/effects/glassstyle.h>
 #include <tavoos/effects/graphicaleffect.h>
 #include <tavoos/effects/shadowstyle.h>
 #include <tavoos/events/events.h>
@@ -232,6 +233,23 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) glass(this auto&& self, const GlassStyle& style) {
+        self.m_glass.set(style);
+        self.m_glassEnabled.set(true);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) glass(this auto&& self, State<GlassStyle>& style) {
+        PropertyArg<GlassStyle>{style}.applyTo(self.m_glass);
+        self.m_glassEnabled.set(true);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) clearGlass(this auto&& self) {
+        self.m_glassEnabled.set(false);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) z(this auto&& self, PropertyArg<int> z) {
         z.applyTo(self.m_z);
         return std::forward<decltype(self)>(self);
@@ -407,6 +425,8 @@ public:
     float opacity() const { return m_opacity; }
     BlurStyle layerBlur() const { return m_layerBlur; }
     BlurStyle backgroundBlur() const { return m_backgroundBlur; }
+    GlassStyle glass() const { return m_glass; }
+    bool hasGlass() const { return m_glassEnabled; }
     float effectiveOpacity() const { return m_effectiveOpacity; }
     int z() const { return m_z; }
 
@@ -626,6 +646,8 @@ private:
     Property<float> m_opacity{1.0f};
     Property<BlurStyle> m_layerBlur{BlurStyle{}};
     Property<BlurStyle> m_backgroundBlur{BlurStyle{}};
+    Property<GlassStyle> m_glass{GlassStyle{}};
+    Property<bool> m_glassEnabled{false};
     Property<int> m_z{0};
 
     float m_effectiveOpacity{1.0f};
