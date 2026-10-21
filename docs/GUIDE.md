@@ -140,8 +140,8 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | `rotation()`, `scale()` | `float` | Degrees / scale factor, applied around the widget's own center for rendering and hit-testing. |
 | `opacity()` | `float` | `0`-`1`; multiplies with ancestors' opacity for the effective value used at render time. |
 | `layerBlur()` | `float` or `BlurStyle` | Blurs the widget together with its children - see [Layer blur](#layer-blur). |
-| `backgroundBlur()` | `float` or `BlurStyle` | Blurs what is drawn behind the widget, inside its shape - see [Background blur](#background-blur). |
-| `glass()` | `GlassStyle` | Draws the widget as a pane of glass over what is behind it - see [Glass](#glass). |
+| `backgroundBlur()` | `float` or `BlurStyle` | Blurs what is drawn behind the widget, inside its shape - see [Background blur](#background-blur). Not available on controls and layouts. |
+| `glass()` | `GlassStyle` | Draws the widget as a pane of glass over what is behind it - see [Glass](#glass). Not available on controls and layouts. |
 | `z()` | `int` | Stacking order among this widget's siblings, for both rendering and hit-testing - higher paints on top and receives clicks first on overlap. Default `0`; ties keep document order. Does **not** affect layout position - siblings with different `z()` still lay out exactly as if `z()` were unset. |
 | `visible()` | `bool` | Hidden widgets are skipped for layout, rendering, and hit-testing. |
 | `focusable()` | `bool` | Whether Tab/Shift+Tab can focus this widget - see [Keyboard & focus](#keyboard--focus). |
@@ -154,7 +154,7 @@ Plus, on every widget:
 
 - **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window.
 - **`focus()`** - programmatically focuses this widget.
-- **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects).
+- **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects). Controls and layouts don't take shadows; put them on a slot or a wrapping rectangle instead.
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
 
 ### Dynamic children
@@ -219,8 +219,8 @@ Same two-overload shape as every `style()` setter (a plain `Font` or a bound `St
 ### `RectangleWidget`
 
 A solid or gradient-filled, optionally rounded and bordered rectangle - the basic visual
-building block (buttons, cards, backgrounds are all built from these today; dedicated
-control widgets are planned for phase 2).
+building block for cards, panels and backgrounds, and the default widget type of every
+control's `background` and `content` slots.
 
 | Property | Type |
 |---|---|
