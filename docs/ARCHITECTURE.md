@@ -84,10 +84,14 @@ whole codebase:
 ```
 Object                    (src/include/tavoos/object.h)
  ├─ owns children: std::vector<std::unique_ptr<Object>>
- ├─ Window                (src/include/tavoos/window.h)      -- tree root, not a Widget
+ ├─ Window                (src/include/tavoos/window.h)       -- tree root, not a Widget
  └─ Widget                (src/include/tavoos/widget/widget.h)
-     ├─ RectangleWidget, ImageWidget, SVGWidget, TextWidget
-     └─ ColumnWidget, RowWidget, GridWidget, FlexWidget       -- layout containers
+     ├─ RectangleWidget, ImageWidget, SVGWidget, TextWidget   -- draw something of their own
+     └─ EffectlessWidget                                      -- rejects shadows, background blur, glass
+         ├─ ColumnWidget, RowWidget, GridWidget, FlexWidget   -- layout containers
+         └─ Control                                           -- background/content slots, enabled, hovered
+             └─ ButtonBase, RangeBase, OverlayBase, ...       -- behavior bases (widget/templates/)
+                 └─ ButtonWidget, SliderWidget, ...           -- concrete controls (widget/controls/)
 ```
 
 `Object` (`object.h`) is the minimal parent/child ownership primitive:
@@ -119,6 +123,11 @@ private:
 It intentionally knows nothing about geometry, rendering, or events - that's all added by
 `Widget`. `Window` derives from `Object` directly (not `Widget`) because a window isn't laid
 out or rendered by a parent - it's the root the rest of the tree hangs off.
+
+`EffectlessWidget` (`widget/effectlesswidget.h`) adds nothing but compile-time errors for the effect
+setters (see [Graphical effects](#graphical-effects)). Controls are built on `Control` and a behavior
+base (see [`Control` and the behavior bases](#control-and-the-behavior-bases)), and a
+`Component<Root>` derives from whichever widget type it wraps (see [Components](#components)).
 
 `appendChild`/`detachChild` are `private`, with `friend class Widget;`/`friend class
 Builder;`.
@@ -1277,10 +1286,12 @@ reverse (highest z checked first, so it wins an overlap).
 
 ### Clipping
 
-`Widget::clip(true)` routes through `Renderer::renderWidget` differently:
+`Widget::clip(true)` routes through `Renderer::renderWidgetContents` differently. `renderWidget`
+reaches it after the widget's glass, background blur and shadows, either directly or through a
+layer blur's capture (see [Graphical effects](#graphical-effects)):
 
 ```cpp
-void Renderer::renderWidget(Widget& widget) {
+void Renderer::renderWidgetContents(Widget& widget) {
     if (!widget.clip()) {
         widget.render(*this);
         return;
@@ -1384,9 +1395,10 @@ void clearEffects();
 The public API is typed on purpose. Each `add*` function constructs the effect with the widget,
 appends it through a private `attachEffect<E>()`, applies the given `ShadowStyle` and returns a
 reference that stays valid until that effect is removed; the `dropShadow()` and `innerShadow()`
-forms are the fluent versions for a builder chain. Naming each kind in the API keeps the cardinality of each kind
-visible: shadows stack, while the blurs planned later (a layer blur and a background blur) are at
-most one each and will be ordinary properties of `Widget`, not entries in this list. Adding,
+forms are the fluent versions for a builder chain. Naming each kind in the API keeps the
+cardinality of each kind visible: shadows stack, while [layer blur](#layer-blur),
+[background blur](#background-blur) and [glass](#glass) are at most one each and are ordinary
+properties of `Widget`, not entries in this list. Adding,
 removing, or changing any property an effect registered with `bindInvalidateTriggers(...)` calls
 `GraphicalEffect::invalidate()`, which requests a repaint of the owner exactly like
 `bindRepaintTriggers` does for a widget's own properties.
@@ -1414,34 +1426,49 @@ effect overrides the one for its stage, so ordering between kinds of effect is f
 stages, and list order only matters between effects of the same stage:
 
 - `renderBehind(Renderer&, Widget&)` runs before the widget draws anything. `Renderer` calls it
-  from `renderWidget` for every effect in list order, before the widget's own `clip()` branch.
+  from `renderWidget` for every effect in list order, after the glass or background blur and
+  before the layer blur and the widget's own `clip()` branch.
 - `renderInside(Renderer&, Widget&)` runs after the widget's own drawing and before its
   children. The widget calls it itself, through the protected `Widget::renderInnerEffects()`,
   at that point in its `render()`.
 
-The first stage looks like this:
+The first stage is the loop in the middle of `renderWidget`:
 
 ```cpp
 void Renderer::renderWidget(Widget& widget) {
-    if (!m_capturingMask) {
+    if (!isCapturingOwn()) {
+        if (widget.hasGlass() && widget.shapeRadii()) {
+            renderGlass(widget, widget.glass());
+        } else {
+            const BlurStyle backdrop = widget.backgroundBlur();
+            if (std::max(backdrop.startRadius, backdrop.endRadius) > 0.01f)
+                renderBackgroundBlur(widget, backdrop);
+        }
+
         for (const auto& effect : widget.effects())
             effect->renderBehind(*this, widget);
     }
 
-    if (!widget.clip()) {
-        widget.render(*this);
-        return;
+    if (!isCapturingOwn()) {
+        const BlurStyle blur = widget.layerBlur();
+        if (std::max(blur.startRadius, blur.endRadius) > 0.01f) {
+            renderLayerBlur(widget, blur);
+            return;
+        }
     }
-    ...
+
+    renderWidgetContents(widget);
 }
 ```
 
-Running before the `clip()` branch is what lets a clipped widget keep its own shadow: the clip
-layer is a texture exactly the size of the widget, so anything drawn inside it would be cropped.
-An ancestor's clip still crops the shadow, because the ancestor's layer is the render target at
-that point. While a clip mask is being captured the hook is skipped, since only the widget's
-shape belongs in a mask. Effects do not touch layout or hit-testing, so a shadow can extend past
-the widget's box without changing where anything is placed or what receives a click.
+Running before `renderWidgetContents`, which holds the [`clip()` branch](#clipping), is what lets
+a clipped widget keep its own shadow: the clip layer is a texture exactly the size of the widget,
+so anything drawn inside it would be cropped. An ancestor's clip still crops the shadow, because
+the ancestor's layer is the render target at that point. While a clip mask or a widget's own
+drawing is being captured (`isCapturingOwn()`) the hook is skipped, since only the widget's own
+shape or drawing belongs in that capture. Effects do not touch layout or hit-testing, so a shadow
+can extend past the widget's box without changing where anything is placed or what receives a
+click. The glass, background blur and layer blur steps are described in their own sections below.
 
 A shadow can be computed in two ways, and `virtual std::optional<CornerRadii> Widget::shapeRadii()
 const` picks between them. It returns the four corner radii (`topLeft`, `topRight`,
@@ -1492,9 +1519,10 @@ the same Gaussian code as the drop shadow, which lives in one shared GLSL string
 - With a radius of zero the hole's anti-aliased signed-distance edge is used instead.
 - The shadow covers the whole shape, including the border.
 
-Effects of one stage are painted in list order, so the first one added is the lowest. Further
-kinds of effect that need another point in the draw order (around a widget's own drawing, or
-reading what is behind it) will each add a virtual for their stage.
+Effects of one stage are painted in list order, so the first one added is the lowest. A further
+kind of list effect that needs another point in the draw order would add a virtual for its stage.
+The blurs and glass, which read what is behind the widget or wrap its whole drawing, are not list
+effects: they are `Widget` properties that `renderWidget` handles directly, as shown above.
 
 #### Alpha-based shadows
 
@@ -1544,7 +1572,7 @@ for a uniform blur. A change requests a repaint.
 `Renderer::renderWidget` draws the widget's behind-effects (the drop shadows) first, outside the
 blur, and then dispatches on the layer blur. When the larger radius is above a small threshold and
 no own-drawing or mask capture is in progress, `renderLayerBlur` runs; otherwise the widget is drawn
-normally. The old body of `renderWidget` (the `clip()` branch) is now `renderWidgetContents`, so the
+normally. The `clip()` branch lives in `renderWidgetContents`, separate from `renderWidget`, so the
 blur can capture exactly what a normal render would draw:
 
 1. **Capture.** `captureWidget(..., ownOnly = false)` renders `renderWidgetContents` into a texture
