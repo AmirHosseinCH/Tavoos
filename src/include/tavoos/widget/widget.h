@@ -96,6 +96,26 @@ public:
         scale.applyTo(self.m_scale);
         return std::forward<decltype(self)>(self);
     }
+    decltype(auto) scaleX(this auto&& self, PropertyArg<float> scale) {
+        scale.applyTo(self.m_scaleX);
+        return std::forward<decltype(self)>(self);
+    }
+    decltype(auto) scaleY(this auto&& self, PropertyArg<float> scale) {
+        scale.applyTo(self.m_scaleY);
+        return std::forward<decltype(self)>(self);
+    }
+    decltype(auto) rotationX(this auto&& self, PropertyArg<float> rotation) {
+        rotation.applyTo(self.m_rotationX);
+        return std::forward<decltype(self)>(self);
+    }
+    decltype(auto) rotationY(this auto&& self, PropertyArg<float> rotation) {
+        rotation.applyTo(self.m_rotationY);
+        return std::forward<decltype(self)>(self);
+    }
+    decltype(auto) perspective(this auto&& self, PropertyArg<float> distance) {
+        distance.applyTo(self.m_perspective);
+        return std::forward<decltype(self)>(self);
+    }
 
     decltype(auto) alignment(this auto&& self, PropertyArg<Alignment> alignment) {
         alignment.applyTo(self.m_alignment);
@@ -393,6 +413,11 @@ public:
 
     float rotation() const { return m_rotation; }
     float scale() const { return m_scale; }
+    float scaleX() const { return m_scaleX; }
+    float scaleY() const { return m_scaleY; }
+    float rotationX() const { return m_rotationX; }
+    float rotationY() const { return m_rotationY; }
+    float perspective() const { return m_perspective; }
 
     Alignment alignment() const { return m_alignment; }
     Fill fill() const { return m_fill; }
@@ -628,6 +653,11 @@ private:
     Property<float> m_yFraction{-1.0f};
     Property<float> m_rotation{0.0f};
     Property<float> m_scale{1.0f};
+    Property<float> m_scaleX{1.0f};
+    Property<float> m_scaleY{1.0f};
+    Property<float> m_rotationX{0.0f};
+    Property<float> m_rotationY{0.0f};
+    Property<float> m_perspective{1000.0f};
     Property<Alignment> m_alignment{Alignment::None};
     Property<Fill> m_fill{Fill::None};
     Property<bool> m_clip{false};

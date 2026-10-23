@@ -515,6 +515,9 @@ void Renderer::renderText(TextWidget& text) {
 }
 
 void Renderer::renderWidget(Widget& widget) {
+    if (std::abs(glm::determinant(widget.worldMatrix())) < 1e-7f)
+        return;
+
     if (!isCapturingOwn()) {
         if (widget.hasGlass() && widget.shapeRadii()) {
             renderGlass(widget, widget.glass());
@@ -686,7 +689,8 @@ void Renderer::renderClipLayer(Widget& widget, int texW, int texH) {
 static bool isAxisAlignedUnitScale(const glm::mat4& m) {
     constexpr float eps = 1e-4f;
     return std::abs(m[0][0] - 1.0f) < eps && std::abs(m[0][1]) < eps &&
-           std::abs(m[1][0]) < eps && std::abs(m[1][1] - 1.0f) < eps;
+           std::abs(m[1][0]) < eps && std::abs(m[1][1] - 1.0f) < eps &&
+           std::abs(m[0][3]) < eps && std::abs(m[1][3]) < eps && std::abs(m[3][3] - 1.0f) < eps;
 }
 
 void Renderer::compositeClipLayer(Widget& widget, int texW, int texH) {
@@ -916,6 +920,13 @@ GLuint Renderer::captureBackdrop(Widget& widget, int texW, int texH, int pad) {
     float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
     for (const glm::vec2& corner : corners) {
         const glm::vec4 clip = mvp * glm::vec4{corner, 0.0f, 1.0f};
+        if (!(clip.w > 0.0f)) {
+            minX = static_cast<float>(viewport[0]);
+            minY = static_cast<float>(viewport[1]);
+            maxX = static_cast<float>(viewport[0] + viewport[2]);
+            maxY = static_cast<float>(viewport[1] + viewport[3]);
+            break;
+        }
         const float px = static_cast<float>(viewport[0]) + (clip.x / clip.w * 0.5f + 0.5f) * static_cast<float>(viewport[2]);
         const float py = static_cast<float>(viewport[1]) + (clip.y / clip.w * 0.5f + 0.5f) * static_cast<float>(viewport[3]);
         minX = std::min(minX, px);
@@ -923,6 +934,10 @@ GLuint Renderer::captureBackdrop(Widget& widget, int texW, int texH, int pad) {
         minY = std::min(minY, py);
         maxY = std::max(maxY, py);
     }
+    minX = std::clamp(minX, static_cast<float>(viewport[0]), static_cast<float>(viewport[0] + viewport[2]));
+    maxX = std::clamp(maxX, static_cast<float>(viewport[0]), static_cast<float>(viewport[0] + viewport[2]));
+    minY = std::clamp(minY, static_cast<float>(viewport[1]), static_cast<float>(viewport[1] + viewport[3]));
+    maxY = std::clamp(maxY, static_cast<float>(viewport[1]), static_cast<float>(viewport[1] + viewport[3]));
     const int regionX = std::max(viewport[0], static_cast<int>(std::floor(minX)));
     const int regionY = std::max(viewport[1], static_cast<int>(std::floor(minY)));
     const int regionW = std::min(viewport[0] + viewport[2], static_cast<int>(std::ceil(maxX))) - regionX;
