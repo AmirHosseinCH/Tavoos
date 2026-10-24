@@ -633,7 +633,9 @@ void bindRepaintTriggers(Props&... props) {
 // Widget::Widget(Object* parent)
 bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_alignment, m_fill,
                      m_padding.leftProperty(), m_padding.topProperty(), /* ... */
-                     m_rotation, m_scale, m_gridColumnSpan, m_gridRowSpan, m_gridRow, m_gridColumn);
+                     m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY,
+                     m_perspective, m_transformOrigin,
+                     m_gridColumnSpan, m_gridRowSpan, m_gridRow, m_gridColumn);
 m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
 bindRepaintTriggers(m_opacity, m_visible, m_clip);
 ```
@@ -1350,7 +1352,8 @@ children, since `m_capturingMask` is `false` again by the time this runs) into a
 composite shader and draws one screen-aligned quad, multiplying color by mask alpha, straight
 into the real framebuffer at the widget's actual world-space position (with a pixel-snapping
 step for axis-aligned, unit-scale widgets, `isAxisAlignedUnitScale`, to avoid subpixel
-shimmer on the common case of an unrotated, unscaled clipped widget).
+shimmer on the common case of an unrotated, unscaled clipped widget). The check also requires the
+matrix's `w` row to be `(0, 0, 0, 1)`, so a widget with perspective is never snapped.
 
 `m_capturingMask` is restored to its *previous* value on exit rather than hard-coded to
 `false`, so nested clipped widgets (a clipped child inside a clipped parent) don't clear the
@@ -1607,11 +1610,13 @@ own-drawing or mask capture is in progress, `renderBackgroundBlur` runs:
    `glCopyTexSubImage2D` into a pooled texture. Going through the projection and viewport makes the
    same code correct for the window (including HiDPI, where the viewport is in physical pixels), for
    clip layers and layer-blur captures (whose projection is relative to their texture), and for
-   rotated or scaled widgets.
+   rotated, scaled, or tilted widgets. If a corner lies behind the viewer under perspective, its
+   projection is meaningless, so the whole viewport is copied instead.
 2. **Resample into the widget's space.** `backdropResampleFragmentShader` fills a texture laid out
    like the layer-blur capture, padded around the widget's box, by mapping each texel's local
-   position through the saved widget-to-clip matrix back to a pixel of the copied region. This makes
-   the next step independent of rotation and of the window's pixel density.
+   position through the saved widget-to-clip matrix, with the perspective divide, back to a pixel of
+   the copied region. This makes the next step independent of rotation, perspective, and the
+   window's pixel density.
 3. **Blur.** `blurLayerTexture`, the same function layer blur uses, runs the two-pass per-pixel-sigma
    Gaussian on that texture, so uniform and progressive blur are shared with layer blur.
 4. **Composite.** `backgroundBlurCompositeFragmentShader` draws the widget's box with the blurred
@@ -1929,7 +1934,7 @@ Widget* Widget::hitTestTree(float px, float py) const {
 }
 
 bool Widget::hitTest(float px, float py) const {
-    const glm::vec4 localPoint = glm::inverse(worldMatrix()) * glm::vec4{px, py, 0.0f, 1.0f};
+    const Point localPoint = mapFromWindow({px, py});
     return localPoint.x >= 0.0f && localPoint.x <= m_displayedWidth &&
            localPoint.y >= 0.0f && localPoint.y <= m_displayedHeight;
 }
@@ -1937,18 +1942,23 @@ bool Widget::hitTest(float px, float py) const {
 
 Children are walked in the *reverse* of render order (the same `zOrderedChildren()` list
 used for rendering, reversed) - the topmost widget for painting is also the one that wins an
-overlapping hit-test, matching rendering exactly. `hitTest` transforms the screen-space point
-into the widget's *local* space via the inverse `worldMatrix()` - so rotation and scale
-(applied in `localMatrix()`, see below) are correctly accounted for, not just axis-aligned
-bounding boxes - then bounds-checks against `m_displayedWidth/Height`.
+overlapping hit-test, matching rendering exactly. `hitTest` maps the screen-space point into
+the widget's *local* space with `mapFromWindow`, the inverse of `worldMatrix()` followed by the
+perspective divide (see [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)),
+so rotation, scale and tilt (applied in `localMatrix()`, see below) are accounted for, not just
+axis-aligned bounding boxes - then bounds-checks against `m_displayedWidth/Height`.
 
 ```cpp
 glm::mat4 Widget::localMatrix() const {
     glm::vec3 position{m_displayedX, m_displayedY, 0.0f};
-    glm::vec3 pivot{m_displayedWidth * 0.5f, m_displayedHeight * 0.5f, 0.0f};
-    return glm::translate({}, position) * glm::translate({}, pivot)
-         * glm::rotate({}, glm::radians(m_rotation), {0,0,1}) * glm::scale({}, {m_scale, m_scale, 1})
-         * glm::translate({}, -pivot);
+    const Point origin = m_transformOrigin.get();
+    glm::vec3 pivot{m_displayedWidth * origin.x, m_displayedHeight * origin.y, 0.0f};
+    glm::mat4 eye{1.0f};
+    if (m_perspective > 0.0f)
+        eye[2][3] = -1.0f / m_perspective;
+    return flattenToPlane(translate(position) * translate(pivot) * eye
+                          * rotateX(m_rotationX) * rotateY(m_rotationY) * rotateZ(m_rotation)
+                          * scale(m_scale * m_scaleX, m_scale * m_scaleY) * translate(-pivot));
 }
 void Widget::updateWorldMatrix() {
     glm::mat4 parentWorld = /* parent Widget's worldMatrix(), or identity */;
@@ -1956,10 +1966,27 @@ void Widget::updateWorldMatrix() {
 }
 ```
 
-Rotation/scale pivot around the widget's own center (`pivot`), and `worldMatrix()` composes
-with the parent's, so nested rotated/scaled widgets transform correctly relative to their
-ancestors - both for rendering (the vertex shader uses `worldMatrix` directly) and for
-hit-testing (its inverse).
+Read the product from right to left: the widget is moved so the pivot (its transform origin, a
+fraction of its size) is at the origin, scaled, rotated in the plane, tilted around Y and then X,
+given perspective, and moved back and into place. The tilt gives each point a depth `z`, and `eye`
+makes the output `w = 1 - z / perspective`; the GPU divides by `w`, so points tilted away from the
+viewer shrink toward the pivot, which is therefore also the vanishing point.
+
+`flattenToPlane` then resets the matrix's `z` row and column to identity, leaving a 3x3 projective
+map on `(x, y, w)`. That does two things. Each widget becomes a flat picture projected onto its
+parent's plane: a child's tilt is drawn on that plane, and its depth is not projected a second time
+by an ancestor's perspective, so products of local matrices stay exact. And `z` stays `0`, inside the
+orthographic projection's `-1`..`1` range, so a tilted widget is not clipped by the near and far
+planes. The clip-layer and capture paths need nothing new: they render children with
+`ortho * inverse(worldMatrix)`, which still lands them in the widget's local space, and composite
+the result with `worldMatrix`, which draws it in perspective with perspective-correct texture
+coordinates.
+
+`worldMatrix()` composes with the parent's, so nested transformed widgets transform correctly
+relative to their ancestors - both for rendering (the vertex shader uses `worldMatrix` directly)
+and for hit-testing (its inverse). `Renderer::renderWidget` skips a widget, with its subtree, whose
+world matrix has a near-zero determinant: a widget seen edge-on, at exactly 90 degrees, has no area,
+and the clip-layer and capture paths would otherwise invert a singular matrix.
 
 Overlays are the one exception to the tree walk. `hitTestTree` skips overlay children, and
 `Window::hitTestChildren` tests the overlay stack first, topmost first. If a modal overlay is
@@ -2280,19 +2307,25 @@ through, so both agree on exactly one focused widget at a time.
 `localMatrix()`/`worldMatrix()` (see [Hit-testing](#hit-testing)) or their inverse:
 
 ```cpp
-Point Widget::mapToParent(const Point& point) const {
-    const glm::vec4 p = localMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
+static Point projectPoint(const glm::mat4& m, const Point& point) {
+    const glm::vec4 p = m * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    if (!(p.w > 0.0f))
+        return { NaN, NaN };
+    return { p.x / p.w, p.y / p.w };
 }
-Point Widget::mapFromParent(const Point& point) const {
-    const glm::vec4 p = glm::inverse(localMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
-}
+Point Widget::mapToParent(const Point& point) const { return projectPoint(localMatrix(), point); }
+Point Widget::mapFromParent(const Point& point) const { return projectPoint(glm::inverse(localMatrix()), point); }
 // mapToWindow / mapFromWindow are the same shape, using worldMatrix() instead of localMatrix()
 ```
 
-(`Point{float x, y}` - a plain pair type in `types.h`, kept out of the public API to avoid
-leaking `glm` types into widget-facing signatures.) Rule of thumb: apply the matrix to go
+Dividing by `w` applies the perspective, and the inverse of a projective map undoes it exactly, so a
+click lands on the right spot of a tilted widget. A result with `w <= 0` lies behind the viewer;
+`NaN` fails every bounds comparison, so such a point never hits anything, and `!(p.w > 0.0f)` also
+catches a `w` that is already `NaN`.
+
+(`Point{float x, y}` - a plain pair type in `types.h`, with equality and `lerp` so it also works
+in `State` and `AnimatedState`, kept out of the public API to avoid leaking `glm` types into
+widget-facing signatures.) Rule of thumb: apply the matrix to go
 *outward* (local space to parent/window space), its inverse to go *inward*.
 
 Every `MouseEvent` a widget's handler receives carries coordinates relative to *that widget*,

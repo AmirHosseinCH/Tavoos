@@ -46,10 +46,11 @@ quick-start example in [README.md](../README.md).
    - [Layer blur](#layer-blur)
    - [Background blur](#background-blur)
    - [Glass](#glass)
-10. [Dragging](#dragging)
-11. [Animation](#animation)
-12. [Resource embedding](#resource-embedding)
-13. [Keyboard & focus](#keyboard--focus)
+10. [Transforms](#transforms)
+11. [Dragging](#dragging)
+12. [Animation](#animation)
+13. [Resource embedding](#resource-embedding)
+14. [Keyboard & focus](#keyboard--focus)
 
 ## Core concepts
 
@@ -137,7 +138,11 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 | `fill()` | `Fill` | `Width`/`Height`/`Both`. Stretches the widget to fill available space on that axis instead of using `width()`/`height()`. Inside Row/Column/Flex, a filled item shares leftover space evenly with other filled siblings; inside Grid, it stretches to its cell. |
 | `padding()`, `paddingLeft/Top/Right/Bottom()` | `float` | Inset applied to *this* widget's children's available area (only meaningful if this widget has children). |
 | `margin()`, `marginLeft/Top/Right/Bottom()` | `float` | Space around this widget, respected by its parent container. |
-| `rotation()`, `scale()` | `float` | Degrees / scale factor, applied around the widget's own center for rendering and hit-testing. |
+| `rotation()`, `scale()` | `float` | Degrees / scale factor, applied around the transform origin (the widget's center by default) for rendering and hit-testing. |
+| `rotationX()`, `rotationY()` | `float` | Degrees of tilt around the horizontal / vertical axis, drawn in perspective - see [Transforms](#transforms). |
+| `scaleX()`, `scaleY()` | `float` | Per-axis scale factor, multiplied with `scale()`. A negative value mirrors the widget on that axis. |
+| `perspective()` | `float` | Distance in pixels between the viewer and the widget, used by `rotationX()`/`rotationY()`. Smaller is stronger; `0` turns perspective off. Default `1000`. |
+| `transformOrigin()` | `TransformOrigin` or `Point` | The point that scale, rotation and perspective are anchored to. Default: the center. |
 | `opacity()` | `float` | `0`-`1`; multiplies with ancestors' opacity for the effective value used at render time. |
 | `layerBlur()` | `float` or `BlurStyle` | Blurs the widget together with its children - see [Layer blur](#layer-blur). |
 | `backgroundBlur()` | `float` or `BlurStyle` | Blurs what is drawn behind the widget, inside its shape - see [Background blur](#background-blur). Not available on controls and layouts. |
@@ -203,6 +208,12 @@ r.color(Tavoos::linearGradient({
 `CenterHorizontal`, `CenterVertical`, `Center` (= both centers).
 
 **`Fill`** (bit flags): `Width`, `Height`, `Both`.
+
+**`Point`** - a plain `{x, y}` pair of floats. It compares with `==` and has a `lerp`, so it also
+works in `State<Point>` and `AnimatedState<Point>`.
+
+**`TransformOrigin`**: `TopLeft`, `Top`, `TopRight`, `Left`, `Center`, `Right`, `BottomLeft`,
+`Bottom`, `BottomRight` - the nine common points for `transformOrigin()`.
 
 **`Font`** - a plain bundle of `family` (`std::string`), `size` (`float`), `weight`
 (`FontWeight`), and `style` (`FontStyle`), for controls whose `font()` setter takes the whole
@@ -1658,6 +1669,58 @@ TB::Button([](Tavoos::ButtonWidget& b) {
 
 Opacity, scale and rotation apply, and a drop shadow on the same widget stays outside the glass.
 Like the background blur, glass inside a clipping ancestor sees only that ancestor's content.
+
+## Transforms
+
+Every widget can be scaled, rotated, and tilted in 3D. Transforms do not affect layout: the parent
+places the widget as if it were untransformed, and the transform is applied when the widget is drawn
+and hit-tested.
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& door) {
+    door.width(160).height(240).radius(12)
+        .transformOrigin(Tavoos::TransformOrigin::Left)
+        .rotationY(-60)
+        .color(Tavoos::Color::rgba(60, 90, 220));
+});
+```
+
+The door stays hinged on its left edge and swings toward the viewer.
+
+- **Order.** The scale (`scale()` times `scaleX()`/`scaleY()`) is applied first, then `rotation()`,
+  then `rotationY()`, then `rotationX()`, all around the transform origin, and perspective last.
+- **Directions.** A positive `rotationX()` tips the top edge away from the viewer, and a positive
+  `rotationY()` turns the right edge away.
+- **Perspective.** `perspective()` is the distance between the viewer and the widget, in pixels. The
+  default of `1000` gives a gentle effect, values around `300`-`500` a strong one, and `0` removes
+  perspective, so a tilt only squashes the widget. The vanishing point is the widget's transform
+  origin, and each widget has its own: a row of tilted cards does not share one vanishing point.
+- **Transform origin.** `transformOrigin()` takes a `TransformOrigin` value for the nine common
+  points, or a `Point` of fractions of the widget's size for anything else. Fractions follow the
+  widget when its size changes and may lie outside `0`-`1`: `Point{0.5f, 2.0f}` swings the widget
+  around a point below it.
+- **Children.** A transformed widget is drawn together with its children as one flat picture on its
+  parent's plane, so children tilt with it, and a child's own tilt is drawn on that plane. Widgets
+  never intersect in depth: siblings stack by `z()` and tree order as usual.
+- **Back face.** Past 90 degrees the widget shows its back, mirrored. At exactly 90 degrees it is
+  seen edge-on, so nothing is drawn and it cannot be clicked.
+- **Hit-testing, clipping, and effects** follow the transform. Clicks land on the tilted shape, and
+  `MouseEvent` coordinates stay in the widget's own untransformed space. `clip()`, shadows, blurs,
+  and glass are drawn in perspective too.
+
+All of these are ordinary properties, so they can be bound and animated. A card that flips on click:
+
+```cpp
+Tavoos::AnimatedState<float> flip{0.0f};
+
+TB::Rectangle([](Tavoos::RectangleWidget& card) {
+    card.width(200).height(130).radius(16).rotationY(flip)
+        .color(Tavoos::Color::rgba(200, 60, 120))
+        .onClick([](Tavoos::MouseEvent&) {
+            flip.animateTo(flip > 90.0f ? 0.0f : 180.0f, 0.6f, Tavoos::Easing::easeInOutQuad);
+        });
+});
+```
 
 ## Dragging
 
