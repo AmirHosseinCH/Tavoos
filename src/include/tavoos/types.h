@@ -12,6 +12,8 @@ namespace Tavoos {
 struct Point {
     float x{0.0f};
     float y{0.0f};
+
+    bool operator==(const Point&) const = default;
 };
 
 struct CornerRadii {
@@ -104,6 +106,12 @@ struct EnableBitmaskOperators<Alignment> : std::true_type {};
 inline constexpr Alignment HorizontalAlignment = Alignment::Left | Alignment::Right | Alignment::CenterHorizontal;
 
 inline constexpr Alignment VerticalAlignment = Alignment::Top | Alignment::Bottom | Alignment::CenterVertical;
+
+enum class TransformOrigin {
+    TopLeft, Top, TopRight,
+    Left, Center, Right,
+    BottomLeft, Bottom, BottomRight,
+};
 
 enum class Fill : std::uint32_t {
     None = 0,
@@ -243,6 +251,10 @@ inline Paint conicGradient(std::vector<Paint::Stop> stops, float centerX = 0.5f,
 
 constexpr float lerp(float a, float b, float t) noexcept {
     return a + (b - a) * t;
+}
+
+constexpr Point lerp(const Point& a, const Point& b, float t) noexcept {
+    return { lerp(a.x, b.x, t), lerp(a.y, b.y, t) };
 }
 
 constexpr Color lerp(const Color& a, const Color& b, float t) noexcept {

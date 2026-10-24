@@ -5,6 +5,7 @@
 #include <tavoos/window.h>
 
 #include <algorithm>
+#include <limits>
 
 namespace Tavoos {
 
@@ -28,7 +29,8 @@ Widget::Widget(Object* parent) : Object{parent} {
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
                          m_margin.rightProperty(), m_margin.bottomProperty(),
-                         m_rotation, m_scale, m_gridColumnSpan, m_gridRowSpan,
+                         m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin,
+                         m_gridColumnSpan, m_gridRowSpan,
                          m_gridRow, m_gridColumn);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
@@ -485,17 +487,42 @@ Widget::Size Widget::computeIntrinsicSize() {
     return { static_cast<float>(width()), static_cast<float>(height()) };
 }
 
+static glm::mat4 flattenToPlane(glm::mat4 m) {
+    for (int i = 0; i < 4; ++i) {
+        m[2][i] = i == 2 ? 1.0f : 0.0f;
+        m[i][2] = i == 2 ? 1.0f : 0.0f;
+    }
+    return m;
+}
+
+static Point projectPoint(const glm::mat4& m, const Point& point) {
+    const glm::vec4 p = m * glm::vec4{point.x, point.y, 0.0f, 1.0f};
+    if (!(p.w > 0.0f)) {
+        constexpr float nan = std::numeric_limits<float>::quiet_NaN();
+        return { nan, nan };
+    }
+    return { p.x / p.w, p.y / p.w };
+}
+
 glm::mat4 Widget::localMatrix() const {
     glm::vec3 position{m_displayedX, m_displayedY, 0.0f};
-    glm::vec3 pivot{m_displayedWidth * 0.5f, m_displayedHeight * 0.5f, 0.0f};
+    const Point origin = m_transformOrigin.get();
+    glm::vec3 pivot{m_displayedWidth * origin.x, m_displayedHeight * origin.y, 0.0f};
+    const float scale = m_scale;
 
     glm::mat4 t = glm::translate(glm::mat4{1.0f}, position);
-    glm::mat4 toCenter = glm::translate(glm::mat4{1.0f}, pivot);
+    glm::mat4 toPivot = glm::translate(glm::mat4{1.0f}, pivot);
+    glm::mat4 tilt = glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotationX)), glm::vec3{1.0f, 0.0f, 0.0f})
+                   * glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotationY)), glm::vec3{0.0f, 1.0f, 0.0f});
     glm::mat4 r = glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotation)), glm::vec3{0.0f, 0.0f, 1.0f});
-    glm::mat4 s = glm::scale(glm::mat4{1.0f}, glm::vec3{static_cast<float>(m_scale), static_cast<float>(m_scale), 1.0f});
-    glm::mat4 fromCenter = glm::translate(glm::mat4{1.0f}, -pivot);
+    glm::mat4 s = glm::scale(glm::mat4{1.0f}, glm::vec3{scale * m_scaleX, scale * m_scaleY, 1.0f});
+    glm::mat4 fromPivot = glm::translate(glm::mat4{1.0f}, -pivot);
 
-    return t * toCenter * r * s * fromCenter;
+    glm::mat4 eye{1.0f};
+    if (m_perspective > 0.0f)
+        eye[2][3] = -1.0f / m_perspective;
+
+    return flattenToPlane(t * toPivot * eye * tilt * r * s * fromPivot);
 }
 
 const glm::mat4& Widget::worldMatrix() const {
@@ -503,23 +530,19 @@ const glm::mat4& Widget::worldMatrix() const {
 }
 
 Point Widget::mapToParent(const Point& point) const {
-    const glm::vec4 p = localMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
+    return projectPoint(localMatrix(), point);
 }
 
 Point Widget::mapFromParent(const Point& point) const {
-    const glm::vec4 p = glm::inverse(localMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
+    return projectPoint(glm::inverse(localMatrix()), point);
 }
 
 Point Widget::mapToWindow(const Point& point) const {
-    const glm::vec4 p = worldMatrix() * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
+    return projectPoint(worldMatrix(), point);
 }
 
 Point Widget::mapFromWindow(const Point& point) const {
-    const glm::vec4 p = glm::inverse(worldMatrix()) * glm::vec4{point.x, point.y, 0.0f, 1.0f};
-    return { p.x, p.y };
+    return projectPoint(glm::inverse(worldMatrix()), point);
 }
 
 void Widget::updateWorldMatrix() {
