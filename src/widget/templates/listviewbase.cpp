@@ -3,6 +3,8 @@
 #include <tavoos/builder.h>
 #include <tavoos/gfx/renderer.h>
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -22,7 +24,7 @@ ListViewBase::ListViewBase(Object* parent) : ScrollAreaBase{parent} {
     flickDirection(FlickDirection::Vertical);
 
     m_count.onChange([this](const int&) {
-        if (built())
+        if (built() && !m_model)
             applyCount();
     });
     m_spacing.onChange([this](const float&) {
@@ -37,13 +39,21 @@ ListViewBase::ListViewBase(Object* parent) : ScrollAreaBase{parent} {
     });
 }
 
+ListViewBase::~ListViewBase() {
+    detachModel();
+}
+
 void ListViewBase::runInBuilderScope(Widget& row, const std::function<void()>& call) {
     Builder::Scope scope{&row};
     call();
 }
 
 int ListViewBase::rowCount() const {
-    return std::max(0, m_count.get());
+    return m_model ? m_model->size() : std::max(0, m_count.get());
+}
+
+int ListViewBase::trackedCount() const {
+    return static_cast<int>(m_heights.size());
 }
 
 float ListViewBase::gap() const {
@@ -56,7 +66,7 @@ float ListViewBase::heightOf(int index) const {
 }
 
 int ListViewBase::indexAt(float y) const {
-    const int total = rowCount();
+    const int total = trackedCount();
     if (total == 0 || y <= 0.0f)
         return 0;
 
@@ -66,7 +76,7 @@ int ListViewBase::indexAt(float y) const {
 }
 
 int ListViewBase::rowIndexOf(const Widget* child) const {
-    const auto found = std::ranges::find(m_rows, child);
+    const auto found = std::ranges::find(m_rows, child, &LiveRow::widget);
     return found == m_rows.end() ? -1 : m_first + static_cast<int>(found - m_rows.begin());
 }
 
@@ -74,11 +84,11 @@ Widget* ListViewBase::rowAt(int index) const {
     const int offset = index - m_first;
     if (offset < 0 || offset >= static_cast<int>(m_rows.size()))
         return nullptr;
-    return m_rows[static_cast<std::size_t>(offset)];
+    return m_rows[static_cast<std::size_t>(offset)].widget;
 }
 
 void ListViewBase::rebuildOffsets() {
-    const int total = rowCount();
+    const int total = trackedCount();
 
     float known = 0.0f;
     int measured = 0;
@@ -108,7 +118,7 @@ bool ListViewBase::measureRows() {
     bool changed = false;
     for (std::size_t k = 0; k < m_rows.size(); ++k) {
         const std::size_t index = static_cast<std::size_t>(m_first) + k;
-        const float height = measure(*m_rows[k]);
+        const float height = measure(*m_rows[k].widget);
         if (std::fabs(height - m_heights[index]) > kHeightTolerance) {
             m_heights[index] = height;
             changed = true;
@@ -121,7 +131,7 @@ Widget::Size ListViewBase::computeContentSize() {
     if (!built())
         return { 0.0f, 0.0f };
 
-    const int total = rowCount();
+    const int total = trackedCount();
     return { 0.0f, total > 0 ? m_tops[static_cast<std::size_t>(total)] - gap() : 0.0f };
 }
 
@@ -145,6 +155,7 @@ void ListViewBase::onBuilt() {
 }
 
 void ListViewBase::render(Renderer& renderer) {
+    m_retiredStates.clear();
     if (!renderer.isCapturingMask())
         syncRows();
     ScrollAreaBase::render(renderer);
@@ -178,6 +189,8 @@ void ListViewBase::syncRows() {
     m_syncing = false;
     m_target = -1;
     updateVisible();
+    if (std::exchange(m_reloadPending, false))
+        reload();
 }
 
 bool ListViewBase::syncPass() {
@@ -191,12 +204,12 @@ bool ListViewBase::syncPass() {
     const int to = indexAt(bottom + buffer);
 
     while (!m_rows.empty() && m_first < from) {
-        removeChild(m_rows.front());
+        retireRow(m_rows.front());
         m_rows.pop_front();
         ++m_first;
     }
     while (!m_rows.empty() && m_first + static_cast<int>(m_rows.size()) - 1 > to) {
-        removeChild(m_rows.back());
+        retireRow(m_rows.back());
         m_rows.pop_back();
     }
     if (m_rows.empty())
@@ -246,7 +259,7 @@ void ListViewBase::applyCount() {
 
 void ListViewBase::removeRowsBeyond(int total) {
     while (!m_rows.empty() && m_first + static_cast<int>(m_rows.size()) - 1 >= total) {
-        removeChild(m_rows.back());
+        retireRow(m_rows.back());
         m_rows.pop_back();
     }
     if (m_rows.empty())
@@ -258,10 +271,17 @@ void ListViewBase::refreshRows() {
 }
 
 void ListViewBase::clearRows() {
-    for (Widget* const row : m_rows)
-        removeChild(row);
+    for (LiveRow& row : m_rows)
+        retireRow(row);
     m_rows.clear();
     m_first = 0;
+}
+
+void ListViewBase::retireRow(LiveRow& row) {
+    removeChild(row.widget);
+    row.widget = nullptr;
+    if (row.state)
+        m_retiredStates.push_back(std::move(row.state));
 }
 
 void ListViewBase::scrollToIndex(int index) {
@@ -286,6 +306,194 @@ void ListViewBase::reload() {
     m_heights.assign(static_cast<std::size_t>(rowCount()), 0.0f);
     rebuildOffsets();
     refreshRows();
+}
+
+void ListViewBase::attachModel(ListModelBase& model) {
+    detachModel();
+    m_model = &model;
+    m_modelSubscription = model.onChange([this](const ListChange& change) { modelChanged(change); });
+    m_delegate = nullptr;
+    if (built())
+        reload();
+}
+
+void ListViewBase::reportModelMismatch() const {
+    if (m_model)
+        spdlog::error("ListView: the delegate's item type does not match the model");
+    else
+        spdlog::error("ListView: call model() before delegate()");
+}
+
+void ListViewBase::detachModel() {
+    if (m_model)
+        m_model->removeOnChange(m_modelSubscription);
+    m_model = nullptr;
+    m_modelSubscription = 0;
+}
+
+void ListViewBase::modelChanged(const ListChange& change) {
+    using Kind = ListChange::Kind;
+
+    if (change.kind == Kind::Destroyed) {
+        m_model = nullptr;
+        m_modelSubscription = 0;
+        m_delegate = nullptr;
+        if (built())
+            reload();
+        return;
+    }
+    if (!built())
+        return;
+    if (m_syncing) {
+        m_reloadPending = true;
+        return;
+    }
+    if (change.kind == Kind::Reset) {
+        reload();
+        return;
+    }
+    if (change.kind == Kind::Changed) {
+        refreshRowStates(change.index, change.count);
+        return;
+    }
+
+    const float top = contentY();
+    const bool atTop = top <= 0.0f;
+    int anchor = indexAt(top);
+    float anchorOffset = trackedCount() > 0 ? top - m_tops[static_cast<std::size_t>(anchor)] : 0.0f;
+    const auto heights = m_heights.begin();
+
+    switch (change.kind) {
+    case Kind::Inserted:
+        m_heights.insert(heights + change.index, static_cast<std::size_t>(change.count), 0.0f);
+        insertRows(change.index, change.count);
+        if (anchor >= change.index)
+            anchor += change.count;
+        break;
+    case Kind::Removed:
+        m_heights.erase(heights + change.index, heights + change.index + change.count);
+        removeRows(change.index, change.count);
+        if (anchor >= change.index + change.count) {
+            anchor -= change.count;
+        } else if (anchor >= change.index) {
+            anchor = change.index;
+            anchorOffset = 0.0f;
+        }
+        break;
+    case Kind::Moved: {
+        const float moved = m_heights[static_cast<std::size_t>(change.index)];
+        m_heights.erase(heights + change.index);
+        m_heights.insert(m_heights.begin() + change.to, moved);
+        moveRow(change.index, change.to);
+        if (anchor == change.index)
+            anchor = change.to;
+        else if (change.index < anchor && anchor <= change.to)
+            --anchor;
+        else if (change.to <= anchor && anchor < change.index)
+            ++anchor;
+        break;
+    }
+    default:
+        break;
+    }
+
+    rebuildOffsets();
+    markLayoutDirty();
+    const int total = trackedCount();
+    const float y = atTop || total == 0 ? 0.0f : m_tops[static_cast<std::size_t>(std::clamp(anchor, 0, total - 1))] + anchorOffset;
+    m_syncing = true;
+    scrollTo(contentX(), y);
+    m_syncing = false;
+    syncRows();
+}
+
+void ListViewBase::insertRows(int index, int count) {
+    if (m_rows.empty())
+        return;
+
+    const int end = m_first + static_cast<int>(m_rows.size());
+    if (index <= m_first) {
+        m_first += count;
+    } else if (index < end) {
+        const auto at = m_rows.begin() + (index - m_first);
+        if (count > static_cast<int>(m_rows.size())) {
+            for (auto it = at; it != m_rows.end(); ++it)
+                retireRow(*it);
+            m_rows.erase(at, m_rows.end());
+        } else {
+            std::size_t position = static_cast<std::size_t>(index - m_first);
+            for (int k = 0; k < count; ++k)
+                m_rows.insert(m_rows.begin() + static_cast<std::ptrdiff_t>(position++), m_delegate(index + k));
+        }
+    }
+    reindexRows();
+}
+
+void ListViewBase::removeRows(int index, int count) {
+    if (m_rows.empty())
+        return;
+
+    std::deque<LiveRow> kept;
+    int first = -1;
+    for (std::size_t k = 0; k < m_rows.size(); ++k) {
+        const int row = m_first + static_cast<int>(k);
+        if (row >= index && row < index + count) {
+            retireRow(m_rows[k]);
+            continue;
+        }
+        if (first < 0)
+            first = row < index ? row : row - count;
+        kept.push_back(std::move(m_rows[k]));
+    }
+    m_rows = std::move(kept);
+    m_first = std::max(first, 0);
+    reindexRows();
+}
+
+void ListViewBase::moveRow(int from, int to) {
+    if (m_rows.empty())
+        return;
+
+    LiveRow moving;
+    const int end = m_first + static_cast<int>(m_rows.size());
+    if (from >= m_first && from < end) {
+        const auto at = m_rows.begin() + (from - m_first);
+        moving = std::move(*at);
+        m_rows.erase(at);
+    } else if (from < m_first) {
+        --m_first;
+    }
+
+    const int last = m_first + static_cast<int>(m_rows.size());
+    if (to < m_first) {
+        ++m_first;
+    } else if (to < last || (to == last && moving.widget)) {
+        const auto at = m_rows.begin() + (to - m_first);
+        if (moving.widget) {
+            m_rows.insert(at, std::move(moving));
+            moving = {};
+        } else {
+            m_rows.insert(at, m_delegate(to));
+        }
+    }
+    if (moving.widget)
+        retireRow(moving);
+    reindexRows();
+}
+
+void ListViewBase::refreshRowStates(int index, int count) {
+    for (std::size_t k = 0; k < m_rows.size(); ++k) {
+        const int row = m_first + static_cast<int>(k);
+        if (row >= index && row < index + count && m_rows[k].state)
+            m_rows[k].state->refresh();
+    }
+}
+
+void ListViewBase::reindexRows() {
+    for (std::size_t k = 0; k < m_rows.size(); ++k) {
+        if (m_rows[k].state)
+            m_rows[k].state->setIndex(m_first + static_cast<int>(k));
+    }
 }
 
 }
