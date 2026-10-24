@@ -159,6 +159,7 @@ target_sources(Tavoos
     include/tavoos/reactive/cornerproperty.h
     include/tavoos/reactive/bindablestate.h
     include/tavoos/reactive/reactive.h
+    include/tavoos/model/listmodel.h
     include/tavoos/events/event.h
     include/tavoos/events/dragevent.h
     include/tavoos/events/mouseevent.h
