@@ -752,8 +752,9 @@ are off by default.
 
 | Property or method | Notes |
 |---|---|
-| `count()` | The number of rows. Changing it keeps the rows that still exist and clamps the scroll position. |
-| `delegate<T>(fn)` | Builds a row of widget type `T`. `fn(row, index)` runs each time a row is created. |
+| `count()` | The number of rows. Changing it keeps the rows that still exist and clamps the scroll position. With a model attached, the count comes from the model and setting it does nothing. |
+| `delegate<T>(fn)` | Builds a row of widget type `T`. `fn(row, index)` runs each time a row is created. Detaches any model. |
+| `model(m)`, `delegate<T, Item>(fn)` | Binds the list to a `ListModel<Item>` - see [Binding to a model](#binding-to-a-model). |
 | `spacing()` | The gap between rows. |
 | `cacheBuffer()` | Pixels of rows kept alive beyond each edge of the view. Default 200. |
 | `scrollToIndex(i)` | Scrolls so row `i` is at the top edge, clamped to the scroll range. Called while building, it is applied once the list is built. |
@@ -777,6 +778,74 @@ are off by default.
   anything typed into it. Keep such state in your own data and apply it in the delegate.
 - To change the defaults for every list, set `Theme::listView` with a `ListViewStyle`, which is the same
   type as `ScrollAreaStyle`.
+
+#### Binding to a model
+
+With `count()` and a plain delegate, the list only knows how many rows there are, so the only ways to
+show new data are changing the count, which adds or removes rows at the end, or `reload()`. A
+`ListModel<T>` (`tavoos/model/listmodel.h`) holds the items itself and tells the list exactly what
+changed, so rows can be inserted, removed, changed and moved anywhere:
+
+```cpp
+Tavoos::ListModel<std::string> fruits{"Apple", "Banana", "Cherry"};
+
+TB::ListView([](Tavoos::ListViewWidget& list) {
+    list.fill(Tavoos::Fill::Both).spacing(6)
+        .model(fruits)
+        .delegate<Tavoos::RectangleWidget, std::string>([](Tavoos::RectangleWidget& row,
+                                                           Tavoos::State<std::string>& item,
+                                                           Tavoos::State<int>& index) {
+            row.height(44).radius(8).color(Tavoos::Color::rgba(238, 240, 246));
+
+            TB::Text([&](Tavoos::TextWidget& label) {
+                label.text(item).alignment(Tavoos::Alignment::Left | Tavoos::Alignment::CenterVertical)
+                    .marginLeft(12);
+            });
+
+            TB::Button([&](Tavoos::ButtonWidget& remove) {
+                remove.text("Remove").variant(Tavoos::ButtonVariant::Text)
+                    .alignment(Tavoos::Alignment::Right | Tavoos::Alignment::CenterVertical)
+                    .onClick([&index](Tavoos::MouseEvent&) { fruits.remove(index.get()); });
+            });
+        });
+});
+
+fruits.append("Mango");
+```
+
+The model's operations, each of which updates every list bound to it:
+
+| Method | Notes |
+|---|---|
+| `append(value)`, `insert(i, value)` | Adds an item at the end or before index `i` (clamped). |
+| `remove(i, n = 1)` | Removes `n` items starting at `i`. |
+| `set(i, value)`, `update(i, fn)` | Replaces item `i`, or edits it in place with `fn(T&)`. |
+| `move(from, to)` | Moves an item so it ends up at index `to`. |
+| `clear()`, `assign(items)` | Removes everything, or replaces everything. |
+| `size()`, `empty()`, `operator[]`, `at()`, `items()` | Read access. |
+
+Out-of-range edits do nothing.
+
+- **Call `model()` first, then `delegate<T, Item>()`.** `Item` must be the model's item type. The list
+  checks this when the delegate is installed and logs an error, and builds no rows, if it does not
+  match or if no model is attached. `model()` clears the delegate, so binding another model needs a new
+  `delegate` call.
+- **The delegate gets the item and its index as `State`.** Use them rather than copying values out of
+  the model. `item` changes when the model's `set()` or `update()` changes that item, so anything bound
+  to it, like `label.text(item)` above, updates in place. For a struct, react with `item.onChange(...)`.
+  `index` follows inserts, removes and moves, so `index.get()` in a click handler is always the row's
+  current position.
+- **Rows keep their widgets across changes.** Changing, inserting, removing or moving items does not
+  rebuild the other rows, so their hover, focus, and anything typed into them survive. Rows that scroll
+  out of range are still destroyed, as above.
+- **What you are looking at stays put.** The row at the top of the view keeps its place on screen when
+  items are added, removed or moved above it or around it; if that row is removed, the next row takes
+  its place, and if it is moved, the view follows it. A list scrolled to the very top stays at the top,
+  so an item inserted first shows.
+- **A row can remove itself.** Its states stay valid until the next frame, so calling
+  `fruits.remove(index.get())` from the row's own button, as above, is safe.
+- **The model must outlive the list, or tell it.** When a model is destroyed, the lists bound to it
+  detach and become empty.
 
 ### `StackViewWidget`
 

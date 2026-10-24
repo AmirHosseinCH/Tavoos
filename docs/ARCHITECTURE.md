@@ -2657,7 +2657,8 @@ recomputes the estimate and the tops, and runs when a height, the count or the s
 `m_tops[index]`, with the row's measured height. Rows are `Fill::Width`, so a row's own height is its
 explicit or natural height, which is what was measured. As with the flick area and swipe view, rows
 therefore have real layout positions and no event is translated. The live rows are a contiguous index
-range, a deque `m_rows` with the index of the first one in `m_first`.
+range, a deque `m_rows` of `LiveRow` (the row widget and, for a model-bound list, its states) with the
+index of the first one in `m_first`.
 
 **Syncing.** `syncRows()` runs from three places: `onOffsetsSynced()` (the scroll position, the size,
 or a property that feeds them changed), `render()` on every normal frame, so a row that grows later is
@@ -2691,6 +2692,49 @@ any focus or hover state pointing into them.
 **Data changes.** A `count` change resizes `m_heights` (new rows start unmeasured), removes the rows past
 the end, and re-syncs. `reload()` destroys every row, forgets every measured height, and re-syncs.
 
+**Models.** `ListModel<T>` (`model/listmodel.h`) owns a `std::vector<T>` and derives from the non-template
+`ListModelBase`, which keeps the observers. Every edit calls `notify(ListChange)` with a kind (`Inserted`,
+`Removed`, `Changed`, `Moved`, `Reset`) and the index range (`index`, `count`, and `to` for a move);
+`clear()` is a `Removed` of everything and `assign()` a `Reset`. The base destructor sends `Destroyed`.
+Callbacks are copied before notifying and skipped if removed meanwhile, the same as `State`.
+
+`model(m)` subscribes `modelChanged` to the model and clears the delegate, so `rowCount()` now comes from
+the model. `delegate<Row, Item>(body)` `dynamic_cast`s the attached `ListModelBase` to `ListModel<Item>`;
+on failure, or with no model, it logs an error and installs nothing. The stored delegate creates a
+`ModelRowState<Item>`, which holds a `State<Item>` copied from the model and a `State<int>` index, builds
+the row, and passes both states to `body`. They live in the `LiveRow` next to the widget, behind a small
+virtual `RowState` interface (`setIndex`, `refresh`) so the non-template base can update them. A plain
+`delegate<T>(body)` detaches the model and stores no states.
+
+`modelChanged` keeps every piece of row bookkeeping in step with the model, which has already changed when
+it is called:
+
+- **`Changed`** calls `refresh()` on the live rows in the range, which sets their `item` state from the
+  model. Rows are not rebuilt; the next sync re-measures them, so a height change is picked up there.
+- **`Inserted`, `Removed`, `Moved`** first record the anchor with the old row table: the row at the top of
+  the view and how far the view's top is into it. They then splice `m_heights` the same way (inserted
+  rows start unmeasured, a moved row keeps its height) and splice the live rows: `insertRows` builds rows
+  for items inserted inside the live range, or retires the rest of the range if more items were inserted
+  than there are live rows, and only shifts `m_first` for inserts above it; `removeRows` retires the rows
+  in the range and recomputes `m_first`; `moveRow` takes the row out and puts it back at its new index,
+  building it if it was not live but lands inside the range and retiring it if it lands outside.
+  `reindexRows()` then sets every live row's `index` state, and only rows whose index changed notify.
+- The anchor index is mapped through the same change (shifted, or replaced by the row now at that index
+  with offset 0 if it was removed, or following its own row if that row moved), the offsets are rebuilt,
+  and `contentY` is set so the anchor row is where it was on screen, or to 0 if the view was at the top.
+  A normal sync then fills in and measures rows.
+- **`Reset`** reloads. **`Destroyed`** drops the model and the delegate and reloads, leaving the list
+  empty.
+
+Row positions are tracked by `trackedCount()`, the size of `m_heights`, rather than by the model's size,
+so the old table is still consistent while a change is being applied. A change that arrives during a sync
+(from inside a delegate) cannot be spliced safely, so it sets `m_reloadPending` and the sync reloads when
+it finishes.
+
+Rows leave through `retireRow`, which removes the widget with the usual deferred destruction and moves its
+states to `m_retiredStates`, cleared at the start of the next `render()`. A click handler that removes its
+own row from the model therefore still finds its `index` state alive until it returns.
+
 **Building.** Following the [build-complete hook](#the-build-complete-hook), the `count`, `spacing` and
 `cacheBuffer` callbacks and the delegate install do nothing until the list is built, and `onBuilt()` sizes
 the height table and rebuilds the offsets once before the first sync. The rebuild must come first: the
@@ -2704,7 +2748,7 @@ before the build, the index is remembered and applied in `onBuilt()`, and kept u
 has a viewport.
 
 **Costs and limits.** A sync costs about the number of live rows, plus O(log n) for each `indexAt`.
-`rebuildOffsets()` is O(count) and runs only when a height changes. Rows keep no state when they leave
+`rebuildOffsets()` is O(count) and runs when a height changes and after each structural model change. Rows keep no state when they leave
 the range. A row needs a natural height (an explicit `height()` or a layouter's content), because a plain
 widget without one measures 0 and is clamped to 1 pixel.
 
