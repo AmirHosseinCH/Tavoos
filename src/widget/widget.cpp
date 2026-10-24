@@ -29,7 +29,7 @@ Widget::Widget(Object* parent) : Object{parent} {
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
                          m_margin.rightProperty(), m_margin.bottomProperty(),
-                         m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective,
+                         m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin,
                          m_gridColumnSpan, m_gridRowSpan,
                          m_gridRow, m_gridColumn);
 
@@ -506,22 +506,23 @@ static Point projectPoint(const glm::mat4& m, const Point& point) {
 
 glm::mat4 Widget::localMatrix() const {
     glm::vec3 position{m_displayedX, m_displayedY, 0.0f};
-    glm::vec3 pivot{m_displayedWidth * 0.5f, m_displayedHeight * 0.5f, 0.0f};
+    const Point origin = m_transformOrigin.get();
+    glm::vec3 pivot{m_displayedWidth * origin.x, m_displayedHeight * origin.y, 0.0f};
     const float scale = m_scale;
 
     glm::mat4 t = glm::translate(glm::mat4{1.0f}, position);
-    glm::mat4 toCenter = glm::translate(glm::mat4{1.0f}, pivot);
+    glm::mat4 toPivot = glm::translate(glm::mat4{1.0f}, pivot);
     glm::mat4 tilt = glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotationX)), glm::vec3{1.0f, 0.0f, 0.0f})
                    * glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotationY)), glm::vec3{0.0f, 1.0f, 0.0f});
     glm::mat4 r = glm::rotate(glm::mat4{1.0f}, glm::radians(static_cast<float>(m_rotation)), glm::vec3{0.0f, 0.0f, 1.0f});
     glm::mat4 s = glm::scale(glm::mat4{1.0f}, glm::vec3{scale * m_scaleX, scale * m_scaleY, 1.0f});
-    glm::mat4 fromCenter = glm::translate(glm::mat4{1.0f}, -pivot);
+    glm::mat4 fromPivot = glm::translate(glm::mat4{1.0f}, -pivot);
 
     glm::mat4 eye{1.0f};
     if (m_perspective > 0.0f)
         eye[2][3] = -1.0f / m_perspective;
 
-    return flattenToPlane(t * toCenter * eye * tilt * r * s * fromCenter);
+    return flattenToPlane(t * toPivot * eye * tilt * r * s * fromPivot);
 }
 
 const glm::mat4& Widget::worldMatrix() const {

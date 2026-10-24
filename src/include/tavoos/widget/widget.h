@@ -116,6 +116,14 @@ public:
         distance.applyTo(self.m_perspective);
         return std::forward<decltype(self)>(self);
     }
+    decltype(auto) transformOrigin(this auto&& self, TransformOrigin origin) {
+        PropertyArg<Point>{transformOriginFraction(origin)}.applyTo(self.m_transformOrigin);
+        return std::forward<decltype(self)>(self);
+    }
+    decltype(auto) transformOrigin(this auto&& self, PropertyArg<Point> origin) {
+        origin.applyTo(self.m_transformOrigin);
+        return std::forward<decltype(self)>(self);
+    }
 
     decltype(auto) alignment(this auto&& self, PropertyArg<Alignment> alignment) {
         alignment.applyTo(self.m_alignment);
@@ -418,6 +426,7 @@ public:
     float rotationX() const { return m_rotationX; }
     float rotationY() const { return m_rotationY; }
     float perspective() const { return m_perspective; }
+    Point transformOrigin() const { return m_transformOrigin.get(); }
 
     Alignment alignment() const { return m_alignment; }
     Fill fill() const { return m_fill; }
@@ -601,6 +610,22 @@ protected:
         auto repaint = [this](const auto&) { requestRepaint(); };
         (props.onChange(repaint), ...);
     }
+
+    static constexpr Point transformOriginFraction(TransformOrigin origin) noexcept {
+        switch (origin) {
+        case TransformOrigin::TopLeft:     return {0.0f, 0.0f};
+        case TransformOrigin::Top:         return {0.5f, 0.0f};
+        case TransformOrigin::TopRight:    return {1.0f, 0.0f};
+        case TransformOrigin::Left:        return {0.0f, 0.5f};
+        case TransformOrigin::Center:      return {0.5f, 0.5f};
+        case TransformOrigin::Right:       return {1.0f, 0.5f};
+        case TransformOrigin::BottomLeft:  return {0.0f, 1.0f};
+        case TransformOrigin::Bottom:      return {0.5f, 1.0f};
+        case TransformOrigin::BottomRight: return {1.0f, 1.0f};
+        }
+        return {0.5f, 0.5f};
+    }
+
     template<typename... Props>
     void bindRelayoutTriggers(Props&... props) {
         auto relayout = [this](const auto&) { requestRelayout(); };
@@ -658,6 +683,7 @@ private:
     Property<float> m_rotationX{0.0f};
     Property<float> m_rotationY{0.0f};
     Property<float> m_perspective{1000.0f};
+    Property<Point> m_transformOrigin{Point{0.5f, 0.5f}};
     Property<Alignment> m_alignment{Alignment::None};
     Property<Fill> m_fill{Fill::None};
     Property<bool> m_clip{false};
