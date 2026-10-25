@@ -18,6 +18,30 @@ struct ListChange {
     int to{0};
 };
 
+inline int indexAfterChange(int index, const ListChange& change) {
+    using Kind = ListChange::Kind;
+
+    const int end = change.index + change.count;
+    switch (change.kind) {
+    case Kind::Inserted:
+        return index >= change.index ? index + change.count : index;
+    case Kind::Removed:
+        if (index >= end)
+            return index - change.count;
+        return index >= change.index ? -1 : index;
+    case Kind::Moved:
+        if (index == change.index)
+            return change.to;
+        if (change.index < index && change.to >= index)
+            return index - 1;
+        if (change.index > index && change.to <= index)
+            return index + 1;
+        return index;
+    default:
+        return index;
+    }
+}
+
 class ListModelBase {
 public:
     ListModelBase() = default;

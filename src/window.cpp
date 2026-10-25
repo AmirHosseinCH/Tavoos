@@ -288,9 +288,18 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
     if (action == GLFW_PRESS && !self->m_overlays.empty()) {
         OverlayBase* const top = self->m_overlays.back();
-        if (hasFlag(top->closePolicy(), ClosePolicy::ClickOutside) &&
-            !top->isContentHit(static_cast<Widget*>(top)->hitTestTree(static_cast<float>(mx), static_cast<float>(my))))
+        const ClosePolicy policy = top->closePolicy();
+        const bool outside = !top->isContentHit(static_cast<Widget*>(top)->hitTestTree(static_cast<float>(mx), static_cast<float>(my)));
+        if (outside && hasFlag(policy, ClosePolicy::ClickOutside)) {
             top->close();
+        } else if (outside && hasFlag(policy, ClosePolicy::ClickOutsideParent)) {
+            const Object* const anchor = static_cast<Widget*>(top)->parent();
+            bool onAnchor = false;
+            for (const Object* object = hit; object && !onAnchor; object = object->parent())
+                onAnchor = object == anchor;
+            if (!onAnchor)
+                top->close();
+        }
     }
 
     if (action == GLFW_PRESS) {

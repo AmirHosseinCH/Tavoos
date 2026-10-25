@@ -17,6 +17,7 @@ enum class ClosePolicy : std::uint32_t {
     None = 0,
     ClickOutside = 1 << 0,
     Escape = 1 << 1,
+    ClickOutsideParent = 1 << 2,
 };
 
 template<>
