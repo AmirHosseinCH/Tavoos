@@ -2747,6 +2747,36 @@ the target are measured it is re-aimed to its real top; the target is cleared wh
 before the build, the index is remembered and applied in `onBuilt()`, and kept until the first sync that
 has a viewport.
 
+**Current index.** `currentIndex` is a `Property<int>`, mirrored into `m_currentIndexState` for observers.
+Every change goes through `applyCurrentIndex`, which turns any value outside the rows into -1 (before the
+list is built the value is kept as given and checked in `onBuilt`, so the order of `.currentIndex()` and
+`.count()` in a builder chain does not matter), updates the state, and moves the highlight. Changes the
+list makes itself, from the model or from `count`, go through `setCurrentIndexQuietly`, which moves the
+highlight without animating it: the rows move on screen at the same moment, so an animation would slide
+away and back. For an insert, remove or move, `modelChanged` maps the index with the pure function
+`indexAfterChange(index, change)`: an insert at or before it adds `count`, a removed block entirely before
+it subtracts `count`, a removed block containing it gives -1, and a move carries the moved item to `to` and
+shifts an index that the item crosses or lands on by one, toward where the item came from. The new index is
+applied after the row table is rebuilt, so the highlight lands on the right row. A model reset, a new model,
+model destruction, and a `count` shrinking past the index all set -1.
+
+**Highlight.** `highlight<W>(body)` creates one widget, a child of the list like the rows but not one of
+them, with `Fill::Both` and `z(-1)` so it draws under the rows. `contentAreaFor` places it from two
+`AnimatedState<float>`s, its top and height, which `updateHighlight` takes from the row table: `m_tops`
+and `heightOf`, measured or estimated, so it needs no built row. An index change animates both over
+`highlightMoveDuration` with `easeOutQuad`; each sync then snaps them to the current row's position unless
+a move is in progress, which corrects estimates as rows are measured. The two states call `markLayoutDirty`
+when they change, and `updateHighlight` only writes values and visibility that differ, so an idle list
+does not schedule frames. It is hidden at -1, and with `highlightFollowsCurrent(false)` `updateHighlight`
+and `contentAreaFor` leave it to the caller.
+
+**Keys and `ensureVisible`.** `hasHandlerFor` claims key presses whenever `keyNavigation` is on, unlike the
+flick area, which only does while it can scroll, because a short list in a popup must still move its index.
+`triggerKeyPress` handles Up, Down, Home and End by setting the index and calling `ensureVisible`; other keys
+go to the flick area's pixel scrolling. `ensureVisible(i)` compares the row's span from the table with the
+view: a row above is scrolled to the top edge, a row below to the bottom edge, or to its top if it is taller
+than the view.
+
 **Costs and limits.** A sync costs about the number of live rows, plus O(log n) for each `indexAt`.
 `rebuildOffsets()` is O(count) and runs when a height changes and after each structural model change. Rows keep no state when they leave
 the range. A row needs a natural height (an explicit `height()` or a layouter's content), because a plain
