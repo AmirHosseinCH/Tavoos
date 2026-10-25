@@ -1,6 +1,7 @@
 #include <tavoos/widget/templates/listviewbase.h>
 
 #include <tavoos/builder.h>
+#include <tavoos/events/key.h>
 #include <tavoos/gfx/renderer.h>
 
 #include <spdlog/spdlog.h>
@@ -24,8 +25,11 @@ ListViewBase::ListViewBase(Object* parent) : ScrollAreaBase{parent} {
     flickDirection(FlickDirection::Vertical);
 
     m_count.onChange([this](const int&) {
-        if (built() && !m_model)
-            applyCount();
+        if (!built() || m_model)
+            return;
+        applyCount();
+        if (currentIndex() >= rowCount())
+            setCurrentIndexQuietly(-1);
     });
     m_spacing.onChange([this](const float&) {
         if (!built())
@@ -37,6 +41,10 @@ ListViewBase::ListViewBase(Object* parent) : ScrollAreaBase{parent} {
         if (built())
             refreshRows();
     });
+    m_currentIndex.onChange([this](const int& index) { applyCurrentIndex(index); });
+    m_highlightFollowsCurrent.onChange([this](const bool&) { updateHighlight(false); });
+    m_highlightTop.onChange([this](const float&) { markLayoutDirty(); });
+    m_highlightHeight.onChange([this](const float&) { markLayoutDirty(); });
 }
 
 ListViewBase::~ListViewBase() {
@@ -137,6 +145,12 @@ Widget::Size ListViewBase::computeContentSize() {
 
 Widget::ContentArea ListViewBase::contentAreaFor(const Widget& child) const {
     ContentArea area = ScrollAreaBase::contentAreaFor(child);
+    if (&child == m_highlight && m_highlightFollowsCurrent.get()) {
+        area.y += m_highlightTop.get();
+        area.height = m_highlightHeight.get();
+        return area;
+    }
+
     const int index = rowIndexOf(&child);
     if (index < 0)
         return area;
@@ -149,6 +163,10 @@ Widget::ContentArea ListViewBase::contentAreaFor(const Widget& child) const {
 void ListViewBase::onBuilt() {
     m_heights.assign(static_cast<std::size_t>(rowCount()), 0.0f);
     rebuildOffsets();
+    const int requested = m_currentIndexState.get();
+    const int valid = requested >= 0 && requested < rowCount() ? requested : -1;
+    if (valid != requested)
+        setCurrentIndexQuietly(valid);
     if (m_pendingIndex >= 0)
         scrollToIndex(std::exchange(m_pendingIndex, -1));
     ScrollAreaBase::onBuilt();
@@ -189,6 +207,7 @@ void ListViewBase::syncRows() {
     m_syncing = false;
     m_target = -1;
     updateVisible();
+    updateHighlight(false);
     if (std::exchange(m_reloadPending, false))
         reload();
 }
@@ -313,6 +332,7 @@ void ListViewBase::attachModel(ListModelBase& model) {
     m_model = &model;
     m_modelSubscription = model.onChange([this](const ListChange& change) { modelChanged(change); });
     m_delegate = nullptr;
+    setCurrentIndexQuietly(-1);
     if (built())
         reload();
 }
@@ -338,18 +358,24 @@ void ListViewBase::modelChanged(const ListChange& change) {
         m_model = nullptr;
         m_modelSubscription = 0;
         m_delegate = nullptr;
+        setCurrentIndexQuietly(-1);
         if (built())
             reload();
         return;
     }
-    if (!built())
-        return;
-    if (m_syncing) {
-        m_reloadPending = true;
+    if (change.kind == Kind::Reset) {
+        setCurrentIndexQuietly(-1);
+        if (built())
+            reload();
         return;
     }
-    if (change.kind == Kind::Reset) {
-        reload();
+
+    const bool structural = change.kind == Kind::Inserted || change.kind == Kind::Removed || change.kind == Kind::Moved;
+    const int current = structural ? indexAfterChange(currentIndex(), change) : currentIndex();
+    if (!built() || m_syncing) {
+        setCurrentIndexQuietly(current);
+        if (m_syncing)
+            m_reloadPending = true;
         return;
     }
     if (change.kind == Kind::Changed) {
@@ -399,6 +425,7 @@ void ListViewBase::modelChanged(const ListChange& change) {
 
     rebuildOffsets();
     markLayoutDirty();
+    setCurrentIndexQuietly(current);
     const int total = trackedCount();
     const float y = atTop || total == 0 ? 0.0f : m_tops[static_cast<std::size_t>(std::clamp(anchor, 0, total - 1))] + anchorOffset;
     m_syncing = true;
@@ -494,6 +521,134 @@ void ListViewBase::reindexRows() {
         if (m_rows[k].state)
             m_rows[k].state->setIndex(m_first + static_cast<int>(k));
     }
+}
+
+int ListViewBase::indexAfterChange(int index, const ListChange& change) {
+    using Kind = ListChange::Kind;
+
+    const int end = change.index + change.count;
+    switch (change.kind) {
+    case Kind::Inserted:
+        return index >= change.index ? index + change.count : index;
+    case Kind::Removed:
+        if (index >= end)
+            return index - change.count;
+        return index >= change.index ? -1 : index;
+    case Kind::Moved:
+        if (index == change.index)
+            return change.to;
+        if (change.index < index && change.to >= index)
+            return index - 1;
+        if (change.index > index && change.to <= index)
+            return index + 1;
+        return index;
+    default:
+        return index;
+    }
+}
+
+void ListViewBase::setCurrentIndexQuietly(int index) {
+    m_quietIndexChange = true;
+    m_currentIndex.set(index);
+    m_quietIndexChange = false;
+}
+
+void ListViewBase::applyCurrentIndex(int index) {
+    if (!built()) {
+        m_currentIndexState.setIfChanged(index);
+        return;
+    }
+
+    const int valid = index >= 0 && index < rowCount() ? index : -1;
+    if (valid != index) {
+        m_currentIndex.set(valid);
+        return;
+    }
+    if (m_currentIndexState.get() == valid)
+        return;
+    m_currentIndexState.set(valid);
+    updateHighlight(!m_quietIndexChange);
+}
+
+Widget* ListViewBase::currentItem() const {
+    const int index = currentIndex();
+    return index >= 0 ? rowAt(index) : nullptr;
+}
+
+void ListViewBase::updateHighlight(bool animate) {
+    if (!m_highlight || !m_highlightFollowsCurrent.get() || !built())
+        return;
+
+    const int index = currentIndex();
+    if (index < 0 || index >= trackedCount()) {
+        if (m_highlight->visible())
+            m_highlight->visible(false);
+        return;
+    }
+
+    const float top = m_tops[static_cast<std::size_t>(index)];
+    const float height = heightOf(index);
+    const bool shown = m_highlight->visible();
+    if (!shown)
+        m_highlight->visible(true);
+
+    if (animate && shown) {
+        const float duration = std::max(0.0f, m_highlightMoveDuration.get());
+        m_highlightTop.animateTo(top, duration, Easing::easeOutQuad);
+        m_highlightHeight.animateTo(height, duration, Easing::easeOutQuad);
+        return;
+    }
+    if (shown && (m_highlightTop.isAnimating() || m_highlightHeight.isAnimating()))
+        return;
+    if (m_highlightTop.get() != top)
+        m_highlightTop.animateTo(top, 0.0f);
+    if (m_highlightHeight.get() != height)
+        m_highlightHeight.animateTo(height, 0.0f);
+}
+
+void ListViewBase::ensureVisible(int index) {
+    if (!built() || index < 0 || index >= trackedCount())
+        return;
+
+    const float top = m_tops[static_cast<std::size_t>(index)];
+    const float bottom = top + heightOf(index);
+    const float viewTop = contentY();
+    const float viewHeight = viewportHeight();
+    if (top < viewTop)
+        scrollTo(contentX(), top);
+    else if (bottom > viewTop + viewHeight)
+        scrollTo(contentX(), std::min(top, bottom - viewHeight));
+}
+
+bool ListViewBase::hasHandlerFor(EventType type) {
+    if (type == EventType::KeyPress && keyNavigation())
+        return true;
+    return ScrollAreaBase::hasHandlerFor(type);
+}
+
+void ListViewBase::triggerKeyPress(KeyEvent& event) {
+    const int total = rowCount();
+    const int current = currentIndex();
+    int next = current;
+    switch (event.keyCode()) {
+    case static_cast<int>(Key::Up):   next = current < 0 ? 0 : current - 1; break;
+    case static_cast<int>(Key::Down): next = current < 0 ? 0 : current + 1; break;
+    case static_cast<int>(Key::Home): next = 0; break;
+    case static_cast<int>(Key::End):  next = total - 1; break;
+    default:
+        ScrollAreaBase::triggerKeyPress(event);
+        return;
+    }
+
+    if (total > 0)
+        next = std::clamp(next, 0, total - 1);
+    if (total == 0 || next == current) {
+        event.ignore();
+    } else {
+        m_currentIndex.set(next);
+        ensureVisible(next);
+    }
+    Widget::triggerKeyPress(event);
 }
 
 }
