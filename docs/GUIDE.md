@@ -35,6 +35,7 @@ quick-start example in [README.md](../README.md).
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
    - [`ListViewWidget`](#listviewwidget)
+   - [`ComboBoxWidget`](#comboboxwidget)
    - [`StackViewWidget`](#stackviewwidget)
    - [`SwipeViewWidget`](#swipeviewwidget)
 6. [Theme & styling](#theme--styling)
@@ -571,7 +572,7 @@ Built on `PopupBase`, itself built on `OverlayBase`.
 | `target()` | `PlacementTarget` | `Parent` (default) places it against the anchor, `Window` against the window. |
 | `offset()`, `offsetLeft()` / `offsetTop()` / `offsetRight()` / `offsetBottom()` | `float` | Gap from the anchor, or inset from the window edge, for the side it ends up on. `offset(v)` sets all four. |
 | `x()`, `y()` | `int` | Explicit position from the target's top-left corner. Overrides placement per axis; not clamped. |
-| `closePolicy()` | `ClosePolicy` | Combine `ClickOutside` and `Escape` with `\|`; `None` for neither. Default: both. |
+| `closePolicy()` | `ClosePolicy` | Combine `ClickOutside` or `ClickOutsideParent` with `Escape` using `\|`; `None` for neither. Default: `ClickOutside \| Escape`. |
 | `modal()` | `bool` | Blocks pointer input behind the popup, dims the window, and confines Tab to the popup. Read when it opens. |
 | `enter<T>(args...)`, `exit<T>(args...)` | transition | Animate opening and closing. Default: a short fade in and out. An empty factory means no animation. |
 | `background<W>(body)`, `scrim<W>(body)` | - | Replace the popup's background or the dimming layer with your own widget. |
@@ -599,7 +600,10 @@ TB::Popup([](Tavoos::PopupWidget& dialog) {
 A press outside the popup closes it when `ClickOutside` is set. A normal popup lets that press
 reach the widget behind it; a modal one swallows it. Escape closes it when `Escape` is set. A press
 on the anchor itself counts as outside, so use `open()` in the anchor's click handler instead of
-toggling, or the popup closes on press and reopens on release.
+toggling, or the popup closes on press and reopens on release. To let the anchor toggle, use
+`ClickOutsideParent` instead of `ClickOutside`: a press on the popup's parent, or anything inside it,
+then leaves the popup open for the anchor's own click to close, while a press anywhere else still
+closes it.
 
 A popup fades in and out by default. `enter` and `exit` take a transition type and its constructor
 arguments, like the [stack view's slots](#transitions):
@@ -885,7 +889,8 @@ TB::ListView([](Tavoos::ListViewWidget& list) {
   still scroll by a page.
 - **It follows the model.** With a model attached, the current index moves with its item when items
   are inserted, removed or moved, and becomes -1 when its item is removed, when the model is reset with
-  `assign()`, or when another model is attached. In count mode it becomes -1 when `count` shrinks past it.
+  `assign()`, or when another model is attached after the list is built. In count mode it becomes -1 when
+  `count` shrinks past it.
 - **`currentItem()` can be null.** Rows that scroll out of range are destroyed, so the current row's
   widget exists only while it is near the view. The index stays valid either way.
 - **The highlight sits under the rows.** Give rows a transparent or translucent background, or they
@@ -895,6 +900,62 @@ TB::ListView([](Tavoos::ListViewWidget& list) {
   `highlightFollowsCurrent(false)` the list leaves it alone, and you position and show it yourself.
 - **`ensureVisible(i)`** scrolls a row above the view to the top edge and a row below it to the bottom
   edge, and does nothing for a row that is already fully visible.
+
+### `ComboBoxWidget`
+
+```cpp
+Tavoos::ListModel<std::string> sizes{"Small", "Medium", "Large"};
+Tavoos::State<std::string> picked{"none"};
+
+TB::ComboBox([](Tavoos::ComboBoxWidget& box) {
+    box.width(200).placeholder("Choose a size")
+        .model(sizes).text<std::string>([](const std::string& s) { return s; })
+        .onActivated([](int index) { picked.set(sizes[index]); });
+});
+```
+
+A closed box that shows the chosen item and opens a popup list of a `ListModel`'s items. Built on
+`ComboBoxBase`, which is a `ButtonBase`, so it takes focus, opens on a click, Space or Enter, and has
+hover and press states. The popup is a [`PopupWidget`](#popupwidget) holding a
+[`ListViewWidget`](#listviewwidget), placed below the box, or above it when there is no room, and as wide
+as the box.
+
+| Property or method | Notes |
+|---|---|
+| `model(m)` | The `ListModel` whose items are listed. Call it first. |
+| `text<Item>(fn)` | Turns an item into the text shown in the closed box, and in the default popup rows. `Item` must be the model's item type. |
+| `delegate<Row, Item>(fn)` | Replaces the default text rows with your own, built like a [model-bound ListView row](#binding-to-a-model): `fn(row, item, index)`. Hover and click on the row are handled for you. |
+| `currentIndex()` (and `currentIndexState()`), `currentText()` | The chosen item, -1 when there is none, and its text. Setting it from code does not fire `onActivated`. |
+| `onActivated(fn)` | `std::function<void(int)>`, called when the user picks an item: a click or Enter in the popup, or Up/Down on the closed box. It fires even if the same item is picked again. |
+| `placeholder()` | Text shown while nothing is chosen. |
+| `displayText()` (and `displayTextState()`) | What the closed box shows: the chosen item's text, or the placeholder. |
+| `popupMaxHeight()` | The popup is as tall as its rows up to this many pixels, then scrolls. Default 300. |
+| `openPopup()`, `closePopup()`, `popupOpened()` (and `popupOpenedState()`) | Open or close it from code, and whether it is open. |
+| `indicator<W>(fn)`, `indicatorItem()` | The widget at the right edge, a chevron by default. |
+| `popup<W>(fn)`, `list<W>(fn)`, `popupItem()`, `listItem()` | Replace the popup or the list with your own `PopupBase` or `ListViewBase` type, or reach them. |
+| `backgroundColor()`, `hoverColor()`, `pressedColor()`, `disabledColor()` | `Paint` - the box by state. |
+| `borderColor()`, `borderWidth()`, `radius()` | `Paint` / `float` / `int` |
+| `textColor()`, `placeholderColor()`, `disabledTextColor()`, `font()` | The closed box's text, and the default rows' text color and font. |
+| `indicatorColor()`, `highlightColor()` | `Paint` - the chevron, and the popup's highlight. |
+| `transition()` | `float` - seconds for color changes. |
+
+- **Picking and cancelling.** While the popup is open, moving the pointer over a row or pressing Up and
+  Down moves the highlight, not the choice. A click or Enter picks the highlighted item and closes the
+  popup. Escape, a click outside, or a click on the box itself closes it and keeps the previous choice.
+- **Keys on the closed box.** Up and Down change the choice one step at a time without opening it, and
+  fire `onActivated`.
+- **It follows the model.** The chosen index moves with its item when items are inserted, removed or
+  moved, also while the popup is open, and becomes -1 when its item is removed or the model is reset.
+  A model change never fires `onActivated`. Renaming the chosen item updates the closed box.
+- **Builder order.** `.currentIndex(i)` can come before or after `.model()`; it is checked once the
+  box is built.
+- **Custom rows** get the item and its index as `State`, like a model-bound ListView row; use them
+  rather than reading the model. The row is placed inside a wrapper that handles hover and click, so a
+  click handler of your own on the row stops it from picking.
+- **Without a look.** `ComboBoxBase` has the same behavior and no look of its own. Use it with your own
+  `background()`, `content()` bound to `displayTextState()`, `indicator()`, `popup<W>()` and `list<W>()`.
+- To change the defaults for every combo box, set `Theme::comboBox` with a `ComboBoxStyle`. The popup
+  itself follows `Theme::popup`.
 
 ### `StackViewWidget`
 
@@ -1089,7 +1150,7 @@ half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one
 
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `ComboBoxStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp

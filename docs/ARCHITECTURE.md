@@ -50,6 +50,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
    - [List views](#list-views)
+   - [Combo boxes](#combo-boxes)
    - [Stack views](#stack-views)
    - [Swipe views](#swipe-views)
    - [Theme and style structs](#theme-and-style-structs)
@@ -2459,12 +2460,16 @@ scrim is installed by default, so an overlay never needs one to block input. Bec
 a child of the overlay, a modal overlay is still a single stack entry.
 
 Dismissal is driven from `Window`, using the overlay's `closePolicy` (a bitmask of `None`,
-`ClickOutside`, `Escape`, both set by default):
+`ClickOutside`, `ClickOutsideParent`, `Escape`; `ClickOutside | Escape` by default):
 
 - A press outside the topmost overlay closes it when `ClickOutside` is set. "Outside" means
   the press hit nothing inside the overlay, or only its scrim. A non-modal overlay then lets the
   press continue to whatever is behind it; a modal one swallows it. A press on the *anchor* counts
   as outside, so an anchor that toggles on click should call `open()` rather than flip state.
+- With `ClickOutsideParent` instead, a press outside the overlay closes it only if the widget it hit is
+  not the overlay's parent or inside it. `Window::mouseButtonCallback` walks up from the hit widget
+  looking for the parent. A press on the anchor then reaches the anchor with the overlay still open, so
+  the anchor can toggle it; the combo box relies on this.
 - `Escape` closes the topmost overlay when `Escape` is set, and the key is consumed before the
   focused widget sees it.
 - `modal` is read when the overlay opens. While it is open, hit-testing blocks hover, press, drag,
@@ -2679,6 +2684,8 @@ continues on the next frame. When the estimate changes, thousands of unbuilt row
 height, so `contentY` can move by a large amount while the rows on screen do not move.
 
 **Content size and visible rows.** `computeContentSize()` returns `m_tops[count]` minus the trailing gap,
+which `rebuildOffsets()` also publishes as `rowsHeight()` and `rowsHeightState()` for anything that sizes
+itself to the rows, such as a combo box popup,
 so the scroll limit and the scrollbar come from the inherited flick area code. `updateVisible()` sets the
 first and last visible indices from the same table: the first row whose bottom is below the top of the
 view, and the last row whose top is above the bottom.
@@ -2753,12 +2760,13 @@ list is built the value is kept as given and checked in `onBuilt`, so the order 
 `.count()` in a builder chain does not matter), updates the state, and moves the highlight. Changes the
 list makes itself, from the model or from `count`, go through `setCurrentIndexQuietly`, which moves the
 highlight without animating it: the rows move on screen at the same moment, so an animation would slide
-away and back. For an insert, remove or move, `modelChanged` maps the index with the pure function
-`indexAfterChange(index, change)`: an insert at or before it adds `count`, a removed block entirely before
+away and back. For an insert, remove or move, `modelChanged` maps the index with the pure free function
+`indexAfterChange(index, change)` from `model/listmodel.h`, shared with the [combo box](#combo-boxes): an insert at or before it adds `count`, a removed block entirely before
 it subtracts `count`, a removed block containing it gives -1, and a move carries the moved item to `to` and
 shifts an index that the item crosses or lands on by one, toward where the item came from. The new index is
-applied after the row table is rebuilt, so the highlight lands on the right row. A model reset, a new model,
-model destruction, and a `count` shrinking past the index all set -1.
+applied after the row table is rebuilt, so the highlight lands on the right row. A model reset, a new model
+attached after the list is built, model destruction, and a `count` shrinking past the index all set -1. A
+model attached while the list is still being built keeps the requested index, which `onBuilt` checks.
 
 **Highlight.** `highlight<W>(body)` creates one widget, a child of the list like the rows but not one of
 them, with `Fill::Both` and `z(-1)` so it draws under the rows. `contentAreaFor` places it from two
@@ -2781,6 +2789,52 @@ than the view.
 `rebuildOffsets()` is O(count) and runs when a height changes and after each structural model change. Rows keep no state when they leave
 the range. A row needs a natural height (an explicit `height()` or a layouter's content), because a plain
 widget without one measures 0 and is clamped to 1 pixel.
+
+### Combo boxes
+
+**`ComboBoxBase`** (`templates/comboboxbase.h`) is a `ButtonBase` with three slots and no look:
+`popup<W>()`, constrained with `std::derived_from<W, PopupBase>`, `list<W>()`, constrained to `ListViewBase`
+and placed inside the popup, and `indicator<W>()`. It works only through `PopupBase*` and `ListViewBase*`,
+so like every other base it includes nothing from `widget/controls`. `ComboBoxWidget`
+(`controls/comboboxwidget.h`) fills the slots with a `PopupWidget`, a `ListViewWidget` with a highlight and
+an SVG chevron, installs the background and a label bound to `displayTextState()`, and follows
+`Theme::comboBox`. Installing the popup sets its placement and a `ClickOutsideParent | Escape` close policy
+before the caller's body and its `onClose` after it, so the body cannot replace the handler the combo box
+depends on. Installing the list hooks it up: model, rows, current index and height.
+
+**The chosen index.** `currentIndex` is a `Property<int>` mirrored into `m_currentIndexState`. While the
+popup is closed, the chosen index *is* the list's `currentIndex`: `syncFromList` copies it whenever the list
+changes it, including when the list itself shifts it for a model change, so closed-state tracking reuses
+the list's rules. Opening stores the chosen index in `m_remembered`; from then on the list's `currentIndex`
+is only the highlight, moved by hover and keys, and changes to it are ignored. Model changes while open are
+applied to `m_remembered` with `indexAfterChange`, the same function the list uses, so it stays correct.
+`pick(i)` sets the list's index, closes with `m_picking` set, commits, and calls `onActivated`. Any other
+close (Escape, a press outside, a click on the box) reaches `popupClosed` through `onClose` with
+`m_picking` false and restores the list's index to `m_remembered`. Without a list, the base keeps the chosen
+index itself and maps it through `indexAfterChange`.
+
+**Building.** `onBuilt` applies the requested `currentIndex`, because the list is built inside the
+constructor, before the caller's builder chain: checked there, `.currentIndex(1).model(m)` would be
+rejected against an empty list. `text<Item>()` and `delegate<Row, Item>()` check the model's type with
+`dynamic_cast` and store a row installer, `m_installRows`, which runs now if the list exists and again
+whenever a list is installed, so the order of the calls does not matter.
+
+**Rows.** Each popup row is a `ColumnWidget` wrapper made by the list delegate, holding either a text label
+(`text<Item>()`) or the caller's row (`delegate<Row, Item>()`). The wrapper carries `onMouseEnter`, which
+moves the highlight, and `onClick`, which picks. A widget keeps one function per event and setting one
+replaces it, so putting these on the caller's row would collide with handlers the caller sets; the wrapper
+keeps them apart. Default labels pass through the virtual `styleRowText(TextWidget&)`, empty in the base,
+where the widget applies its text color and font.
+
+**Keys and focus.** While open, the focused list handles Up, Down, Home and End; Enter bubbles from the
+list to the combo box, which picks, and Escape is handled by `Window` before any widget. While closed, the
+combo box handles Up and Down itself and steps the chosen index, and Space and Enter reach `ButtonBase`,
+whose click opens the popup. Focus moves to the list on open and back to the box on close, through the
+overlay focus memory and an explicit `focus()` in `popupClosed`.
+
+**Sizing.** Opening sets the popup's width to the box's and scrolls the chosen row to the top. The list's
+height is `min(rowsHeight(), popupMaxHeight)`, recomputed from `rowsHeightState()`, so it settles as rows
+are measured; rows are estimated until the popup has been shown once.
 
 ### Stack views
 
