@@ -100,6 +100,7 @@ public:
     void closePopup();
 
 protected:
+    virtual void styleRowText(TextWidget&) {}
     void onBuilt() override;
     void handleClick(MouseEvent& event) override;
     void triggerKeyPress(KeyEvent& event) override;
@@ -164,8 +165,9 @@ private:
             m_installRows = [this, fn] {
                 m_list->delegate<ColumnWidget, Item>([this, fn](ColumnWidget& row, State<Item>& item, State<int>& index) {
                     wireRow(row, index);
-                    row.addChild<TextWidget>([&item, &fn](TextWidget& label) {
+                    row.addChild<TextWidget>([this, &item, &fn](TextWidget& label) {
                         label.text(fn(item.get())).marginLeft(10).marginRight(10).marginTop(8).marginBottom(8);
+                        styleRowText(label);
                         item.onChange([&label, fn](const Item& value) { label.text(fn(value)); });
                     });
                 });
