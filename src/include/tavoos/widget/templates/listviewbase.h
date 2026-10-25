@@ -1,5 +1,6 @@
 #pragma once
 
+#include <tavoos/animation/animatedstate.h>
 #include <tavoos/export.hpp>
 #include <tavoos/model/listmodel.h>
 #include <tavoos/reactive/reactive.h>
@@ -51,9 +52,36 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) currentIndex(this auto&& self, PropertyArg<int> index) {
+        index.applyTo(self.m_currentIndex);
+        return std::forward<decltype(self)>(self);
+    }
+
+    template<typename W>
+    decltype(auto) highlight(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
+        self.template installHighlight<W>(std::move(body));
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) highlightMoveDuration(this auto&& self, PropertyArg<float> seconds) {
+        seconds.applyTo(self.m_highlightMoveDuration);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) highlightFollowsCurrent(this auto&& self, PropertyArg<bool> follows) {
+        follows.applyTo(self.m_highlightFollowsCurrent);
+        return std::forward<decltype(self)>(self);
+    }
+
     int count() const { return rowCount(); }
     float spacing() const { return m_spacing; }
     float cacheBuffer() const { return m_cacheBuffer; }
+    int currentIndex() const { return m_currentIndexState.get(); }
+    State<int>& currentIndexState() { return m_currentIndexState; }
+    Widget* currentItem() const;
+    Widget* highlightItem() const { return m_highlight; }
+    float highlightMoveDuration() const { return m_highlightMoveDuration; }
+    bool highlightFollowsCurrent() const { return m_highlightFollowsCurrent; }
 
     int firstVisibleIndex() const { return m_firstVisible.get(); }
     int lastVisibleIndex() const { return m_lastVisible.get(); }
@@ -63,6 +91,7 @@ public:
     Widget* rowAt(int index) const;
     void reload();
     void scrollToIndex(int index);
+    void ensureVisible(int index);
 
 protected:
     void render(Renderer& renderer) override;
@@ -70,6 +99,8 @@ protected:
     Size computeContentSize() override;
     ContentArea contentAreaFor(const Widget& child) const override;
     void onOffsetsSynced(bool offsetsChanged) override;
+    bool hasHandlerFor(EventType type) override;
+    void triggerKeyPress(KeyEvent& event) override;
 
 private:
     struct RowState {
@@ -130,6 +161,23 @@ private:
             reload();
     }
 
+    template<typename W>
+    void installHighlight(std::function<void(W&)> body) {
+        if (m_highlight)
+            removeChild(m_highlight);
+        m_highlight = addChild<W>([&body](W& item) {
+            item.fill(Fill::Both).z(-1).visible(false);
+            if (body)
+                runInBuilderScope(item, [&item, &body] { body(item); });
+        });
+        updateHighlight(false);
+    }
+
+    int indexAfterChange(int index, const ListChange& change);
+    void setCurrentIndexQuietly(int index);
+    void applyCurrentIndex(int index);
+    void updateHighlight(bool animate);
+
     void attachModel(ListModelBase& model);
     void detachModel();
     void reportModelMismatch() const;
@@ -179,6 +227,15 @@ private:
     float m_estimate{40.0f};
     bool m_syncing{false};
     bool m_reloadPending{false};
+
+    Property<int> m_currentIndex{-1};
+    State<int> m_currentIndexState{-1};
+    Property<float> m_highlightMoveDuration{0.15f};
+    Property<bool> m_highlightFollowsCurrent{true};
+    Widget* m_highlight{nullptr};
+    AnimatedState<float> m_highlightTop{0.0f};
+    AnimatedState<float> m_highlightHeight{0.0f};
+    bool m_quietIndexChange{false};
 };
 
 }

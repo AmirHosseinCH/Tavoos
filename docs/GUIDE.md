@@ -761,6 +761,10 @@ are off by default.
 | `reload()` | Destroys every row and measures again. Use it when your data changed in a way `count` doesn't show. |
 | `rowAt(i)` | The live row at an index, or null if that row is not currently built. |
 | `firstVisibleIndex()`, `lastVisibleIndex()` (and `...State()`) | The first and last rows that intersect the view; -1 when there are none. |
+| `currentIndex()` (and `currentIndexState()`), `currentItem()` | The current row, -1 when there is none, and its widget when it is built - see [Current row and highlight](#current-row-and-highlight). |
+| `highlight<W>(fn)`, `highlightItem()` | A widget drawn under the current row, built once by `fn`, and access to it. |
+| `highlightMoveDuration()`, `highlightFollowsCurrent()` | How long the highlight takes to move to a new current row (default 0.15 s, 0 jumps), and whether the list moves it at all (default `true`). |
+| `ensureVisible(i)` | Scrolls just enough to show row `i`. |
 
 - **Rows size themselves.** A row's height is its explicit `height()`, or what a layout inside it
   needs, such as a `Column`. A plain `Rectangle` without a height has none, so give it one. Rows fill
@@ -846,6 +850,51 @@ Out-of-range edits do nothing.
   `fruits.remove(index.get())` from the row's own button, as above, is safe.
 - **The model must outlive the list, or tell it.** When a model is destroyed, the lists bound to it
   detach and become empty.
+
+#### Current row and highlight
+
+A list can have one current row, marked by a highlight drawn underneath it:
+
+```cpp
+TB::ListView([](Tavoos::ListViewWidget& list) {
+    list.fill(Tavoos::Fill::Both).keyNavigation(true).focusable(true)
+        .highlight<Tavoos::RectangleWidget>([](Tavoos::RectangleWidget& h) {
+            h.radius(8).color(Tavoos::Color::rgba(85, 112, 241, 60));
+        })
+        .model(fruits)
+        .delegate<Tavoos::RectangleWidget, std::string>([&list](Tavoos::RectangleWidget& row,
+                                                                Tavoos::State<std::string>& item,
+                                                                Tavoos::State<int>& index) {
+            row.height(36).color(Tavoos::Color::Transparent)
+                .onClick([&list, &index](Tavoos::MouseEvent&) { list.currentIndex(index.get()); });
+            TB::Text([&](Tavoos::TextWidget& label) {
+                label.text(item).alignment(Tavoos::Alignment::Left | Tavoos::Alignment::CenterVertical)
+                    .marginLeft(12);
+            });
+        });
+});
+```
+
+- **`currentIndex()` is -1 until something sets it.** Clicking a row does not set it: the delegate does,
+  as above, so a click can mean something else in another list. Setting it from code, including to a row
+  that is scrolled away, never scrolls the list; call `ensureVisible(i)` for that. Values outside the
+  rows become -1.
+- **Keys move it.** With `keyNavigation(true)` and keyboard focus (`focusable(true)`, then a click or
+  Tab), Up and Down step one row, Home and End go to the first and last row, and the list scrolls just
+  enough to keep the new row in view. From -1, Up and Down go to the first row. PageUp and PageDown
+  still scroll by a page.
+- **It follows the model.** With a model attached, the current index moves with its item when items
+  are inserted, removed or moved, and becomes -1 when its item is removed, when the model is reset with
+  `assign()`, or when another model is attached. In count mode it becomes -1 when `count` shrinks past it.
+- **`currentItem()` can be null.** Rows that scroll out of range are destroyed, so the current row's
+  widget exists only while it is near the view. The index stays valid either way.
+- **The highlight sits under the rows.** Give rows a transparent or translucent background, or they
+  cover it. It takes the current row's position and height, even when that row is not built, so
+  `highlightItem()` is always there once `highlight()` is set. It animates to a new current row over
+  `highlightMoveDuration()` and is hidden while `currentIndex()` is -1. With
+  `highlightFollowsCurrent(false)` the list leaves it alone, and you position and show it yourself.
+- **`ensureVisible(i)`** scrolls a row above the view to the top edge and a row below it to the bottom
+  edge, and does nothing for a row that is already fully visible.
 
 ### `StackViewWidget`
 
