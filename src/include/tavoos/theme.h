@@ -3,6 +3,7 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/controls/style/buttonstyle.h>
 #include <tavoos/widget/controls/style/checkboxstyle.h>
+#include <tavoos/widget/controls/style/comboboxstyle.h>
 #include <tavoos/widget/controls/style/flickareastyle.h>
 #include <tavoos/widget/controls/style/listviewstyle.h>
 #include <tavoos/widget/controls/style/popupstyle.h>
@@ -34,6 +35,7 @@ public:
     State<StackViewStyle> stackView{StackViewStyle{}};
     State<SwipeViewStyle> swipeView{SwipeViewStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
+    State<ComboBoxStyle> comboBox{ComboBoxStyle{}};
 };
 
 }

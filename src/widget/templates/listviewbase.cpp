@@ -115,6 +115,7 @@ void ListViewBase::rebuildOffsets() {
         y += heightOf(i) + gap();
     }
     m_tops[static_cast<std::size_t>(total)] = y;
+    m_rowsHeight.setIfChanged(total > 0 ? y - gap() : 0.0f);
 }
 
 float ListViewBase::measure(Widget& row) {
@@ -332,7 +333,8 @@ void ListViewBase::attachModel(ListModelBase& model) {
     m_model = &model;
     m_modelSubscription = model.onChange([this](const ListChange& change) { modelChanged(change); });
     m_delegate = nullptr;
-    setCurrentIndexQuietly(-1);
+    if (built())
+        setCurrentIndexQuietly(-1);
     if (built())
         reload();
 }
@@ -371,7 +373,7 @@ void ListViewBase::modelChanged(const ListChange& change) {
     }
 
     const bool structural = change.kind == Kind::Inserted || change.kind == Kind::Removed || change.kind == Kind::Moved;
-    const int current = structural ? indexAfterChange(currentIndex(), change) : currentIndex();
+    const int current = structural ? Tavoos::indexAfterChange(currentIndex(), change) : currentIndex();
     if (!built() || m_syncing) {
         setCurrentIndexQuietly(current);
         if (m_syncing)
@@ -520,30 +522,6 @@ void ListViewBase::reindexRows() {
     for (std::size_t k = 0; k < m_rows.size(); ++k) {
         if (m_rows[k].state)
             m_rows[k].state->setIndex(m_first + static_cast<int>(k));
-    }
-}
-
-int ListViewBase::indexAfterChange(int index, const ListChange& change) {
-    using Kind = ListChange::Kind;
-
-    const int end = change.index + change.count;
-    switch (change.kind) {
-    case Kind::Inserted:
-        return index >= change.index ? index + change.count : index;
-    case Kind::Removed:
-        if (index >= end)
-            return index - change.count;
-        return index >= change.index ? -1 : index;
-    case Kind::Moved:
-        if (index == change.index)
-            return change.to;
-        if (change.index < index && change.to >= index)
-            return index - 1;
-        if (change.index > index && change.to <= index)
-            return index + 1;
-        return index;
-    default:
-        return index;
     }
 }
 

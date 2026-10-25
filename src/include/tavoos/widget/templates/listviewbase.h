@@ -83,6 +83,9 @@ public:
     float highlightMoveDuration() const { return m_highlightMoveDuration; }
     bool highlightFollowsCurrent() const { return m_highlightFollowsCurrent; }
 
+    float rowsHeight() const { return m_rowsHeight.get(); }
+    State<float>& rowsHeightState() { return m_rowsHeight; }
+
     int firstVisibleIndex() const { return m_firstVisible.get(); }
     int lastVisibleIndex() const { return m_lastVisible.get(); }
     State<int>& firstVisibleIndexState() { return m_firstVisible; }
@@ -173,7 +176,6 @@ private:
         updateHighlight(false);
     }
 
-    int indexAfterChange(int index, const ListChange& change);
     void setCurrentIndexQuietly(int index);
     void applyCurrentIndex(int index);
     void updateHighlight(bool animate);
@@ -211,6 +213,7 @@ private:
     Property<float> m_spacing{0.0f};
     Property<float> m_cacheBuffer{200.0f};
     State<int> m_firstVisible{-1};
+    State<float> m_rowsHeight{0.0f};
     State<int> m_lastVisible{-1};
 
     std::function<LiveRow(int)> m_delegate;

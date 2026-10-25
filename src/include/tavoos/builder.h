@@ -5,6 +5,7 @@
 #include <tavoos/object.h>
 #include <tavoos/widget/controls/buttonwidget.h>
 #include <tavoos/widget/controls/checkboxwidget.h>
+#include <tavoos/widget/controls/comboboxwidget.h>
 #include <tavoos/widget/controls/flickareawidget.h>
 #include <tavoos/widget/controls/listviewwidget.h>
 #include <tavoos/widget/controls/popupwidget.h>
@@ -62,6 +63,7 @@ public:
     static void FlickArea(std::function<void(FlickAreaWidget&)> body) { create<FlickAreaWidget>(std::move(body)); }
     static void ScrollArea(std::function<void(ScrollAreaWidget&)> body) { create<ScrollAreaWidget>(std::move(body)); }
     static void ListView(std::function<void(ListViewWidget&)> body)   { create<ListViewWidget>(std::move(body)); }
+    static void ComboBox(std::function<void(ComboBoxWidget&)> body)   { create<ComboBoxWidget>(std::move(body)); }
     static void StackView(std::function<void(StackViewWidget&)> body) { create<StackViewWidget>(std::move(body)); }
     static void SwipeView(std::function<void(SwipeViewWidget&)> body) { create<SwipeViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
