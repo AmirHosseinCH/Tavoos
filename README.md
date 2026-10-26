@@ -9,7 +9,7 @@ A C++23/OpenGL 2D UI framework, built around a fluent, declarative widget-builde
 - **Fluent, declarative builder API** - widget trees are built with chained setters (C++23 "deducing this"), not verbose imperative construction.
 - **Reactive properties** - `Property<T>`/`State<T>` bindings that propagate changes automatically.
 - **Layout system** - `Column`, `Row`, `Grid`, and `Flex`.
-- **Controls** - Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField, SpinBox, and ComboBox, each themeable via a shared `Theme` and stylable per-instance.
+- **Controls** - Button, Checkbox, Radio, Switch, ProgressBar, Slider, TextField, SpinBox, ComboBox, and ToolTip, each themeable via a shared `Theme` and stylable per-instance.
 - **Popups, scrolling, and navigation** - `Popup` overlays, `FlickArea`, `ScrollArea` and `ListView` for content larger than its view, and `StackView` and `SwipeView` for moving between pages.
 - **Components** - reusable widget types with declared properties and a `build()` method, usable anywhere a widget is.
 - **Text, images, and SVG** - font loading with weight/family fallback, JPEG/PNG images, and SVG rendering, all through the same widget model.

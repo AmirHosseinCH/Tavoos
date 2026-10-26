@@ -32,6 +32,7 @@ quick-start example in [README.md](../README.md).
    - [`TextFieldWidget`](#textfieldwidget)
    - [`SpinBoxWidget`](#spinboxwidget)
    - [`PopupWidget`](#popupwidget)
+   - [`ToolTipWidget`](#tooltipwidget)
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
    - [`ListViewWidget`](#listviewwidget)
@@ -346,6 +347,9 @@ Button, Checkbox, Radio, and Switch derive `ButtonBase`, which adds:
 | `checked()`, `checkedState()` | `bool` / `State<bool>&` | The toggle state. |
 | `exclusive()` | `bool` | When `true`, a click only checks, never unchecks. |
 | `group(ButtonGroup&)` | - | Joins a mutually exclusive group (see [RadioWidget / ButtonGroup](#radiowidget--buttongroup)). |
+| `toolTip()` | `ToolTipBase&` | The control's tooltip, created on first use; shown on hover. See [ToolTipWidget](#tooltipwidget). |
+| `toolTip<W>(body)` | - | Installs your own tooltip type `W` instead. |
+| `toolTipItem()` | `ToolTipBase*` | The tooltip, or `nullptr` if none has been created. |
 
 All controls also support `focus()`/`focused()`/`focusedState()` (from `Widget` itself - see
 [Keyboard & focus](#keyboard--focus)) and a `style()`/`Theme` pair - see
@@ -621,6 +625,79 @@ Slides travel by the size of the window. While a popup fades out it no longer ta
 and outside presses skip it, a modal popup stops blocking, and presses reach the widgets behind it.
 `onOpen` and `onClose` fire when `open()` and `close()` are called, not when the animation ends.
 Opening a popup that is still closing finishes the exit at once and starts the enter.
+
+### `ToolTipWidget`
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("Save").toolTip().text("Save the file");
+});
+```
+
+Every control built on `ButtonBase` (Button, Checkbox, Radio, Switch, and ComboBox) has a tooltip.
+`toolTip()` creates a themed `ToolTipWidget` the first time it is called and returns the same one
+after that. It shows 0.5 seconds after the pointer rests on the control and hides when the pointer
+leaves. A press hides it until the pointer leaves and comes back.
+
+`toolTip()` returns a `ToolTipBase&`, which reaches the text and timing but not the look. To style
+one tooltip, install it with the typed slot, which also takes any `ToolTipBase` subclass for a
+tooltip with your own content:
+
+```cpp
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("Delete").toolTip<Tavoos::ToolTipWidget>([](Tavoos::ToolTipWidget& t) {
+        t.text("This cannot be undone").backgroundColor(Tavoos::Color::rgba(180, 40, 40));
+    });
+});
+```
+
+Anywhere else, declare a tooltip inside the widget it describes and bind `opened` to the state that
+should show it:
+
+```cpp
+TB::Slider([](Tavoos::SliderWidget& s) {
+    TB::ToolTip([&s](Tavoos::ToolTipWidget& t) {
+        t.text("Drag to adjust").opened(s.pressedState());
+    });
+});
+```
+
+Or show it from code:
+
+```cpp
+Tavoos::ToolTipWidget* notice = nullptr;
+
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("Copy").onClick([](Tavoos::MouseEvent&) { notice->show("Copied", 1.5f); });
+    TB::ToolTip([](Tavoos::ToolTipWidget& t) { notice = &t; });
+});
+```
+
+Built on `ToolTipBase`, itself built on [`PopupBase`](#popupwidget), so placement, offsets and
+transitions work as on a popup.
+
+| Property | Type | Notes |
+|---|---|---|
+| `text()` | `std::string` | |
+| `opened()`, `openedState()` | `bool` / `State<bool>&` | `opened` asks for the tooltip, usually through a binding; `openedState()` is whether it is showing. |
+| `delay()` | `float` | Seconds an open request waits before the tooltip shows; closing before then cancels it. Default 0, or 0.5 on a control's own tooltip. |
+| `timeout()` | `float` | Seconds before a shown tooltip hides itself. Default -1, never. |
+| `show(text, timeout = -1)` | - | Sets the text, and the timeout when it is 0 or more, then shows it after `delay`. |
+| `hide()` | - | Hides it now and cancels a pending show. |
+| `placement()`, `offset()` | `Placement` / `float` | Default `Top`, centered on the anchor, 6 px away. |
+| `backgroundColor()`, `borderColor()`, `textColor()` | `Paint` | |
+| `borderWidth()`, `radius()` | `float` / `int` | |
+| `font()` | `Font` | |
+| `padding()` | `float` | The space around the text (default 6, set by the style). |
+| `enter<T>(args...)`, `exit<T>(args...)` | transition | Default: a short fade in and out. |
+
+`show()` and `hide()` never write `opened`, so a bound tooltip keeps its binding: after `hide()`
+it shows again the next time its binding turns true. Setting `opened` yourself, or calling `open()`
+or `close()`, replaces the binding.
+
+Escape and presses outside do not close a tooltip; its binding, `hide()`, or its timeout do. While
+one is showing it is the topmost popup, so Escape or a press outside does not close a popup beneath
+it until the tooltip hides.
 
 ### `FlickAreaWidget`
 
@@ -1150,7 +1227,7 @@ half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one
 
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `ComboBoxStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `ToolTipStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `ComboBoxStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -1185,13 +1262,14 @@ what you give it.
 
 | Base | Owns | You provide |
 |---|---|---|
-| `ButtonBase` | `pressed`, click and Space/Enter, `checkable`/`checked`/`exclusive`/`group` | `background`, `content` |
+| `ButtonBase` | `pressed`, click and Space/Enter, `checkable`/`checked`/`exclusive`/`group`, the hover tooltip | `background`, `content`; override `createToolTip()` to give `toolTip()` a visible tooltip |
 | `RangeBase` | `value`/`minValue`/`maxValue`, `position` (0-1); the base of the three below | `background`, `content` |
 | `ProgressBarBase` | the range, nothing more | `background`, `content` bound to `positionState()` |
 | `SliderBase` | the range, `pressed`, press/drag/tap handling | `background`, `content`, and a `handle` positioned with `xFraction(positionState())` |
 | `SpinBoxBase` | the range, `step`, `commitText`, `valueText`, `increase`/`decrease` | `background`, `content`, `up`, `down` |
 | `OverlayBase` | open/close, `closePolicy`, `modal`, input blocking, focus, sizing to its children | `background`, optionally `scrim`; children are declared inside it |
 | `PopupBase` | everything in `OverlayBase`, plus `placement`, `target`, offsets, `x`/`y` | `background`, optionally `scrim`; children are declared inside it |
+| `ToolTipBase` | everything in `PopupBase`, plus `text`, `delay`, `timeout`, `show`/`hide` | `background`; children are declared inside it and read the text through the protected `textState()` |
 | `FlickAreaBase` | scrolling: offsets, content size, wheel, drag, keys, clipping | `background` (also the clip shape); children are declared inside it |
 | `ScrollAreaBase` | everything in `FlickAreaBase`, plus bar policy, auto-hide, thumb drag, track click, thumb size and position states | `background`, `verticalTrack`/`verticalThumb`, `horizontalTrack`/`horizontalThumb`; children are declared inside it |
 | `ListViewBase` | everything in `ScrollAreaBase`, plus a row count and delegate, building only the rows in view, measured row heights, `scrollToIndex`, `firstVisibleIndex`/`lastVisibleIndex` | `background`, the bar slots as on a scroll area; rows come from the delegate |
