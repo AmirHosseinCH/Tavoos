@@ -5,6 +5,11 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/templates/buttongroup.h>
 #include <tavoos/widget/templates/control.h>
+#include <tavoos/widget/templates/tooltipbase.h>
+
+#include <concepts>
+#include <functional>
+#include <type_traits>
 
 namespace Tavoos {
 
@@ -38,6 +43,13 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    template<typename W>
+        requires std::derived_from<W, ToolTipBase>
+    decltype(auto) toolTip(this auto&& self, std::type_identity_t<std::function<void(W&)>> body) {
+        self.template installToolTip<W>(std::move(body));
+        return std::forward<decltype(self)>(self);
+    }
+
     bool pressed() const { return m_pressed; }
     bool checkable() const { return m_checkable; }
     bool exclusive() const { return m_exclusive; }
@@ -46,7 +58,11 @@ public:
     State<bool>& pressedState() { return m_pressed; }
     State<bool>& checkedState() { return m_checkedState; }
 
+    ToolTipBase& toolTip();
+    ToolTipBase* toolTipItem() const { return m_toolTip; }
+
 protected:
+    virtual void createToolTip();
     void onSlotReplaced() override;
 
     bool hasHandlerFor(EventType type) override;
@@ -60,6 +76,20 @@ protected:
     void triggerFocusOut(Event& event) override;
 
 private:
+    template<typename W>
+    void installToolTip(std::function<void(W&)> body) {
+        if (m_toolTip) {
+            removeChild(m_toolTip);
+            m_toolTip = nullptr;
+        }
+        m_toolTip = addChild<W>([this, &body](W& slot) {
+            slot.delay(0.5f).opened(hoveredState());
+            if (body)
+                runInBuilderScope(slot, [&slot, &body] { body(slot); });
+        });
+    }
+
+    static void runInBuilderScope(Widget& slot, const std::function<void()>& call);
     void sendClick(float x, float y, KeyModifier modifiers);
     void sendClickFromKeyboard(KeyModifier modifiers);
 
@@ -70,6 +100,7 @@ private:
     Property<bool> m_checked{false};
     State<bool> m_checkedState{false};
     bool m_spaceDown{false};
+    ToolTipBase* m_toolTip{nullptr};
 };
 
 }

@@ -83,6 +83,9 @@ public:
 
     void place() override;
 
+protected:
+    void setCenteredOnAnchor(bool centered) { m_centeredOnAnchor = centered; }
+
 private:
     Property<Placement> m_placement{Placement::Bottom};
     Property<PlacementTarget> m_target{PlacementTarget::Parent};
@@ -91,6 +94,7 @@ private:
     Property<int> m_requestedY{0};
     bool m_hasRequestedX{false};
     bool m_hasRequestedY{false};
+    bool m_centeredOnAnchor{false};
 };
 
 }

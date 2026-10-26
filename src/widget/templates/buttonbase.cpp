@@ -1,5 +1,7 @@
 #include <tavoos/widget/templates/buttonbase.h>
 
+#include <tavoos/builder.h>
+
 namespace Tavoos {
 
 ButtonBase::ButtonBase(Object* parent) : Control{parent} {
@@ -11,6 +13,21 @@ ButtonBase::ButtonBase(Object* parent) : Control{parent} {
 ButtonBase::~ButtonBase() {
     if (m_group)
         m_group->remove(this);
+}
+
+ToolTipBase& ButtonBase::toolTip() {
+    if (!m_toolTip)
+        createToolTip();
+    return *m_toolTip;
+}
+
+void ButtonBase::createToolTip() {
+    installToolTip<ToolTipBase>({});
+}
+
+void ButtonBase::runInBuilderScope(Widget& slot, const std::function<void()>& call) {
+    Builder::Scope scope{&slot};
+    call();
 }
 
 void ButtonBase::onSlotReplaced() {
@@ -56,6 +73,8 @@ void ButtonBase::triggerMouseLeave(MouseEvent& event) {
 }
 
 void ButtonBase::triggerPress(MouseEvent& event) {
+    if (m_toolTip)
+        m_toolTip->hide();
     if (!enabled())
         return;
 

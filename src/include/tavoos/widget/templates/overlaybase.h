@@ -99,6 +99,7 @@ public:
     bool isOverlay() const override { return true; }
 
 protected:
+    virtual void applyOpened(bool opened);
     bool hasHandlerFor(EventType type) override;
     Size computeIntrinsicSize() override;
     ContentArea contentAreaFor(const Widget& child) const override;
@@ -120,7 +121,6 @@ private:
         m_scrim->visible(m_modalActive);
     }
 
-    void applyOpened(bool opened);
     void runTransition(TransitionFactory factory, std::function<void()> onFinished);
     void finishHiding();
 

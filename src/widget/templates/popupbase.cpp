@@ -74,11 +74,15 @@ void PopupBase::place() {
         if (space(side) < needed && space(opposite(side)) > space(side))
             side = opposite(side);
 
+        if (!m_centeredOnAnchor) {
+            x = ref.left;
+            y = ref.top;
+        }
         switch (side) {
-        case Placement::Bottom: x = ref.left; y = ref.bottom + m_offset.bottom(); break;
-        case Placement::Top:    x = ref.left; y = ref.top - m_offset.top() - size.height; break;
-        case Placement::Left:   x = ref.left - m_offset.left() - size.width; y = ref.top; break;
-        default:                x = ref.right + m_offset.right(); y = ref.top; break;
+        case Placement::Bottom: y = ref.bottom + m_offset.bottom(); break;
+        case Placement::Top:    y = ref.top - m_offset.top() - size.height; break;
+        case Placement::Left:   x = ref.left - m_offset.left() - size.width; break;
+        default:                x = ref.right + m_offset.right(); break;
         }
     }
 
