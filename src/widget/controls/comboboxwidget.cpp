@@ -3,6 +3,7 @@
 #include <tavoos/application.h>
 #include <tavoos/widget/controls/listviewwidget.h>
 #include <tavoos/widget/controls/popupwidget.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 #include <tavoos/widget/svg.h>
 
 #include <string>
@@ -113,6 +114,10 @@ void ComboBoxWidget::applyStyle(const ComboBoxStyle& value) {
     indicatorColor(value.indicatorColor);
     highlightColor(value.highlightColor);
     transition(value.transition);
+}
+
+void ComboBoxWidget::createToolTip() {
+    toolTip<ToolTipWidget>({});
 }
 
 }

@@ -1,6 +1,7 @@
 #include <tavoos/widget/controls/buttonwidget.h>
 
 #include <tavoos/application.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 #include <tavoos/widget/row.h>
 #include <tavoos/widget/svg.h>
 #include <tavoos/widget/text.h>
@@ -154,6 +155,10 @@ void ButtonWidget::updateBorderColor(bool animate) {
 void ButtonWidget::updateTextColor(bool animate) {
     const Paint& target = enabled() ? m_textColor.get() : m_disabledTextColor.get();
     m_textColorOut.animateTo(target, (animate && m_settled) ? m_transition.get() : 0.0f);
+}
+
+void ButtonWidget::createToolTip() {
+    toolTip<ToolTipWidget>({});
 }
 
 }

@@ -1,6 +1,7 @@
 #include <tavoos/widget/controls/checkboxwidget.h>
 
 #include <tavoos/application.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 #include <tavoos/widget/svg.h>
 
 #include <algorithm>
@@ -99,6 +100,10 @@ void CheckboxWidget::updateGeometry() {
     const int size = static_cast<int>(std::lround(std::min(resolvedWidth(), resolvedHeight())));
     m_contentRadius.set(std::max(0, m_radius.get() - kContentMargin));
     m_iconSize.set(std::max(4, static_cast<int>((size - 2 * kContentMargin) * 0.7f)));
+}
+
+void CheckboxWidget::createToolTip() {
+    toolTip<ToolTipWidget>({});
 }
 
 }

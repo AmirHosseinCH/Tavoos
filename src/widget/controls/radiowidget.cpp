@@ -1,6 +1,7 @@
 #include <tavoos/widget/controls/radiowidget.h>
 
 #include <tavoos/application.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,10 @@ void RadioWidget::applyStyle(const RadioStyle& value) {
     if (value.radius >= 0)
         radius(value.radius);
     transition(value.transition);
+}
+
+void RadioWidget::createToolTip() {
+    toolTip<ToolTipWidget>({});
 }
 
 }

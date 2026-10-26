@@ -16,6 +16,7 @@
 #include <tavoos/widget/controls/style/swipeviewstyle.h>
 #include <tavoos/widget/controls/style/switchstyle.h>
 #include <tavoos/widget/controls/style/textfieldstyle.h>
+#include <tavoos/widget/controls/style/tooltipstyle.h>
 
 namespace Tavoos {
 
@@ -36,6 +37,7 @@ public:
     State<SwipeViewStyle> swipeView{SwipeViewStyle{}};
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
     State<ComboBoxStyle> comboBox{ComboBoxStyle{}};
+    State<ToolTipStyle> toolTip{ToolTipStyle{}};
 };
 
 }

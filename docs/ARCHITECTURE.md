@@ -52,6 +52,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Scroll areas](#scroll-areas)
    - [List views](#list-views)
    - [Combo boxes](#combo-boxes)
+   - [Tooltips](#tooltips)
    - [Stack views](#stack-views)
    - [Swipe views](#swipe-views)
    - [Theme and style structs](#theme-and-style-structs)
@@ -2545,7 +2546,8 @@ flip the *new* side's offset applies. Results are clamped into the window. `x()`
 explicit coordinates measured from the target's top-left corner; they override placement per
 axis and are not clamped. Whichever of `x`, `y`, and `placement` was set last wins, tracked by
 the properties' change notifications rather than call order, so a bound value that changes later
-counts as the latest.
+counts as the latest. A subclass can call the protected `setCenteredOnAnchor(true)` to center on
+the cross axis against the parent instead of start-aligning; tooltips do.
 
 **`PopupWidget`** (`controls/popupwidget.h`) is the concrete popup. It installs a rectangle
 `background` and a rectangle `scrim`, both bound to `PopupStyle` (`backgroundColor`, `borderColor`,
@@ -2876,6 +2878,42 @@ overlay focus memory and an explicit `focus()` in `popupClosed`.
 **Sizing.** Opening sets the popup's width to the box's and scrolls the chosen row to the top. The list's
 height is `min(rowsHeight(), popupMaxHeight)`, recomputed from `rowsHeightState()`, so it settles as rows
 are measured; rows are estimated until the popup has been shown once.
+
+### Tooltips
+
+**`ToolTipBase`** (`templates/tooltipbase.h`) is a `PopupBase` with no look, placed above its parent,
+centered, 6 px away, with close policy `None`. It splits the overlay's open state in two: `opened` is the
+*request*, usually bound to a state such as `hoveredState()` or `pressedState()`, and `openedState()` is
+whether the tooltip is *showing*. It overrides `OverlayBase::applyOpened`, which is virtual for this: a
+request to open waits `delay` seconds, counted in an `AnimatableBase` tick, and a request to close cancels a
+pending open and hides it. An open request while it is already showing skips the delay. Once shown,
+`timeout` hides it after that many seconds.
+
+**Why `show()` and `hide()` leave `opened` alone.** `Property::set` removes a binding, so writing `opened`
+from inside the tooltip would cut it loose from the state it follows. `hide()`, which the timeout also uses,
+hides now and cancels a pending open; `show(text, timeout)` sets the text and the timeout and takes the same
+delayed path as an open request. Neither touches `opened`, so a bound tooltip shows again on the next
+false-to-true change of its binding. The close policy is `None` for the same reason: the window's Escape and
+outside-press handling call `close()`. The text is a `BindableState<std::string>`; the public API is
+`text(...)` and `text()`, and subclasses bind to it through the protected `textState()`.
+
+**`ToolTipWidget`** (`controls/tooltipwidget.h`) installs a rectangle background and a `TextWidget` bound to
+`textState()`, styled from `ToolTipStyle` through `Theme::toolTip`.
+
+**The control shortcut.** `ButtonBase` owns one tooltip. `toolTip()` returns it, calling the protected
+virtual `createToolTip()` first when there is none, and `toolTip<W>(body)` replaces it with a `W`
+constrained to `ToolTipBase`. Installing sets `delay(0.5)` and `opened(hoveredState())` before the caller's
+body, so the body can change either. `triggerPress` calls `hide()`; `opened` stays true while the pointer is
+over the control, so the tooltip stays hidden until the pointer leaves and comes back. Bases include
+nothing from `widget/controls`, so `ButtonBase::createToolTip()` installs a plain `ToolTipBase`, which draws
+nothing, and the Button, Checkbox, Radio, Switch and ComboBox widgets override it to install a
+`ToolTipWidget`. Because `toolTip()` returns `ToolTipBase&`, styling one tooltip goes through
+`toolTip<ToolTipWidget>(body)`.
+
+**Other overlays.** A showing tooltip is an ordinary entry on the overlay stack. With close policy `None`,
+while it is the topmost overlay, Escape and outside presses close nothing, so a popup beneath it stays open
+until the tooltip hides. A hover tooltip usually hides first, because the pointer leaves its control before
+pressing elsewhere.
 
 ### Stack views
 

@@ -72,6 +72,7 @@ public:
     }
 
 protected:
+    void createToolTip() override;
     void render(Renderer& renderer) override;
     void onResolvedSizeChanged() override;
 
