@@ -18,6 +18,7 @@
 #include <tavoos/widget/controls/spinboxwidget.h>
 #include <tavoos/widget/controls/switchwidget.h>
 #include <tavoos/widget/controls/textfieldwidget.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 #include <tavoos/widget/widgets.h>
 #include <tavoos/window.h>
 
@@ -67,6 +68,7 @@ public:
     static void StackView(std::function<void(StackViewWidget&)> body) { create<StackViewWidget>(std::move(body)); }
     static void SwipeView(std::function<void(SwipeViewWidget&)> body) { create<SwipeViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
+    static void ToolTip(std::function<void(ToolTipWidget&)> body)     { create<ToolTipWidget>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
 

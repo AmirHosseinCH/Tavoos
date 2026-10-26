@@ -151,6 +151,7 @@ public:
     State<Paint>& colorState() { return m_color; }
 
 protected:
+    void createToolTip() override;
     void render(Renderer& renderer) override;
 
 private:

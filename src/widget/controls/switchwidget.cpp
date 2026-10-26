@@ -1,6 +1,7 @@
 #include <tavoos/widget/controls/switchwidget.h>
 
 #include <tavoos/application.h>
+#include <tavoos/widget/controls/tooltipwidget.h>
 
 #include <algorithm>
 #include <cmath>
@@ -101,6 +102,10 @@ void SwitchWidget::applyStyle(const SwitchStyle& value) {
     checkedThumbColor(value.checkedThumbColor);
     disabledThumbColor(value.disabledThumbColor);
     transition(value.transition);
+}
+
+void SwitchWidget::createToolTip() {
+    toolTip<ToolTipWidget>({});
 }
 
 }
