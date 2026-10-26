@@ -38,6 +38,7 @@ document is where the "why" behind non-obvious code lives instead.
 8. [Event system](#event-system)
    - [Bubbling](#bubbling)
    - [Hit-testing](#hit-testing)
+   - [Hover](#hover)
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
    - [Focus memory](#focus-memory)
@@ -286,7 +287,7 @@ downstream ends up holding a pointer into freed memory mid-call.
 
 `Window::clearReferencesTo` is the other half of making this safe - it walks the removed
 subtree's *potential observers* (not the subtree itself) and nulls any of `Window`'s own
-cached pointers that point into it:
+cached pointers that point into it and erases them from the hovered chain (see [Hover](#hover)):
 
 ```cpp
 void Window::clearReferencesTo(Widget* subtreeRoot) {
@@ -299,7 +300,7 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
         return false;
     };
 
-    if (isOrDescendantOf(m_hoveredWidget))   m_hoveredWidget = nullptr;
+    std::erase_if(m_hoveredChain, isOrDescendantOf);
     if (isOrDescendantOf(m_pressedWidget))   m_pressedWidget = nullptr;
     if (isOrDescendantOf(m_lastClickWidget)) m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))   setFocusedWidget(nullptr);
@@ -1998,6 +1999,45 @@ A widget with `clip(true)` returns a miss for points outside its own rectangle w
 its children. Children that are clipped out of view therefore cannot catch input meant for
 whatever is visible at that spot, which matters for scrolled content.
 
+### Hover
+
+Hover is a state shared by every widget that contains the pointer, not an event that one widget
+consumes. `Window` keeps the hovered widgets in `m_hoveredChain` and rebuilds it on every cursor
+move from the hit-test result:
+
+```cpp
+std::vector<Widget*> Window::hoverChainAt(Widget* hit, const Point& windowPoint) {
+    std::vector<Widget*> chain;
+    for (Widget* widget = hit; widget; widget = widget->isOverlay() ? nullptr : dynamic_cast<Widget*>(widget->parent())) {
+        if (widget->hitTest(windowPoint.x, windowPoint.y))
+            chain.push_back(widget);
+    }
+    return chain;
+}
+```
+
+The chain is the hit widget and its ancestors, with two rules:
+
+- A widget is in the chain only while the pointer is inside its own rectangle, so a child that
+  extends outside its parent hovers the child, not the parent.
+- An overlay is a hover root: the walk stops after it, so the pointer over a popup does not hover
+  the widget the popup belongs to.
+
+A widget covered by another one is not hovered, since hit-testing returns the covering widget
+and the chain follows that widget's ancestors.
+
+`updateHover` compares the new chain with the previous one. Widgets that dropped out get
+`MouseLeave`, innermost first, and widgets that joined get `MouseEnter`, outermost first. Each
+event is delivered straight to its widget, with the position mapped into that widget's space,
+when `hasHandlerFor` claims the type. Nothing bubbles and accepting an event stops nothing, so
+nested widgets each get their own enter and leave. Moving between a widget's children keeps it in
+both chains, so it gets no events. `Control` keeps `hovered()` in step from these two events.
+
+The chain is rebuilt only when the cursor moves: a widget that moves or hides under a still
+pointer keeps its hover state until the next move. Removed widgets are erased from it by
+`clearReferencesTo`, and `updateHover` skips an enter for any widget no longer in the chain, so a
+widget removed by an outer widget's enter handler gets no enter of its own.
+
 ### Press / release / click / double-click
 
 ```cpp
@@ -2354,8 +2394,9 @@ This matters because the widget that's actually *hit* (deepest match) is often n
 that ends up *handling* the event (the nearest ancestor with a handler, per
 [Bubbling](#bubbling)) - recomputing per-step means a handler always sees coordinates
 relative to itself, never relative to whatever leaf happened to be hit. `dispatchMouseBubble`
-is used for every positional mouse event (press/release/click/double-click/enter/leave/move);
-the generic `dispatchBubble` (no position) still handles Wheel/KeyPress/KeyRelease/TextInput.
+is used for the positional mouse events press/release/click/double-click/move; enter and leave
+do not bubble (see [Hover](#hover)). The generic `dispatchBubble` (no position) still handles
+Wheel/KeyPress/KeyRelease/TextInput.
 
 ### Dragging
 

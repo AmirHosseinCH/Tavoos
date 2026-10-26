@@ -114,9 +114,11 @@ private:
     static Widget* dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&));
 
     static Widget* hitTestChildren(Window* self, double x, double y);
+    static std::vector<Widget*> hoverChainAt(Widget* hit, const Point& windowPoint);
+    void updateHover(Widget* hit, const Point& windowPoint);
     static void collectFocusable(Object* root, std::vector<Widget*>& out);
     void focusNext(bool reverse);
-    Widget* m_hoveredWidget{nullptr};
+    std::vector<Widget*> m_hoveredChain;
     Widget* m_pressedWidget{nullptr};
     Widget* m_focusedWidget{nullptr};
     std::vector<OverlayBase*> m_overlays;
