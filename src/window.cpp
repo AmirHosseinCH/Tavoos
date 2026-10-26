@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -43,8 +44,7 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
         return false;
     };
 
-    if (isOrDescendantOf(m_hoveredWidget))
-        m_hoveredWidget = nullptr;
+    std::erase_if(m_hoveredChain, isOrDescendantOf);
     if (isOrDescendantOf(m_pressedWidget))
         m_pressedWidget = nullptr;
     if (isOrDescendantOf(m_lastClickWidget))
@@ -252,6 +252,36 @@ Widget* Window::hitTestChildren(Window* self, double x, double y) {
     return nullptr;
 }
 
+std::vector<Widget*> Window::hoverChainAt(Widget* hit, const Point& windowPoint) {
+    std::vector<Widget*> chain;
+    for (Widget* widget = hit; widget; widget = widget->isOverlay() ? nullptr : dynamic_cast<Widget*>(widget->parent())) {
+        if (widget->hitTest(windowPoint.x, windowPoint.y))
+            chain.push_back(widget);
+    }
+    return chain;
+}
+
+void Window::updateHover(Widget* hit, const Point& windowPoint) {
+    const std::vector<Widget*> chain = hoverChainAt(hit, windowPoint);
+    const std::vector<Widget*> previous = std::exchange(m_hoveredChain, chain);
+
+    for (Widget* widget : previous) {
+        if (std::ranges::contains(chain, widget) || !widget->hasHandlerFor(EventType::MouseLeave))
+            continue;
+        MouseEvent leaveEvent{EventType::MouseLeave, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
+        leaveEvent.setPosition(widget->mapFromWindow(windowPoint));
+        widget->triggerMouseLeave(leaveEvent);
+    }
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+        Widget* const widget = *it;
+        if (std::ranges::contains(previous, widget) || !std::ranges::contains(m_hoveredChain, widget) || !widget->hasHandlerFor(EventType::MouseEnter))
+            continue;
+        MouseEvent enterEvent{EventType::MouseEnter, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
+        enterEvent.setPosition(widget->mapFromWindow(windowPoint));
+        widget->triggerMouseEnter(enterEvent);
+    }
+}
+
 static KeyModifier toKeyModifier(int mods) {
     KeyModifier km = KeyModifier::None;
     if (mods & GLFW_MOD_SHIFT)   km |= KeyModifier::Shift;
@@ -419,17 +449,7 @@ void Window::cursorPosCallback(GLFWwindow* window, double x, double y) {
     Widget* const hit = hitTestChildren(self, x, y);
     const Point windowPoint{static_cast<float>(x), static_cast<float>(y)};
 
-    if (hit != self->m_hoveredWidget) {
-        if (self->m_hoveredWidget) {
-            MouseEvent leaveEvent{EventType::MouseLeave, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
-            dispatchMouseBubble(self->m_hoveredWidget, leaveEvent, windowPoint, &Widget::triggerMouseLeave);
-        }
-        if (hit) {
-            MouseEvent enterEvent{EventType::MouseEnter, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
-            dispatchMouseBubble(hit, enterEvent, windowPoint, &Widget::triggerMouseEnter);
-        }
-        self->m_hoveredWidget = hit;
-    }
+    self->updateHover(hit, windowPoint);
 
     if (hit) {
         MouseEvent moveEvent{EventType::MouseMove, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};
