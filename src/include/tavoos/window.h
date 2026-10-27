@@ -116,6 +116,7 @@ private:
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
     static void keyCallback(GLFWwindow* window, int key, int /*scancode*/, int action, int mods);
     static void charCallback(GLFWwindow* window, unsigned int codepoint);
+    static void dropCallback(GLFWwindow* window, int count, const char** paths);
     template<typename EventT>
     static Widget* dispatchBubble(Widget* start, EventT& event, void (Widget::*trigger)(EventT&));
     static Widget* dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&));

@@ -180,6 +180,7 @@ void Window::setup() {
     glfwSetScrollCallback(m_window, &Window::scrollCallback);
     glfwSetKeyCallback(m_window, &Window::keyCallback);
     glfwSetCharCallback(m_window, &Window::charCallback);
+    glfwSetDropCallback(m_window, &Window::dropCallback);
 
     glfwGetFramebufferSize(m_window, &m_framebufferWidth, &m_framebufferHeight);
     m_windowActive = glfwGetWindowAttrib(m_window, GLFW_FOCUSED) == GLFW_TRUE;
@@ -695,6 +696,27 @@ void Window::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) 
     if (hit) {
         WheelEvent event{static_cast<float>(xoffset), static_cast<float>(yoffset)};
         dispatchBubble(hit, event, &Widget::triggerWheel);
+    }
+}
+
+void Window::dropCallback(GLFWwindow* window, int count, const char** paths) {
+    auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+    double mx, my;
+    glfwGetCursorPos(window, &mx, &my);
+    const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
+
+    const std::vector<std::string> keys{"text/uri-list"};
+    for (Widget* const widget : hoverChainAt(hitTestChildren(self, mx, my), windowPoint)) {
+        auto* const area = dynamic_cast<DropAreaWidget*>(widget);
+        if (!area || !area->acceptsKeys(keys))
+            continue;
+        if (area->m_onDropped) {
+            DropEvent event{EventType::Drop, nullptr, keys, {}, std::vector<std::string>(paths, paths + count)};
+            event.setPosition(area->mapFromWindow(windowPoint));
+            area->m_onDropped(event);
+        }
+        return;
     }
 }
 
