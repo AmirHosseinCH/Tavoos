@@ -34,12 +34,12 @@ bool Window::consumeDirty() {
     return false;
 }
 
-void Window::clearReferencesTo(Widget* subtreeRoot) {
-    auto isOrDescendantOf = [subtreeRoot](Widget* w) {
-        while (w) {
-            if (w == subtreeRoot)
+void Window::clearReferencesTo(Object* subtreeRoot) {
+    auto isOrDescendantOf = [subtreeRoot](const Object* object) {
+        while (object) {
+            if (object == subtreeRoot)
                 return true;
-            w = dynamic_cast<Widget*>(w->parent());
+            object = object->parent();
         }
         return false;
     };

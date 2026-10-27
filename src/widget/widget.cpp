@@ -148,7 +148,7 @@ void Widget::requestRepaint() {
         m_ownerWindow->markDirty();
 }
 
-void Widget::detachAndDefer(Widget* child) {
+void Widget::detachAndDefer(Object* child) {
     Object* const parentObj = child->parent();
     if (!parentObj)
         return;
@@ -157,10 +157,10 @@ void Widget::detachAndDefer(Widget* child) {
     if (!detached)
         return;
 
-    if (child->m_ownerWindow) {
-        child->m_ownerWindow->clearReferencesTo(child);
-        child->m_ownerWindow->markDirty();
-        child->m_ownerWindow->deferDestruction(std::move(detached));
+    if (m_ownerWindow) {
+        m_ownerWindow->clearReferencesTo(child);
+        m_ownerWindow->markDirty();
+        m_ownerWindow->deferDestruction(std::move(detached));
     }
 
     if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->isLayouter())
@@ -225,7 +225,7 @@ void Widget::clearEffects() {
     requestRepaint();
 }
 
-void Widget::removeChild(Widget* child) {
+void Widget::removeChild(Object* child) {
     if (child->parent() != this)
         return;
     detachAndDefer(child);

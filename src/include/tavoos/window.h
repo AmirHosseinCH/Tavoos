@@ -81,7 +81,7 @@ protected:
     virtual void build() = 0;
 
 private:
-    void clearReferencesTo(Widget* subtreeRoot);
+    void clearReferencesTo(Object* subtreeRoot);
     void deferDestruction(std::unique_ptr<Object> widget);
 
     GLFWwindow* m_window{nullptr};
