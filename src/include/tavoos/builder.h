@@ -22,6 +22,7 @@
 #include <tavoos/widget/widgets.h>
 #include <tavoos/window.h>
 
+#include <concepts>
 #include <functional>
 
 namespace Tavoos {
@@ -73,7 +74,7 @@ public:
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
 
     template<typename T>
-        requires std::derived_from<T, Widget>
+        requires std::derived_from<T, Object>
     static void Create(std::function<void(T&)> body) { create<T>(std::move(body)); }
 
     class Scope {
@@ -94,15 +95,20 @@ private:
     template<typename T>
     static void create(std::function<void(T&)> body) {
         const auto parentObject = currentItem;
-        std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
-        T* const raw = static_cast<T*>(widget.get());
-        currentItem = widget.get();
-        if constexpr (std::is_base_of_v<ComponentBase, T>)
-            static_cast<ComponentBase&>(*raw).runBuild();
-        body(*raw);
-        parentObject->appendChild(widget);
-        raw->finishBuild();
-        currentItem = parentObject;
+        std::unique_ptr<Object> object = std::make_unique<T>(parentObject);
+        T* const raw = static_cast<T*>(object.get());
+        if constexpr (std::derived_from<T, Widget>) {
+            currentItem = object.get();
+            if constexpr (std::is_base_of_v<ComponentBase, T>)
+                static_cast<ComponentBase&>(*raw).runBuild();
+            body(*raw);
+            parentObject->appendChild(object);
+            raw->finishBuild();
+            currentItem = parentObject;
+        } else {
+            body(*raw);
+            parentObject->appendChild(object);
+        }
     }
 };
 

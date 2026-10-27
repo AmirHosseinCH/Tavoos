@@ -497,7 +497,7 @@ public:
 
     template<typename T>
     T* addChild(std::function<void(T&)> body = {}) {
-        static_assert(std::is_base_of_v<Widget, T>, "addChild<T>() requires T to derive from Widget");
+        static_assert(std::is_base_of_v<Object, T>, "addChild<T>() requires T to derive from Object");
         auto child = std::make_unique<T>(this);
         T* raw = child.get();
         if constexpr (std::is_base_of_v<ComponentBase, T>)
@@ -506,8 +506,10 @@ public:
             body(*raw);
         std::unique_ptr<Object> asObject = std::move(child);
         appendChild(asObject);
-        raw->finishBuild();
-        raw->requestRelayout();
+        if constexpr (std::is_base_of_v<Widget, T>) {
+            raw->finishBuild();
+            raw->requestRelayout();
+        }
         return raw;
     }
 
@@ -541,7 +543,7 @@ public:
     const std::vector<std::unique_ptr<GraphicalEffect>>& effects() const noexcept { return m_effects; }
 
     void removeSelf();
-    void removeChild(Widget* child);
+    void removeChild(Object* child);
 
 protected:
     void updateWorldMatrix();
@@ -610,7 +612,7 @@ protected:
     void notifyResolvedSizeIfChanged();
     void requestRepaint();
     void renderInnerEffects(Renderer& renderer);
-    void detachAndDefer(Widget* child);
+    void detachAndDefer(Object* child);
     template<typename... Props>
     void bindRepaintTriggers(Props&... props) {
         auto repaint = [this](const auto&) { requestRepaint(); };
