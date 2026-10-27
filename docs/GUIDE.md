@@ -53,6 +53,7 @@ quick-start example in [README.md](../README.md).
 12. [Animation](#animation)
 13. [Resource embedding](#resource-embedding)
 14. [Keyboard & focus](#keyboard--focus)
+   - [Keyboard shortcuts](#keyboard-shortcuts)
 
 ## Core concepts
 
@@ -160,7 +161,7 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 
 Plus, on every widget:
 
-- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window. `onMouseEnter`/`onMouseLeave` fire once as the pointer enters and leaves the widget: moving over its children keeps it hovered, a child that sticks out of the widget's rectangle hovers only the child, and nested widgets each get their own enter and leave.
+- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput`, `onShortcutOverride` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window. `onMouseEnter`/`onMouseLeave` fire once as the pointer enters and leaves the widget: moving over its children keeps it hovered, a child that sticks out of the widget's rectangle hovers only the child, and nested widgets each get their own enter and leave.
 - **`focus()`** - programmatically focuses this widget.
 - **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects). Controls and layouts don't take shadows; put them on a slot or a wrapping rectangle instead.
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
@@ -2123,3 +2124,65 @@ A swipe view changes page with the arrow keys that match its orientation. As wit
 not need to be focused: a key ignored by the focused widget inside it (a button, for example) bubbles
 up to it. Changing page moves focus into the new page and back again when you return, and the pages
 that are out of view are never Tab targets.
+
+### Keyboard shortcuts
+
+```cpp
+void saveDocument();
+
+TB::Shortcut([](Tavoos::Shortcut& s) {
+    s.sequence("Ctrl+S").onActivated(saveDocument);
+});
+```
+
+A `Shortcut` runs `onActivated` when its key sequence is pressed, whichever widget has focus, and also
+with nothing focused. It is not a widget: it draws nothing and takes no space, so declare it anywhere,
+usually next to what it acts on. Its `context` decides where it applies: `ShortcutContext::Window`, the
+default, while its window has focus, or `ShortcutContext::Application` from any of the app's windows. A
+shortcut applies only while it is enabled and every widget above it is visible, so the shortcuts of a
+hidden page are off.
+
+A sequence is a key with its modifiers, written as text or as a `KeySequence`:
+
+```cpp
+s.sequence("Ctrl+Shift+Z");
+s.sequence({Tavoos::KeyModifier::Control | Tavoos::KeyModifier::Shift, Tavoos::Key::Z});
+s.sequence(Tavoos::Key::F5);
+```
+
+Text is read by `KeySequence::fromString`, case-insensitively: modifiers `Ctrl` (or `Control`), `Alt`,
+`Shift`, and `Meta` (or `Super`), joined with `+`, then one key: a letter, a digit, `F1` to `F25`,
+`Space`, `Enter`, `Esc`, `Tab`, `Backspace`, `Ins`, `Del`, `Home`, `End`, `PgUp`, `PgDown`, `Left`,
+`Right`, `Up`, `Down`, or one of ``- = [ ] ; ' , . / \ ` ``. Text it cannot read is logged as an error and
+the shortcut matches nothing. `toString()` writes a sequence back in that form, such as `"Ctrl+Shift+Z"`,
+for showing it in a tooltip or a menu. Modifiers must match exactly: `Ctrl+S` does not fire for
+`Ctrl+Shift+S`.
+
+| Property | Type | Notes |
+|---|---|---|
+| `sequence()` | `KeySequence` | Set from a `KeySequence`, a `Key`, or text. |
+| `context()` | `ShortcutContext` | `Window` (default) or `Application`. |
+| `enabled()` | `bool` | Default `true`. |
+| `autoRepeat()` | `bool` | Whether holding the keys fires it again with each key repeat. Default `true`. |
+| `onActivated(fn)` | `std::function<void()>` | Runs when the sequence is pressed. |
+| `onActivatedAmbiguously(fn)` | `std::function<void()>` | Runs instead when more than one applicable shortcut has the sequence: none of them activates, and each gets this. |
+
+A key that a shortcut takes does not reach the focused widget. The focused widget, or one of its
+ancestors, can keep a key for itself by accepting it in `onShortcutOverride`; shortcuts are then not
+checked at all, and the key is delivered as a normal key press:
+
+```cpp
+TB::TextField([](Tavoos::TextFieldWidget& field) {
+    field.onShortcutOverride([](Tavoos::KeyEvent& event) {
+        if (event.keyCode() == Tavoos::Key::A && event.modifiers() == Tavoos::KeyModifier::Control)
+            event.accept();
+    });
+});
+```
+
+While a modal popup is open, only the window shortcuts declared inside it, and application shortcuts,
+apply. Escape for closing a popup and Tab for moving focus are handled before shortcuts, and key
+releases always go to the focused widget.
+
+To add a shortcut after the window is built, use `addChild<Tavoos::Shortcut>` on a widget, and
+`removeChild` to remove it; it stops applying as soon as it is removed.
