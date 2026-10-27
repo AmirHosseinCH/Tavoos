@@ -1,5 +1,6 @@
 #pragma once
 #include <tavoos/events/dragevent.h>
+#include <tavoos/events/dropevent.h>
 #include <tavoos/events/event.h>
 #include <tavoos/events/key.h>
 #include <tavoos/events/keyevent.h>

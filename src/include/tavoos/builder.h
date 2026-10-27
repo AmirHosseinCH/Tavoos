@@ -54,6 +54,7 @@ public:
     static void Column(std::function<void(ColumnWidget&)> body)       { create<ColumnWidget>(std::move(body)); }
     static void Grid(std::function<void(GridWidget&)> body)           { create<GridWidget>(std::move(body)); }
     static void Flex(std::function<void(FlexWidget&)> body)           { create<FlexWidget>(std::move(body)); }
+    static void DropArea(std::function<void(DropAreaWidget&)> body)   { create<DropAreaWidget>(std::move(body)); }
     static void Image(std::function<void(ImageWidget&)> body)         { create<ImageWidget>(std::move(body)); }
     static void SVG(std::function<void(SVGWidget&)> body)             { create<SVGWidget>(std::move(body)); }
     static void Text(std::function<void(TextWidget&)> body)           { create<TextWidget>(std::move(body)); }

@@ -28,6 +28,7 @@ set(TAVOOS_SOURCES
     widget/image.cpp
     widget/svg.cpp
     widget/text.cpp
+    widget/droparea.cpp
     widget/templates/buttonbase.cpp
     widget/controls/buttonwidget.cpp
     widget/controls/checkboxwidget.cpp
@@ -106,6 +107,7 @@ target_sources(Tavoos
     include/tavoos/widget/image.h
     include/tavoos/widget/svg.h
     include/tavoos/widget/text.h
+    include/tavoos/widget/droparea.h
     include/tavoos/widget/templates/buttonbase.h
     include/tavoos/widget/controls/buttonwidget.h
     include/tavoos/widget/controls/checkboxwidget.h
@@ -174,6 +176,7 @@ target_sources(Tavoos
     include/tavoos/model/listmodel.h
     include/tavoos/events/event.h
     include/tavoos/events/dragevent.h
+    include/tavoos/events/dropevent.h
     include/tavoos/events/mouseevent.h
     include/tavoos/events/wheelevent.h
     include/tavoos/events/keyevent.h
