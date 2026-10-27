@@ -49,6 +49,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Click-to-focus](#click-to-focus)
    - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
    - [Dragging](#dragging)
+   - [Drag and drop](#drag-and-drop)
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
@@ -1259,24 +1260,30 @@ void Renderer::renderForWindow(Window& window) {
     glClearColor(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    for (const auto& child : window.children())
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout();
+    window.layoutTree();
 
-    for (const auto& child : window.children())
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            if (widget->visible())
-                renderWidget(*widget);
+    for (Widget* const widget : Widget::zOrderedChildren(window))
+        if (widget->visible())
+            renderWidget(*widget);
 
     std::vector<OverlayBase*> overlays = window.retiredOverlays();
     overlays.insert(overlays.end(), window.overlays().begin(), window.overlays().end());
+    for (OverlayBase* const overlay : overlays)
+        if (overlay->visible())
+            renderWidget(*overlay);
+}
+
+void Window::layoutTree() {
+    for (const auto& child : children()) {
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->layout();
+    }
+    std::vector<OverlayBase*> overlays = m_retiredOverlays;
+    overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
     for (OverlayBase* const overlay : overlays) {
         overlay->place();
         overlay->layout(true);
     }
-    for (OverlayBase* const overlay : overlays)
-        if (overlay->visible())
-            renderWidget(*overlay);
 }
 ```
 
@@ -1286,9 +1293,12 @@ detached-and-deferred by an event handler in a *previous* frame (see
 (`ensureWindowResources` - each window has independent VAOs/FBO, tracked in
 `m_windowResources`, since multiple windows can share one GL context); set up the projection
 from logical window size (not physical framebuffer size - see `HiDPI` note below); clear;
-run the [dirty-flag-driven layout pass](#dirty-flag-propagation) on every top-level child;
-render every visible one; then place, lay out, and render the window's
-[overlays](#overlays-and-popups) on top, closing ones first and then the open ones in stack order.
+lay out with `Window::layoutTree`, which runs the
+[dirty-flag-driven layout pass](#dirty-flag-propagation) on every top-level child and then places
+and lays out the window's [overlays](#overlays-and-popups); render every visible top-level child in
+`z()` order; then render the overlays on top, closing ones first and then the open ones in stack
+order. `layoutTree` is also called by the drop search during a drag (see
+[Drag and drop](#drag-and-drop)), so a frame after it finds the tree already clean.
 
 Note the ortho projection uses `window.width()`/`height()` (logical units) while
 `glViewport` uses `window.framebufferWidth()`/`framebufferHeight()` (physical pixels) - this
@@ -1952,12 +1962,12 @@ bool Widget::hasHandlerFor(EventType type) {
 ### Hit-testing
 
 ```cpp
-Widget* Widget::hitTestTree(float px, float py) const {
-    if (!visible()) return nullptr;
+Widget* Widget::hitTestTree(float px, float py, const Widget* skip) const {
+    if (!visible() || this == skip) return nullptr;
     if (m_clip && !hitTest(px, py)) return nullptr;
     const std::vector<Widget*> ordered = zOrderedChildren(*this);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it)   // reverse: highest z / last-drawn first
-        if (auto* hit = (*it)->hitTestTree(px, py))
+        if (auto* hit = (*it)->hitTestTree(px, py, skip))
             return hit;
     if (hitTest(px, py))
         return const_cast<Widget*>(this);
@@ -1977,7 +1987,9 @@ overlapping hit-test, matching rendering exactly. `hitTest` maps the screen-spac
 the widget's *local* space with `mapFromWindow`, the inverse of `worldMatrix()` followed by the
 perspective divide (see [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)),
 so rotation, scale and tilt (applied in `localMatrix()`, see below) are accounted for, not just
-axis-aligned bounding boxes - then bounds-checks against `m_displayedWidth/Height`.
+axis-aligned bounding boxes - then bounds-checks against `m_displayedWidth/Height`. `skip`, null by
+default, leaves one widget and everything under it out, as if it were hidden; the drop search
+passes the widget being dragged (see [Drag and drop](#drag-and-drop)).
 
 ```cpp
 glm::mat4 Widget::localMatrix() const {
@@ -2542,6 +2554,125 @@ is how `SliderBase` is built: drag events bubble from the handle or the track to
 whose own `triggerDragMove` derives a clamped value from `event.totalDx()` against the value
 held at drag start - nothing sets `draggable(true)`.
 
+### Drag and drop
+
+**The source.** `Widget` stores `m_dragKeys`, `m_dragData` (`DragData`, a
+`std::map<std::string, std::string>` from `events/dropevent.h`) and `m_dragHotSpot`, a
+`Property<Point>` holding a fraction of the widget's size. When a drag starts, `cursorPosCallback`
+keeps the widget that handled `DragStart` as the window's `m_dragSource`, if it is draggable and
+has keys:
+
+```cpp
+Widget* const handler = dispatchBubble(self->m_pressedWidget, dragStartEvent, &Widget::triggerDragStart);
+if (handler && handler->draggable() && !handler->dragKeys().empty())
+    self->m_dragSource = handler;
+```
+
+**The target.** `DropAreaWidget` (`widget/droparea.h`) is a widget that only draws its children. It
+holds its keys, its callbacks, `m_containsDrag` and `m_dragSource`, and `Window`, a friend, drives
+it. `acceptsKeys` is true when the area has no keys or shares one with the drag. `DropEvent` uses
+three event types, `DropEnter`, `DropMove` and `Drop`, and starts accepted. After every `DragMove`,
+the window calls `updateDropTarget`:
+
+```cpp
+void Window::updateDropTarget() {
+    layoutTree();
+    const Point point = dragHotSpotInWindow();
+    std::vector<DropAreaWidget*> candidates;
+    for (Widget* const widget : hoverChainAt(hitTestChildren(this, point.x, point.y, m_dragSource), point)) {
+        if (auto* const area = dynamic_cast<DropAreaWidget*>(widget); area && area->acceptsKeys(m_dragSource->dragKeys()))
+            candidates.push_back(area);
+    }
+    std::erase_if(m_dropRejected, [&candidates](DropAreaWidget* area) { return !std::ranges::contains(candidates, area); });
+    std::erase_if(candidates, [this](DropAreaWidget* area) { return std::ranges::contains(m_dropRejected, area); });
+
+    for (DropAreaWidget* const area : candidates) {
+        if (!m_dragSource)
+            return;
+        if (area == m_dropTarget) {
+            DropEvent event{EventType::DropMove, m_dragSource, m_dragSource->dragKeys(), m_dragSource->dragData(), {}};
+            event.setPosition(area->mapFromWindow(point));
+            if (area->m_onPositionChanged)
+                area->m_onPositionChanged(event);
+            return;
+        }
+        DropEvent event{EventType::DropEnter, m_dragSource, m_dragSource->dragKeys(), m_dragSource->dragData(), {}};
+        event.setPosition(area->mapFromWindow(point));
+        if (area->m_onEntered)
+            area->m_onEntered(event);
+        if (!m_dragSource)
+            return;
+        if (!event.isAccepted()) {
+            m_dropRejected.push_back(area);
+            continue;
+        }
+        leaveDropTarget();
+        m_dropTarget = area;
+        area->m_dragSource = m_dragSource;
+        area->m_containsDrag.setIfChanged(true);
+        return;
+    }
+    leaveDropTarget();
+}
+```
+
+It first runs `layoutTree`, so the source's position includes the move just made, and maps the hot
+spot to the window. The hit test skips the source (see [Hit-testing](#hit-testing)), so the dragged
+widget never hides what is beneath it, and `hoverChainAt` (see [Hover](#hover)) turns the hit into
+the widgets containing the point, innermost first. The drop areas among them that accept the keys
+are the candidates.
+
+`m_dropRejected` holds the areas that refused this drag. An area is forgotten as soon as it is no
+longer a candidate, so it is asked again when the hot spot comes back, and it is skipped while it
+stays one. The loop then walks the candidates from the inside out. Reaching the current target means
+nothing inside it accepted, so it gets `DropMove` and stays the target. Any other area gets
+`DropEnter`; if `onEntered` ignores it, the area is remembered and the next one out is tried. The
+first area that accepts becomes the target, and only then does `leaveDropTarget` reset the old one
+and call its `onExited`, so a refusing child never makes its parent exit and enter again. With no
+candidate left, the old target is left as well. Each event carries the hot spot mapped into the area
+with `mapFromWindow`. A callback can remove the source, so `m_dragSource` is checked after each one.
+
+**Release.** `mouseButtonCallback` calls `finishDrag` before dispatching `DragEnd`. It runs
+`updateDropTarget` once more for the final position, takes the target, sends it `Drop` through
+`onDropped`, and resets its `dragSource` and `containsDrag` without calling `onExited`. Then it
+clears `m_dragSource` and `m_dropRejected`.
+
+**Removal.** `clearReferencesTo` nulls `m_dropTarget` without a callback when the target is removed,
+and erases removed areas from `m_dropRejected`. When the source is removed, it clears `m_dragSource`
+and `m_dropRejected` and calls `leaveDropTarget`, so a target that is still there gets `onExited`.
+The target is checked first, so an area removed together with the source gets nothing.
+
+**Files.** `glfwSetDropCallback` installs `dropCallback`, which GLFW calls with the paths already
+decoded from the dropped `text/uri-list` data:
+
+```cpp
+void Window::dropCallback(GLFWwindow* window, int count, const char** paths) {
+    auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+    double mx, my;
+    glfwGetCursorPos(window, &mx, &my);
+    const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
+
+    const std::vector<std::string> keys{"text/uri-list"};
+    for (Widget* const widget : hoverChainAt(hitTestChildren(self, mx, my), windowPoint)) {
+        auto* const area = dynamic_cast<DropAreaWidget*>(widget);
+        if (!area || !area->acceptsKeys(keys))
+            continue;
+        if (area->m_onDropped) {
+            DropEvent event{EventType::Drop, nullptr, keys, {}, std::vector<std::string>(paths, paths + count)};
+            event.setPosition(area->mapFromWindow(windowPoint));
+            area->m_onDropped(event);
+        }
+        return;
+    }
+}
+```
+
+There is no hot spot, so it uses the pointer, the same hit test as a click, and the innermost area
+that accepts `"text/uri-list"`. GLFW reports a file drag only when it is dropped, which is why there
+is no enter or exit. On X11, GLFW moves the cursor position along with the drag, so
+`glfwGetCursorPos` is the drop point; on Wayland it does not, and the last pointer position is used.
+
 ### Overlays and popups
 
 An **overlay** is a widget whose `isOverlay()` returns true. It is out of flow: its parent's
@@ -2551,13 +2682,13 @@ world matrix ignores the parent chain. Ancestor `clip(true)`, rotation, and layo
 never affect it, even though it is declared as a child of an anchor widget.
 
 `Window` keeps the open overlays in a typed stack, `std::vector<OverlayBase*>` (`addOverlay`
-/ `removeOverlay`, topmost last). After the normal tree, `Renderer::renderForWindow` calls each
-overlay's `place()` and `layout(true)` and then renders them in stack order, which is the
-snippet under [Per-frame sequence](#per-frame-sequence). A second, render-only list,
+/ `removeOverlay`, topmost last). After the normal tree, `Window::layoutTree` calls each
+overlay's `place()` and `layout(true)`, and `Renderer::renderForWindow` then renders them in stack
+order, as in the snippet under [Per-frame sequence](#per-frame-sequence). A second, render-only list,
 `m_retiredOverlays`, holds overlays that have left the stack but are still playing an exit
 transition. `retireOverlay` moves an overlay there (restoring focus at that moment) and
-`releaseOverlay` drops it when the exit ends; the renderer places, lays out and draws retired
-overlays first, beneath the open ones, and `clearReferencesTo` clears both lists. Hit-testing
+`releaseOverlay` drops it when the exit ends; retired overlays are placed, laid out and drawn
+first, beneath the open ones, and `clearReferencesTo` clears both lists. Hit-testing
 walks the stack in reverse before the tree:
 
 ```cpp
@@ -2618,7 +2749,7 @@ blocks input, and `onOpen`/`onClose` fire at that moment too.
 
 **`PopupBase`** (`templates/popupbase.h`) is an `OverlayBase` that places itself relative to a
 target rectangle - the parent widget by default, or the window (`target(PlacementTarget::Window)`)
-- in `place()`, once per rendered frame, so it follows an anchor that moves or resizes:
+- in `place()`, on every layout pass, so it follows an anchor that moves or resizes:
 
 | Target | `Bottom` / `Top` / `Left` / `Right` | `Center` |
 |---|---|---|
