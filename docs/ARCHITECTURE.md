@@ -39,6 +39,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Bubbling](#bubbling)
    - [Hit-testing](#hit-testing)
    - [Hover](#hover)
+   - [Cursor](#cursor)
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
    - [Focus memory](#focus-memory)
@@ -303,6 +304,7 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
 
     std::erase_if(m_hoveredChain, isOrDescendantOf);
     if (isOrDescendantOf(m_pressedWidget))   m_pressedWidget = nullptr;
+    std::erase_if(m_pressedChain, isOrDescendantOf);
     if (isOrDescendantOf(m_lastClickWidget)) m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))   setFocusedWidget(nullptr);
 }
@@ -2038,6 +2040,23 @@ The chain is rebuilt only when the cursor moves: a widget that moves or hides un
 pointer keeps its hover state until the next move. Removed widgets are erased from it by
 `clearReferencesTo`, and `updateHover` skips an enter for any widget no longer in the chain, so a
 widget removed by an outer widget's enter handler gets no enter of its own.
+
+### Cursor
+
+Every widget has a `cursor` property, a `CursorShape` that defaults to `Inherit`. `Window::updateCursor`
+picks the shape from a chain of widgets, innermost first: the first widget that does not say `Inherit`
+decides, and with none the cursor is the arrow. While a mouse button is held, the chain is
+`m_pressedChain`, built with `hoverChainAt` at the press and kept until release, so a drag keeps its cursor
+after the pointer leaves the widget; otherwise it is the hovered chain (see [Hover](#hover)). Using the
+same chain as hover means the cursor follows the same rules: a child outside its parent's rectangle does
+not take the parent's cursor, and a popup does not take its anchor's.
+
+`updateCursor` runs after every cursor move, press and release, and from the `cursor` property's change
+handler, so a cursor set from code shows without the pointer moving. It calls `glfwSetCursor` only when
+the shape changes. `cursorFor` creates each GLFW standard cursor the first time it is needed and keeps it
+in a per-window map; `Arrow` passes `nullptr`, GLFW's default cursor. `~Window` destroys the map's cursors
+after the GLFW window. `clearReferencesTo` erases removed widgets from the pressed chain as it does from the
+hovered one.
 
 ### Press / release / click / double-click
 

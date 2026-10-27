@@ -7,13 +7,26 @@ Developed and tested on Ubuntu 24.04 (Linux). Other platforms aren't validated.
 - CMake >= 3.24
 - GCC >= 14 - Tavoos's fluent widget-builder API uses C++23 "deducing this", which needs GCC 14 or newer. Configuring with an older compiler fails immediately with a clear error, whether you're building Tavoos itself or consuming it via `find_package(Tavoos)`.
 - OpenGL
+- GLFW >= 3.4 - needed for the full set of standard cursor shapes.
 
 ## Dependencies
 
-Available via apt on Ubuntu 24.04:
+Install these from your package manager; on Debian-based systems:
 
 ```bash
-sudo apt install g++-14 libglfw3-dev libspdlog-dev libglm-dev libfreetype-dev libfontconfig-dev
+sudo apt install g++-14 libspdlog-dev libglm-dev libfreetype-dev libfontconfig-dev
+```
+
+GLFW must be 3.4 or newer. Install it from your package manager if it provides 3.4 or later
+(`libglfw3-dev` on Debian-based systems); otherwise build it from source, which needs the X11 and
+Wayland development headers (`libwayland-dev`, `libxkbcommon-dev` and `xorg-dev` on Debian-based
+systems):
+
+```bash
+git clone --branch 3.4 https://github.com/glfw/glfw.git
+cmake -S glfw -B glfw/build -DCMAKE_BUILD_TYPE=Release -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF
+cmake --build glfw/build -j"$(nproc)"
+sudo cmake --install glfw/build
 ```
 
 `lunasvg` has no Debian package - build and install it from source first:

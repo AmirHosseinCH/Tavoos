@@ -34,6 +34,10 @@ Widget::Widget(Object* parent) : Object{parent} {
                          m_gridRow, m_gridColumn);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
+    m_cursor.onChange([this](const CursorShape&) {
+        if (m_ownerWindow)
+            m_ownerWindow->updateCursor();
+    });
     bindRepaintTriggers(m_opacity, m_visible, m_clip, m_z, m_layerBlur, m_backgroundBlur, m_glass, m_glassEnabled);
 }
 
