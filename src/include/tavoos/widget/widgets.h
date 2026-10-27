@@ -3,6 +3,7 @@
 #include <tavoos/effects/innershadow.h>
 #include <tavoos/widget/widget.h>
 #include <tavoos/widget/column.h>
+#include <tavoos/widget/droparea.h>
 #include <tavoos/widget/flex.h>
 #include <tavoos/widget/grid.h>
 #include <tavoos/widget/image.h>

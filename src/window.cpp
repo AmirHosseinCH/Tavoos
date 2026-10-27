@@ -3,6 +3,7 @@
 #include <tavoos/events/events.h>
 #include <tavoos/events/shortcut.h>
 #include <tavoos/gfx/renderer.h>
+#include <tavoos/widget/droparea.h>
 #include <tavoos/widget/templates/overlaybase.h>
 #include <tavoos/window.h>
 
@@ -50,6 +51,14 @@ void Window::clearReferencesTo(Object* subtreeRoot) {
         m_pressedWidget = nullptr;
     std::erase_if(m_pressedChain, isOrDescendantOf);
     std::erase_if(m_shortcuts, isOrDescendantOf);
+    if (isOrDescendantOf(m_dropTarget))
+        m_dropTarget = nullptr;
+    std::erase_if(m_dropRejected, isOrDescendantOf);
+    if (isOrDescendantOf(m_dragSource)) {
+        m_dragSource = nullptr;
+        m_dropRejected.clear();
+        leaveDropTarget();
+    }
     if (isOrDescendantOf(m_lastClickWidget))
         m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
@@ -171,6 +180,7 @@ void Window::setup() {
     glfwSetScrollCallback(m_window, &Window::scrollCallback);
     glfwSetKeyCallback(m_window, &Window::keyCallback);
     glfwSetCharCallback(m_window, &Window::charCallback);
+    glfwSetDropCallback(m_window, &Window::dropCallback);
 
     glfwGetFramebufferSize(m_window, &m_framebufferWidth, &m_framebufferHeight);
     m_windowActive = glfwGetWindowAttrib(m_window, GLFW_FOCUSED) == GLFW_TRUE;
@@ -241,9 +251,9 @@ Widget* Window::dispatchMouseBubble(Widget* start, MouseEvent& event, const Poin
     return nullptr;
 }
 
-Widget* Window::hitTestChildren(Window* self, double x, double y) {
+Widget* Window::hitTestChildren(Window* self, double x, double y, const Widget* skip) {
     for (auto it = self->m_overlays.rbegin(); it != self->m_overlays.rend(); ++it) {
-        if (auto* hit = static_cast<Widget*>(*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+        if (auto* hit = static_cast<Widget*>(*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y), skip))
             return hit;
         if ((*it)->modalActive())
             return nullptr;
@@ -251,10 +261,94 @@ Widget* Window::hitTestChildren(Window* self, double x, double y) {
 
     const std::vector<Widget*> ordered = Widget::zOrderedChildren(*self);
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
-        if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y)))
+        if (auto* hit = (*it)->hitTestTree(static_cast<float>(x), static_cast<float>(y), skip))
             return hit;
     }
     return nullptr;
+}
+
+void Window::layoutTree() {
+    for (const auto& child : children()) {
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->layout();
+    }
+    std::vector<OverlayBase*> overlays = m_retiredOverlays;
+    overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
+    for (OverlayBase* const overlay : overlays) {
+        overlay->place();
+        overlay->layout(true);
+    }
+}
+
+Point Window::dragHotSpotInWindow() const {
+    const Point fraction = m_dragSource->dragHotSpot();
+    return m_dragSource->mapToWindow({fraction.x * m_dragSource->displayedWidth(), fraction.y * m_dragSource->displayedHeight()});
+}
+
+void Window::updateDropTarget() {
+    layoutTree();
+    const Point point = dragHotSpotInWindow();
+    std::vector<DropAreaWidget*> candidates;
+    for (Widget* const widget : hoverChainAt(hitTestChildren(this, point.x, point.y, m_dragSource), point)) {
+        if (auto* const area = dynamic_cast<DropAreaWidget*>(widget); area && area->acceptsKeys(m_dragSource->dragKeys()))
+            candidates.push_back(area);
+    }
+    std::erase_if(m_dropRejected, [&candidates](DropAreaWidget* area) { return !std::ranges::contains(candidates, area); });
+    std::erase_if(candidates, [this](DropAreaWidget* area) { return std::ranges::contains(m_dropRejected, area); });
+
+    for (DropAreaWidget* const area : candidates) {
+        if (!m_dragSource)
+            return;
+        if (area == m_dropTarget) {
+            DropEvent event{EventType::DropMove, m_dragSource, m_dragSource->dragKeys(), m_dragSource->dragData(), {}};
+            event.setPosition(area->mapFromWindow(point));
+            if (area->m_onPositionChanged)
+                area->m_onPositionChanged(event);
+            return;
+        }
+        DropEvent event{EventType::DropEnter, m_dragSource, m_dragSource->dragKeys(), m_dragSource->dragData(), {}};
+        event.setPosition(area->mapFromWindow(point));
+        if (area->m_onEntered)
+            area->m_onEntered(event);
+        if (!m_dragSource)
+            return;
+        if (!event.isAccepted()) {
+            m_dropRejected.push_back(area);
+            continue;
+        }
+        leaveDropTarget();
+        m_dropTarget = area;
+        area->m_dragSource = m_dragSource;
+        area->m_containsDrag.setIfChanged(true);
+        return;
+    }
+    leaveDropTarget();
+}
+
+void Window::leaveDropTarget() {
+    DropAreaWidget* const area = std::exchange(m_dropTarget, nullptr);
+    if (!area)
+        return;
+    area->m_dragSource = nullptr;
+    area->m_containsDrag.setIfChanged(false);
+    if (area->m_onExited)
+        area->m_onExited();
+}
+
+void Window::finishDrag() {
+    if (!m_dragSource)
+        return;
+    updateDropTarget();
+    if (DropAreaWidget* const area = std::exchange(m_dropTarget, nullptr); area && m_dragSource) {
+        DropEvent event{EventType::Drop, m_dragSource, m_dragSource->dragKeys(), m_dragSource->dragData(), {}};
+        event.setPosition(area->mapFromWindow(dragHotSpotInWindow()));
+        if (area->m_onDropped)
+            area->m_onDropped(event);
+        area->m_dragSource = nullptr;
+        area->m_containsDrag.setIfChanged(false);
+    }
+    m_dragSource = nullptr;
+    m_dropRejected.clear();
 }
 
 std::vector<Widget*> Window::hoverChainAt(Widget* hit, const Point& windowPoint) {
@@ -456,6 +550,7 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
         }
     } else if (action == GLFW_RELEASE) {
         bool dragHandled = false;
+        self->finishDrag();
         if (self->m_pressedWidget && self->m_dragging) {
             const float dx = windowPoint.x - self->m_dragLastPoint.x;
             const float dy = windowPoint.y - self->m_dragLastPoint.y;
@@ -576,12 +671,16 @@ void Window::cursorPosCallback(GLFWwindow* window, double x, double y) {
 
             if (justStarted) {
                 DragEvent dragStartEvent{EventType::DragStart, dx, dy, totalDx, totalDy};
-                dispatchBubble(self->m_pressedWidget, dragStartEvent, &Widget::triggerDragStart);
+                Widget* const handler = dispatchBubble(self->m_pressedWidget, dragStartEvent, &Widget::triggerDragStart);
+                if (handler && handler->draggable() && !handler->dragKeys().empty())
+                    self->m_dragSource = handler;
             }
 
             DragEvent dragMoveEvent{EventType::DragMove, dx, dy, totalDx, totalDy};
             dispatchBubble(self->m_pressedWidget, dragMoveEvent, &Widget::triggerDragMove);
             self->m_dragLastPoint = windowPoint;
+            if (self->m_dragSource)
+                self->updateDropTarget();
         }
     }
 }
@@ -597,6 +696,27 @@ void Window::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) 
     if (hit) {
         WheelEvent event{static_cast<float>(xoffset), static_cast<float>(yoffset)};
         dispatchBubble(hit, event, &Widget::triggerWheel);
+    }
+}
+
+void Window::dropCallback(GLFWwindow* window, int count, const char** paths) {
+    auto* const self = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+    double mx, my;
+    glfwGetCursorPos(window, &mx, &my);
+    const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
+
+    const std::vector<std::string> keys{"text/uri-list"};
+    for (Widget* const widget : hoverChainAt(hitTestChildren(self, mx, my), windowPoint)) {
+        auto* const area = dynamic_cast<DropAreaWidget*>(widget);
+        if (!area || !area->acceptsKeys(keys))
+            continue;
+        if (area->m_onDropped) {
+            DropEvent event{EventType::Drop, nullptr, keys, {}, std::vector<std::string>(paths, paths + count)};
+            event.setPosition(area->mapFromWindow(windowPoint));
+            area->m_onDropped(event);
+        }
+        return;
     }
 }
 

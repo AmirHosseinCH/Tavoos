@@ -146,10 +146,7 @@ void Renderer::renderForWindow(Window& window) {
     glClearColor(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    for (const auto& child : window.children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout();
-    }
+    window.layoutTree();
 
     for (Widget* const widget : Widget::zOrderedChildren(window)) {
         if (widget->visible())
@@ -158,10 +155,6 @@ void Renderer::renderForWindow(Window& window) {
 
     std::vector<OverlayBase*> overlays = window.retiredOverlays();
     overlays.insert(overlays.end(), window.overlays().begin(), window.overlays().end());
-    for (OverlayBase* const overlay : overlays) {
-        overlay->place();
-        overlay->layout(true);
-    }
     for (OverlayBase* const overlay : overlays) {
         if (overlay->visible())
             renderWidget(*overlay);

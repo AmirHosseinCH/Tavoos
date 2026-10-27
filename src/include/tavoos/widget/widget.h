@@ -17,6 +17,7 @@
 #include <concepts>
 #include <memory>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -367,6 +368,21 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) dragKeys(this auto&& self, std::vector<std::string> keys) {
+        self.m_dragKeys = std::move(keys);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragData(this auto&& self, DragData data) {
+        self.m_dragData = std::move(data);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) dragHotSpot(this auto&& self, PropertyArg<Point> hotSpot) {
+        hotSpot.applyTo(self.m_dragHotSpot);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) onDragStart(this auto&& self, std::function<void(DragEvent&)> callback) {
         self.m_onDragStart = std::move(callback);
         return std::forward<decltype(self)>(self);
@@ -467,6 +483,9 @@ public:
     float dragThreshold() const { return m_dragThreshold; }
     DragAxis dragXAxis() const { return m_dragXAxis; }
     DragAxis dragYAxis() const { return m_dragYAxis; }
+    const std::vector<std::string>& dragKeys() const { return m_dragKeys; }
+    const DragData& dragData() const { return m_dragData; }
+    Point dragHotSpot() const { return m_dragHotSpot; }
     float opacity() const { return m_opacity; }
     BlurStyle layerBlur() const { return m_layerBlur; }
     BlurStyle backgroundBlur() const { return m_backgroundBlur; }
@@ -715,6 +734,9 @@ private:
     Property<float> m_dragThreshold{0.0f};
     Property<DragAxis> m_dragXAxis{DragAxis{}};
     Property<DragAxis> m_dragYAxis{DragAxis{}};
+    std::vector<std::string> m_dragKeys;
+    DragData m_dragData;
+    Property<Point> m_dragHotSpot{Point{0.5f, 0.5f}};
     Property<float> m_opacity{1.0f};
     Property<BlurStyle> m_layerBlur{BlurStyle{}};
     Property<BlurStyle> m_backgroundBlur{BlurStyle{}};
@@ -779,7 +801,7 @@ private:
     std::function<void(Event&)> m_onFocusOut;
 
     bool hitTest(float px, float py) const;
-    Widget* hitTestTree(float px, float py) const;
+    Widget* hitTestTree(float px, float py, const Widget* skip = nullptr) const;
     void updateEffectiveOpacity();
 
     template<typename E>

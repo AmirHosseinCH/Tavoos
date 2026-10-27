@@ -16,6 +16,7 @@ namespace Tavoos {
 
 class Widget;
 class OverlayBase;
+class DropAreaWidget;
 class Shortcut;
 class KeyEvent;
 struct KeySequence;
@@ -115,11 +116,17 @@ private:
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
     static void keyCallback(GLFWwindow* window, int key, int /*scancode*/, int action, int mods);
     static void charCallback(GLFWwindow* window, unsigned int codepoint);
+    static void dropCallback(GLFWwindow* window, int count, const char** paths);
     template<typename EventT>
     static Widget* dispatchBubble(Widget* start, EventT& event, void (Widget::*trigger)(EventT&));
     static Widget* dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&));
 
-    static Widget* hitTestChildren(Window* self, double x, double y);
+    static Widget* hitTestChildren(Window* self, double x, double y, const Widget* skip = nullptr);
+    void layoutTree();
+    Point dragHotSpotInWindow() const;
+    void updateDropTarget();
+    void leaveDropTarget();
+    void finishDrag();
     static std::vector<Widget*> hoverChainAt(Widget* hit, const Point& windowPoint);
     void updateHover(Widget* hit, const Point& windowPoint);
     void updateCursor();
@@ -143,6 +150,9 @@ private:
     std::vector<std::pair<Widget*, Widget*>> m_focusMemory;
 
     bool m_dragging{false};
+    Widget* m_dragSource{nullptr};
+    DropAreaWidget* m_dropTarget{nullptr};
+    std::vector<DropAreaWidget*> m_dropRejected;
     Point m_dragStartPoint{};
     Point m_dragLastPoint{};
 

@@ -50,6 +50,7 @@ quick-start example in [README.md](../README.md).
    - [Glass](#glass)
 10. [Transforms](#transforms)
 11. [Dragging](#dragging)
+   - [Drag and drop](#drag-and-drop)
 12. [Animation](#animation)
 13. [Resource embedding](#resource-embedding)
 14. [Keyboard & focus](#keyboard--focus)
@@ -2014,6 +2015,95 @@ thumb.onDragMove([&](Tavoos::DragEvent& e) {
 `DragEvent::dx()`/`dy()` are the delta since the last move; `totalDx()`/`totalDy()` are the
 cumulative delta since the drag started - prefer `total*` for computing an absolute value (no
 incremental rounding drift), `dx`/`dy` for a pure follow-the-cursor translate.
+
+### Drag and drop
+
+A dragged widget can also be dropped somewhere. Give it drag keys, which say what kind of thing it is,
+and optionally some data; a `DropAreaWidget` receives the drags whose keys it accepts:
+
+```cpp
+void markDone(const std::string& task);
+
+TB::Rectangle([](Tavoos::RectangleWidget& card) {
+    card.width(110).height(40).draggable(true)
+        .dragKeys({"task"}).dragData({{"text/plain", "Write the docs"}});
+});
+
+TB::DropArea([](Tavoos::DropAreaWidget& done) {
+    done.x(300).width(220).height(250).keys({"task"})
+        .onDropped([](Tavoos::DropEvent& event) {
+            markDone(event.data().at("text/plain"));
+            event.source()->removeSelf();
+        });
+});
+```
+
+A draggable widget with at least one key is a drag source while it is dragged, also when the press
+was on one of its children, such as its label. Without keys, dragging only moves it.
+
+| Property | Type | Notes |
+|---|---|---|
+| `dragKeys()` | `std::vector<std::string>` | What the widget is, for drop areas to match against. |
+| `dragData()` | `DragData` | Named strings for the drop area to read, a `std::map<std::string, std::string>`. |
+| `dragHotSpot()` | `Point` | The point of the widget that is dropped, as a fraction of its size. Default `{0.5, 0.5}`, the center. |
+
+The target of a drag is the innermost drop area under the source's hot spot that accepts it, so where
+the widget is decides, not where the pointer is. The source and its children are never targets. An
+area accepts a drag when they share at least one key, and an area with no keys accepts every drag.
+
+| Property | Type | Notes |
+|---|---|---|
+| `keys()` | `std::vector<std::string>` | The drag keys it accepts. Empty, the default, accepts every drag. |
+| `onEntered(fn)` | `std::function<void(DropEvent&)>` | A drag it accepts came over it. Call `ignore()` on the event to refuse the drag. |
+| `onPositionChanged(fn)` | `std::function<void(DropEvent&)>` | The drag moved while over it. |
+| `onExited(fn)` | `std::function<void()>` | The drag left it, or the source was removed. Not sent after a drop. |
+| `onDropped(fn)` | `std::function<void(DropEvent&)>` | The source was released over it. |
+| `containsDrag()`, `containsDragState()` | `bool` | Whether a drag it took is over it, as a value or as a `State` to react to. |
+| `dragSource()` | `Widget*` | The widget being dragged over it, or `nullptr`. |
+
+A `DropEvent` has the hot spot's position in the area's own coordinates, `x()` and `y()`, and the
+drag's `source()`, `keys()` and `data()`.
+
+Refusing a drag in `onEntered`, for example because the area is full, passes it to the next drop area
+out that accepts it. The refusing area is not asked again until the hot spot leaves it and comes back.
+When the target changes, the new one gets `onEntered` before the old one gets `onExited`, and an area
+that refuses the drag does not make the area around it exit.
+
+On release, the target gets `onDropped`, then `containsDrag()` turns false, and then the source gets
+`onDragEnd` as for any drag. Dropping moves nothing by itself: the source stays where it was released
+until you move, rebuild or remove it. To send back a drag that was not dropped, reset the position in
+the source's `onDragEnd`; a source removed in `onDropped` gets no `onDragEnd`:
+
+```cpp
+card.onDragEnd([&card](Tavoos::DragEvent&) { card.x(30).y(30); });
+```
+
+Removing the source during a drag ends it, and the target gets `onExited`. Removing the target just
+takes it out of the drag, and the next move looks for a new one. As with clicks, drags don't reach
+widgets behind a modal popup.
+
+#### Files
+
+Files dragged onto the window from another application, such as a file manager, are dropped on the
+innermost drop area under the pointer that accepts `"text/uri-list"`, the standard type for a list of
+files. An area with no keys accepts them too:
+
+```cpp
+void openFile(const std::string& path);
+
+TB::DropArea([](Tavoos::DropAreaWidget& area) {
+    area.fill(Tavoos::Fill::Both).keys({"text/uri-list"})
+        .onDropped([](Tavoos::DropEvent& event) {
+            for (const std::string& path : event.urls())
+                openFile(path);
+        });
+});
+```
+
+`urls()` holds plain paths, such as `/home/me/notes v2.txt`; `source()` is null and `data()` is empty.
+A file drag gets only `onDropped`: no `onEntered`, `onPositionChanged` or `onExited`, it can't be
+refused, and `containsDrag()` stays false. On Wayland the drop's position is not reported, so the files
+go to the area under the last pointer position the window saw.
 
 ## Animation
 

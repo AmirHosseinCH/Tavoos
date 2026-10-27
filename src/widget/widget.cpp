@@ -82,8 +82,8 @@ bool Widget::hitTest(float px, float py) const {
            localPoint.y >= 0.0f && localPoint.y <= m_displayedHeight;
 }
 
-Widget *Widget::hitTestTree(float px, float py) const {
-    if (!visible())
+Widget *Widget::hitTestTree(float px, float py, const Widget* skip) const {
+    if (!visible() || this == skip)
         return nullptr;
     if (m_clip && !hitTest(px, py))
         return nullptr;
@@ -92,7 +92,7 @@ Widget *Widget::hitTestTree(float px, float py) const {
     for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
         if ((*it)->isOverlay())
             continue;
-        if (auto* hit = (*it)->hitTestTree(px, py))
+        if (auto* hit = (*it)->hitTestTree(px, py, skip))
             return hit;
     }
 
@@ -121,6 +121,9 @@ bool Widget::hasHandlerFor(EventType type) {
     case EventType::TextInput:        return static_cast<bool>(m_onTextInput);
     case EventType::FocusIn:          return static_cast<bool>(m_onFocusIn);
     case EventType::FocusOut:         return static_cast<bool>(m_onFocusOut);
+    case EventType::DropEnter:
+    case EventType::DropMove:
+    case EventType::Drop:
     case EventType::None:             return false;
     }
     return false;
