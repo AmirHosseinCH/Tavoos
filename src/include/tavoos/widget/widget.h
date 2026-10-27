@@ -392,6 +392,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) onShortcutOverride(this auto&& self, std::function<void(KeyEvent&)> callback) {
+        self.m_onShortcutOverride = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) onKeyRelease(this auto&& self, std::function<void(KeyEvent&)> callback) {
         self.m_onKeyRelease = std::move(callback);
         return std::forward<decltype(self)>(self);
@@ -578,6 +583,7 @@ protected:
     virtual void triggerWheel(WheelEvent& event)       { if (m_onWheel) m_onWheel(event); }
     virtual void triggerKeyPress(KeyEvent& event)      { if (m_onKeyPress) m_onKeyPress(event); }
     virtual void triggerKeyRelease(KeyEvent& event)    { if (m_onKeyRelease) m_onKeyRelease(event); }
+    virtual void triggerShortcutOverride(KeyEvent& event) { if (m_onShortcutOverride) m_onShortcutOverride(event); }
     virtual void triggerTextInput(KeyEvent& event)     { if (m_onTextInput) m_onTextInput(event); }
     virtual void triggerFocusIn(Event& event) {
         m_focused.setIfChanged(true);
@@ -767,6 +773,7 @@ private:
     std::function<void(WheelEvent&)> m_onWheel;
     std::function<void(KeyEvent&)> m_onKeyPress;
     std::function<void(KeyEvent&)> m_onKeyRelease;
+    std::function<void(KeyEvent&)> m_onShortcutOverride;
     std::function<void(KeyEvent&)> m_onTextInput;
     std::function<void(Event&)> m_onFocusIn;
     std::function<void(Event&)> m_onFocusOut;

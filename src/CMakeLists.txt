@@ -5,6 +5,7 @@ set(TAVOOS_SOURCES
     builder.cpp
     component/componentbase.cpp
     events/keysequence.cpp
+    events/shortcut.cpp
     animation/animationmanager.cpp
     animation/transitionrunner.cpp
     animation/transitions.cpp
@@ -178,6 +179,7 @@ target_sources(Tavoos
     include/tavoos/events/keyevent.h
     include/tavoos/events/key.h
     include/tavoos/events/keysequence.h
+    include/tavoos/events/shortcut.h
     include/tavoos/events/events.h
     include/tavoos/animation/easing.h
     include/tavoos/animation/animatedstate.h

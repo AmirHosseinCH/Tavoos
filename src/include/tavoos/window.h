@@ -16,12 +16,16 @@ namespace Tavoos {
 
 class Widget;
 class OverlayBase;
+class Shortcut;
+class KeyEvent;
+struct KeySequence;
 
 class TAVOOS_EXPORT Window : public Object {
     friend class Application;
     friend class Builder;
     friend class Renderer;
     friend class Widget;
+    friend class Shortcut;
 
 public:
     Window();
@@ -120,6 +124,11 @@ private:
     void updateHover(Widget* hit, const Point& windowPoint);
     void updateCursor();
     GLFWcursor* cursorFor(CursorShape shape);
+    void addShortcut(Shortcut* shortcut);
+    void removeShortcut(Shortcut* shortcut);
+    bool claimsShortcut(const KeyEvent& key) const;
+    bool runShortcut(const KeySequence& sequence, bool repeat);
+    bool reachesShortcut(const Shortcut* shortcut) const;
     static void collectFocusable(Object* root, std::vector<Widget*>& out);
     void focusNext(bool reverse);
     std::vector<Widget*> m_hoveredChain;
@@ -127,6 +136,7 @@ private:
     std::vector<Widget*> m_pressedChain;
     CursorShape m_cursorShape{CursorShape::Arrow};
     std::unordered_map<CursorShape, GLFWcursor*> m_cursors;
+    std::vector<Shortcut*> m_shortcuts;
     Widget* m_focusedWidget{nullptr};
     std::vector<OverlayBase*> m_overlays;
     std::vector<OverlayBase*> m_retiredOverlays;

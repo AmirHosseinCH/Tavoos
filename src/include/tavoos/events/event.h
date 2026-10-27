@@ -19,6 +19,7 @@ enum class EventType {
     Wheel,
     KeyPress,
     KeyRelease,
+    ShortcutOverride,
     TextInput,
     FocusIn,
     FocusOut,
