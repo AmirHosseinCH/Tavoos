@@ -177,9 +177,11 @@ someContainer.addChild<Tavoos::RectangleWidget>([](Tavoos::RectangleWidget& r) {
 });
 ```
 
-- **`T* addChild<T>(std::function<void(T&)> body = {})`** - constructs `T` as a new child, runs `body` on it, and returns the pointer (which stays valid for as long as the widget remains in the tree).
+- **`T* addChild<T>(std::function<void(T&)> body = {})`** - constructs `T` as a new child, runs `body` on it, and returns the pointer (which stays valid for as long as the child remains in the tree). `T` can be any `Object`, not only a widget.
 - **`removeSelf()`** - detaches this widget (and its subtree) from its parent. Safe to call from within the widget's own event handler.
-- **`removeChild(Widget* child)`** - same, called on the parent for a specific child.
+- **`removeChild(Object* child)`** - same, called on the parent for a specific child, widget or not.
+
+`TB::Create<T>` also accepts any `Object`. A child that is not a widget takes no space in layouts and draws nothing. Widgets declared inside its body go to the enclosing widget, not under the object.
 
 A list view's delegate is an exception to the "`TB::` won't work later" rule: its rows are created after
 the build, but the list points the builder at each row while its delegate runs, so `TB::` calls there work.

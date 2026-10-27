@@ -157,13 +157,18 @@ private:
     template<typename T>
     static void create(std::function<void(T&)> body) {
         const auto parentObject = currentItem;
-        std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
-        T* const raw = static_cast<T*>(widget.get());
-        currentItem = widget.get();
-        body(*raw);
-        parentObject->appendChild(widget);
-        raw->finishBuild();
-        currentItem = parentObject;
+        std::unique_ptr<Object> object = std::make_unique<T>(parentObject);
+        T* const raw = static_cast<T*>(object.get());
+        if constexpr (std::derived_from<T, Widget>) {
+            currentItem = object.get();
+            body(*raw);
+            parentObject->appendChild(object);
+            raw->finishBuild();
+            currentItem = parentObject;
+        } else {
+            body(*raw);
+            parentObject->appendChild(object);
+        }
     }
 };
 ```
@@ -186,6 +191,15 @@ Builder::currentItem = nullptr; // dereferencing this later crashes
 Calling `TB::Rectangle(...)` later (e.g. from an `onClick` handler) dereferences a null
 `parentObject` and crashes.
 
+`T` does not have to be a widget: `create<T>()` and `TB::Create<T>` accept any `Object`. A plain
+object is constructed and appended the same way, but it skips `finishBuild()`, since it has no
+build hook or layout, and `currentItem` stays on the enclosing widget while its body runs. A `TB::`
+call inside the body therefore adds the widget to the enclosing widget rather than under an object
+that cannot show it, and a nested plain object becomes the enclosing widget's child too. Every
+traversal of `children()` (layout, rendering, hit-testing, focus, and the item scans of stack and
+swipe views) casts each child with `dynamic_cast<Widget*>` and skips the rest, so a plain object
+takes no layout slot and draws nothing.
+
 Code that has to run a user body after the build can give the builder a parent for the length of
 that body with `Builder::Scope`, an RAII object whose constructor points `currentItem` at a widget
 and whose destructor restores the previous value. `ListViewBase` uses it for its delegate.
@@ -195,18 +209,23 @@ and whose destructor restores the previous value. `ListViewBase` uses it for its
 ```cpp
 template<typename T>
 T* addChild(std::function<void(T&)> body = {}) {
-    static_assert(std::is_base_of_v<Widget, T>, "addChild<T>() requires T to derive from Widget");
+    static_assert(std::is_base_of_v<Object, T>, "addChild<T>() requires T to derive from Object");
     auto child = std::make_unique<T>(this);
     T* raw = child.get();
     if (body)
         body(*raw);
     std::unique_ptr<Object> asObject = std::move(child);
     appendChild(asObject);
-    raw->finishBuild();
-    raw->requestRelayout();
+    if constexpr (std::is_base_of_v<Widget, T>) {
+        raw->finishBuild();
+        raw->requestRelayout();
+    }
     return raw;
 }
 ```
+
+Like `create<T>()`, it accepts any `Object` and only finishes the build and requests a relayout for
+widgets.
 
 This has no dependency on `Builder::currentItem` at all - it's the only safe way to grow the
 tree dynamically, at runtime, after `build()` has already returned. If a dynamically-added
@@ -243,10 +262,11 @@ only suppresses relayout requests during the window's initial build.
 
 ### Removing widgets: two-phase deferred destruction
 
-`Widget::removeSelf()`/`removeChild()` don't destroy anything immediately:
+`Widget::removeSelf()`/`removeChild()` don't destroy anything immediately. `removeChild` takes
+any `Object`, so plain objects are removed the same way:
 
 ```cpp
-void Widget::detachAndDefer(Widget* child) {
+void Widget::detachAndDefer(Object* child) {
     Object* const parentObj = child->parent();
     if (!parentObj)
         return;
@@ -255,10 +275,10 @@ void Widget::detachAndDefer(Widget* child) {
     if (!detached)
         return;
 
-    if (child->m_ownerWindow) {
-        child->m_ownerWindow->clearReferencesTo(child);
-        child->m_ownerWindow->markDirty();
-        child->m_ownerWindow->deferDestruction(std::move(detached));
+    if (m_ownerWindow) {
+        m_ownerWindow->clearReferencesTo(child);
+        m_ownerWindow->markDirty();
+        m_ownerWindow->deferDestruction(std::move(detached));
     }
 
     if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->isLayouter())
@@ -292,12 +312,12 @@ subtree's *potential observers* (not the subtree itself) and nulls any of `Windo
 cached pointers that point into it and erases them from the hovered chain (see [Hover](#hover)):
 
 ```cpp
-void Window::clearReferencesTo(Widget* subtreeRoot) {
-    auto isOrDescendantOf = [subtreeRoot](Widget* w) {
-        while (w) {
-            if (w == subtreeRoot)
+void Window::clearReferencesTo(Object* subtreeRoot) {
+    auto isOrDescendantOf = [subtreeRoot](const Object* object) {
+        while (object) {
+            if (object == subtreeRoot)
                 return true;
-            w = dynamic_cast<Widget*>(w->parent());
+            object = object->parent();
         }
         return false;
     };
@@ -332,15 +352,20 @@ exist yet, so creation is two-phase and both creation paths know about it:
 template<typename T>
 static void create(std::function<void(T&)> body) {
     const auto parentObject = currentItem;
-    std::unique_ptr<Object> widget = std::make_unique<T>(parentObject);
-    T* const raw = static_cast<T*>(widget.get());
-    currentItem = widget.get();
-    if constexpr (std::is_base_of_v<ComponentBase, T>)
-        static_cast<ComponentBase&>(*raw).runBuild();
-    body(*raw);
-    parentObject->appendChild(widget);
-    raw->finishBuild();
-    currentItem = parentObject;
+    std::unique_ptr<Object> object = std::make_unique<T>(parentObject);
+    T* const raw = static_cast<T*>(object.get());
+    if constexpr (std::derived_from<T, Widget>) {
+        currentItem = object.get();
+        if constexpr (std::is_base_of_v<ComponentBase, T>)
+            static_cast<ComponentBase&>(*raw).runBuild();
+        body(*raw);
+        parentObject->appendChild(object);
+        raw->finishBuild();
+        currentItem = parentObject;
+    } else {
+        body(*raw);
+        parentObject->appendChild(object);
+    }
 }
 ```
 
