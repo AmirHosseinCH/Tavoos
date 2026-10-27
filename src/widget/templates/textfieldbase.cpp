@@ -26,6 +26,7 @@ std::size_t previousCodepointStart(const std::string& text, std::size_t i) {
 }
 
 TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
+    cursor(CursorShape::IBeam);
     m_text.onChange([this](const std::string& value) {
         m_textState.setIfChanged(value);
         m_cursorByteIndex = std::min(m_cursorByteIndex, value.size());

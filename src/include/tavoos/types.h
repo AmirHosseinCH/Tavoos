@@ -113,6 +113,20 @@ enum class TransformOrigin {
     BottomLeft, Bottom, BottomRight,
 };
 
+enum class CursorShape {
+    Inherit,
+    Arrow,
+    IBeam,
+    Crosshair,
+    PointingHand,
+    ResizeEW,
+    ResizeNS,
+    ResizeNWSE,
+    ResizeNESW,
+    ResizeAll,
+    NotAllowed,
+};
+
 enum class Fill : std::uint32_t {
     None = 0,
     Width = 1 << 0,

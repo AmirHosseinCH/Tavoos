@@ -47,6 +47,7 @@ void Window::clearReferencesTo(Widget* subtreeRoot) {
     std::erase_if(m_hoveredChain, isOrDescendantOf);
     if (isOrDescendantOf(m_pressedWidget))
         m_pressedWidget = nullptr;
+    std::erase_if(m_pressedChain, isOrDescendantOf);
     if (isOrDescendantOf(m_lastClickWidget))
         m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
@@ -148,6 +149,8 @@ Window::~Window() {
         m_pendingDestruction.clear();
         Application::instance()->renderer->releaseWindowResources(*this);
         glfwDestroyWindow(m_window);
+        for (const auto& [shape, cursor] : m_cursors)
+            glfwDestroyCursor(cursor);
     }
 }
 
@@ -282,6 +285,40 @@ void Window::updateHover(Widget* hit, const Point& windowPoint) {
     }
 }
 
+static int glfwCursorShape(CursorShape shape) {
+    switch (shape) {
+    case CursorShape::IBeam:        return GLFW_IBEAM_CURSOR;
+    case CursorShape::Crosshair:    return GLFW_CROSSHAIR_CURSOR;
+    case CursorShape::PointingHand: return GLFW_POINTING_HAND_CURSOR;
+    case CursorShape::ResizeEW:     return GLFW_RESIZE_EW_CURSOR;
+    case CursorShape::ResizeNS:     return GLFW_RESIZE_NS_CURSOR;
+    case CursorShape::ResizeNWSE:   return GLFW_RESIZE_NWSE_CURSOR;
+    case CursorShape::ResizeNESW:   return GLFW_RESIZE_NESW_CURSOR;
+    case CursorShape::ResizeAll:    return GLFW_RESIZE_ALL_CURSOR;
+    case CursorShape::NotAllowed:   return GLFW_NOT_ALLOWED_CURSOR;
+    default:                        return GLFW_ARROW_CURSOR;
+    }
+}
+
+void Window::updateCursor() {
+    const std::vector<Widget*>& chain = m_pressedWidget ? m_pressedChain : m_hoveredChain;
+    const auto set = std::ranges::find_if(chain, [](const Widget* widget) { return widget->cursor() != CursorShape::Inherit; });
+    const CursorShape shape = set != chain.end() ? (*set)->cursor() : CursorShape::Arrow;
+    if (shape == m_cursorShape || !m_window)
+        return;
+    m_cursorShape = shape;
+    glfwSetCursor(m_window, cursorFor(shape));
+}
+
+GLFWcursor* Window::cursorFor(CursorShape shape) {
+    if (shape == CursorShape::Arrow)
+        return nullptr;
+    GLFWcursor*& cursor = m_cursors[shape];
+    if (!cursor)
+        cursor = glfwCreateStandardCursor(glfwCursorShape(shape));
+    return cursor;
+}
+
 static KeyModifier toKeyModifier(int mods) {
     KeyModifier km = KeyModifier::None;
     if (mods & GLFW_MOD_SHIFT)   km |= KeyModifier::Shift;
@@ -334,6 +371,8 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
     if (action == GLFW_PRESS) {
         self->m_pressedWidget = hit;
+        self->m_pressedChain = hoverChainAt(hit, windowPoint);
+        self->updateCursor();
         self->m_dragging = false;
         self->m_dragStartPoint = windowPoint;
         self->m_dragLastPoint = windowPoint;
@@ -387,6 +426,8 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
         }
 
         self->m_pressedWidget = nullptr;
+        self->m_pressedChain.clear();
+        self->updateCursor();
     }
 }
 
@@ -450,6 +491,7 @@ void Window::cursorPosCallback(GLFWwindow* window, double x, double y) {
     const Point windowPoint{static_cast<float>(x), static_cast<float>(y)};
 
     self->updateHover(hit, windowPoint);
+    self->updateCursor();
 
     if (hit) {
         MouseEvent moveEvent{EventType::MouseMove, 0.0f, 0.0f, MouseButton::Unknown, KeyModifier::None};

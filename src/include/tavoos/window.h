@@ -7,7 +7,9 @@
 #include <tavoos/types.h>
 
 #include <string>
+#include <unordered_map>
 
+struct GLFWcursor;
 struct GLFWwindow;
 
 namespace Tavoos {
@@ -116,10 +118,15 @@ private:
     static Widget* hitTestChildren(Window* self, double x, double y);
     static std::vector<Widget*> hoverChainAt(Widget* hit, const Point& windowPoint);
     void updateHover(Widget* hit, const Point& windowPoint);
+    void updateCursor();
+    GLFWcursor* cursorFor(CursorShape shape);
     static void collectFocusable(Object* root, std::vector<Widget*>& out);
     void focusNext(bool reverse);
     std::vector<Widget*> m_hoveredChain;
     Widget* m_pressedWidget{nullptr};
+    std::vector<Widget*> m_pressedChain;
+    CursorShape m_cursorShape{CursorShape::Arrow};
+    std::unordered_map<CursorShape, GLFWcursor*> m_cursors;
     Widget* m_focusedWidget{nullptr};
     std::vector<OverlayBase*> m_overlays;
     std::vector<OverlayBase*> m_retiredOverlays;

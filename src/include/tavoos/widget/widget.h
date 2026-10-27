@@ -332,6 +332,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) cursor(this auto&& self, PropertyArg<CursorShape> shape) {
+        shape.applyTo(self.m_cursor);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) draggable(this auto&& self, PropertyArg<bool> draggable) {
         draggable.applyTo(self.m_draggable);
         return std::forward<decltype(self)>(self);
@@ -452,6 +457,7 @@ public:
     bool focusable() const { return m_focusable; }
     bool focused() const { return m_focused; }
     State<bool>& focusedState() { return m_focused; }
+    CursorShape cursor() const { return m_cursor; }
     bool draggable() const { return m_draggable; }
     float dragThreshold() const { return m_dragThreshold; }
     DragAxis dragXAxis() const { return m_dragXAxis; }
@@ -696,6 +702,7 @@ private:
     Property<bool> m_visible{true};
     Property<bool> m_focusable{false};
     State<bool> m_focused{false};
+    Property<CursorShape> m_cursor{CursorShape::Inherit};
     Property<bool> m_draggable{false};
     Property<float> m_dragThreshold{0.0f};
     Property<DragAxis> m_dragXAxis{DragAxis{}};
