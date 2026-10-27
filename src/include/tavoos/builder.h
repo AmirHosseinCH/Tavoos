@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tavoos/application.h>
+#include <tavoos/events/shortcut.h>
 #include <tavoos/export.hpp>
 #include <tavoos/object.h>
 #include <tavoos/widget/controls/buttonwidget.h>
@@ -70,6 +71,7 @@ public:
     static void SwipeView(std::function<void(SwipeViewWidget&)> body) { create<SwipeViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }
     static void ToolTip(std::function<void(ToolTipWidget&)> body)     { create<ToolTipWidget>(std::move(body)); }
+    static void Shortcut(std::function<void(Tavoos::Shortcut&)> body) { create<Tavoos::Shortcut>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
 

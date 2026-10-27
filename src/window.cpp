@@ -1,6 +1,7 @@
 #include <tavoos/application.h>
 #include <tavoos/builder.h>
 #include <tavoos/events/events.h>
+#include <tavoos/events/shortcut.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/widget/templates/overlaybase.h>
 #include <tavoos/window.h>
@@ -48,6 +49,7 @@ void Window::clearReferencesTo(Object* subtreeRoot) {
     if (isOrDescendantOf(m_pressedWidget))
         m_pressedWidget = nullptr;
     std::erase_if(m_pressedChain, isOrDescendantOf);
+    std::erase_if(m_shortcuts, isOrDescendantOf);
     if (isOrDescendantOf(m_lastClickWidget))
         m_lastClickWidget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
@@ -319,6 +321,62 @@ GLFWcursor* Window::cursorFor(CursorShape shape) {
     return cursor;
 }
 
+void Window::addShortcut(Shortcut* shortcut) {
+    m_shortcuts.push_back(shortcut);
+}
+
+void Window::removeShortcut(Shortcut* shortcut) {
+    std::erase(m_shortcuts, shortcut);
+}
+
+bool Window::claimsShortcut(const KeyEvent& key) const {
+    for (Widget* widget = m_focusedWidget; widget; widget = dynamic_cast<Widget*>(widget->parent())) {
+        if (!widget->hasHandlerFor(EventType::ShortcutOverride))
+            continue;
+        KeyEvent event{EventType::ShortcutOverride, key.keyCode(), key.modifiers()};
+        widget->triggerShortcutOverride(event);
+        if (event.isAccepted())
+            return true;
+    }
+    return false;
+}
+
+bool Window::reachesShortcut(const Shortcut* shortcut) const {
+    const auto modal = std::find_if(m_overlays.rbegin(), m_overlays.rend(), [](const OverlayBase* overlay) { return overlay->modalActive(); });
+    if (modal == m_overlays.rend())
+        return true;
+    for (const Object* object = shortcut; object; object = object->parent()) {
+        if (object == *modal)
+            return true;
+    }
+    return false;
+}
+
+bool Window::runShortcut(const KeySequence& sequence, bool repeat) {
+    std::vector<Shortcut*> matches;
+    for (const auto& window : Application::instance()->m_windows) {
+        for (Shortcut* shortcut : window->m_shortcuts) {
+            if (!shortcut->matches(sequence, repeat))
+                continue;
+            if (shortcut->context() == ShortcutContext::Application || (window.get() == this && reachesShortcut(shortcut)))
+                matches.push_back(shortcut);
+        }
+    }
+
+    if (matches.empty())
+        return false;
+    if (matches.size() == 1) {
+        if (matches.front()->m_onActivated)
+            matches.front()->m_onActivated();
+        return true;
+    }
+    for (Shortcut* shortcut : matches) {
+        if (shortcut->m_onActivatedAmbiguously)
+            shortcut->m_onActivatedAmbiguously();
+    }
+    return true;
+}
+
 static KeyModifier toKeyModifier(int mods) {
     KeyModifier km = KeyModifier::None;
     if (mods & GLFW_MOD_SHIFT)   km |= KeyModifier::Shift;
@@ -575,15 +633,15 @@ void Window::keyCallback(GLFWwindow* window, int key, int /*scancode*/, int acti
         return;
     }
 
-    if (!self->m_focusedWidget)
-        return;
-
     const KeyModifier km = toKeyModifier(mods);
 
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         KeyEvent event{EventType::KeyPress, key, km};
-        dispatchBubble(self->m_focusedWidget, event, &Widget::triggerKeyPress);
-    } else if (action == GLFW_RELEASE) {
+        if (!self->claimsShortcut(event) && self->runShortcut(KeySequence{km, static_cast<Key>(key)}, action == GLFW_REPEAT))
+            return;
+        if (self->m_focusedWidget)
+            dispatchBubble(self->m_focusedWidget, event, &Widget::triggerKeyPress);
+    } else if (action == GLFW_RELEASE && self->m_focusedWidget) {
         KeyEvent event{EventType::KeyRelease, key, km};
         dispatchBubble(self->m_focusedWidget, event, &Widget::triggerKeyRelease);
     }

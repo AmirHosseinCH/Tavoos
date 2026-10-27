@@ -117,6 +117,7 @@ bool Widget::hasHandlerFor(EventType type) {
     case EventType::Wheel:            return static_cast<bool>(m_onWheel);
     case EventType::KeyPress:         return static_cast<bool>(m_onKeyPress);
     case EventType::KeyRelease:       return static_cast<bool>(m_onKeyRelease);
+    case EventType::ShortcutOverride: return static_cast<bool>(m_onShortcutOverride);
     case EventType::TextInput:        return static_cast<bool>(m_onTextInput);
     case EventType::FocusIn:          return static_cast<bool>(m_onFocusIn);
     case EventType::FocusOut:         return static_cast<bool>(m_onFocusOut);

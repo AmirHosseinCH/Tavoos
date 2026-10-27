@@ -43,6 +43,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Press / release / click / double-click](#press--release--click--double-click)
    - [Focus chain](#focus-chain)
    - [Focus memory](#focus-memory)
+   - [Shortcuts](#shortcuts)
 9. [Interaction state & control widgets](#interaction-state--control-widgets)
    - [`Control` and the behavior bases](#control-and-the-behavior-bases)
    - [Click-to-focus](#click-to-focus)
@@ -2159,7 +2160,8 @@ void Window::focusNext(bool reverse) {
 ```
 
 `keyCallback` intercepts Tab (`GLFW_KEY_TAB`) before anything else and calls `focusNext`
-(`Shift+Tab` reverses); every other key only dispatches if `m_focusedWidget` is set. The
+(`Shift+Tab` reverses); other keys go through the shortcut check (see [Shortcuts](#shortcuts)) and
+then to `m_focusedWidget`, if one is set. The
 chain is recomputed from scratch on every Tab press rather than cached - simple, and cheap
 enough in practice for typical UI sizes. While a modal overlay is open, the chain is collected
 from that overlay's subtree only, so Tab never leaves it.
@@ -2182,6 +2184,45 @@ is respected, and it must run before `key` is removed, because removing the subt
 and the entry. `clearReferencesTo` also removes entries whose key was removed and nulls saved
 widgets that were removed, so a restore never focuses a dead widget. Overlays use these calls when
 they open and close, and stack views use them when items are pushed, popped and replaced.
+
+### Shortcuts
+
+**`KeySequence`** (`events/keysequence.h`) is a `Key` with its `KeyModifier`s, compared exactly.
+`fromString` (`src/events/keysequence.cpp`) splits text on `+`: every part but the last must be a
+modifier name and the last a key name, both case-insensitive; anything else is logged and gives an
+empty sequence, which matches nothing. `toString` writes the modifiers in a fixed order (Ctrl, Alt,
+Shift, Meta) and the first name of the key.
+
+**`Shortcut`** (`events/shortcut.h`) is a plain `Object` (see
+[Building the tree](#building-the-tree)), not a widget, so it takes no layout slot and is
+skipped by every traversal. Its constructor walks up its parents to the nearest widget, whose
+`ownerWindow()` it takes, or to the window itself, and registers there with `addShortcut`; the
+destructor calls `removeShortcut`. Removing it, or a widget above it, goes through
+`clearReferencesTo`, which erases it from `m_shortcuts` at once, before the deferred destruction.
+`matches(sequence, repeat)` checks that it is enabled and not empty, that the sequence is equal, that
+a key repeat is allowed by `autoRepeat`, and that every widget above it is visible.
+
+A key press or repeat that is not Escape for a popup or Tab reaches this, in `keyCallback`:
+
+```cpp
+KeyEvent event{EventType::KeyPress, key, km};
+if (!self->claimsShortcut(event) && self->runShortcut(KeySequence{km, static_cast<Key>(key)}, action == GLFW_REPEAT))
+    return;
+if (self->m_focusedWidget)
+    dispatchBubble(self->m_focusedWidget, event, &Widget::triggerKeyPress);
+```
+
+`claimsShortcut` sends an `EventType::ShortcutOverride` event to the focused widget and then each
+ancestor that has a handler, through the virtual `triggerShortcutOverride`, which runs
+`onShortcutOverride`. The event starts unaccepted, and the first widget to accept it claims the key:
+the `&&` then skips `runShortcut`, and the key goes to the focused widget as usual.
+
+`runShortcut` collects the matching shortcuts of every window: `Application` shortcuts from any
+window, `Window` shortcuts only from the window that got the key, and only if `reachesShortcut`
+allows them. That finds the topmost overlay with `modalActive()`, and with one open, accepts only
+shortcuts inside it. One match runs `onActivated`; several run `onActivatedAmbiguously` on each, and
+none activates. Either way the key is consumed. With no match, the key goes to the focused widget.
+Key releases are not checked.
 
 ## Interaction state & control widgets
 
