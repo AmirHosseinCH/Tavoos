@@ -145,6 +145,7 @@ protected:
     void triggerFocusOut(Event& event) override;
     void triggerKeyPress(KeyEvent& event) override;
     void triggerKeyRelease(KeyEvent& event) override;
+    void triggerShortcutOverride(KeyEvent& event) override;
     void triggerTextInput(KeyEvent& event) override;
     void onResolvedSizeChanged() override;
 

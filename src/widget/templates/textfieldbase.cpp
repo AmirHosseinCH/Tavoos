@@ -102,6 +102,7 @@ bool TextFieldBase::hasHandlerFor(EventType type) {
     case EventType::MouseClick:
     case EventType::KeyPress:
     case EventType::KeyRelease:
+    case EventType::ShortcutOverride:
     case EventType::TextInput:
         return true;
     case EventType::DragStart:
@@ -165,6 +166,13 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
 }
 
 void TextFieldBase::triggerKeyRelease(KeyEvent&) {
+}
+
+void TextFieldBase::triggerShortcutOverride(KeyEvent& event) {
+    const Key key = static_cast<Key>(event.keyCode());
+    if (enabled() && (textEditActionFor(key, event.modifiers()) || isTextInputKey(key, event.modifiers())))
+        event.accept();
+    Widget::triggerShortcutOverride(event);
 }
 
 void TextFieldBase::triggerTextInput(KeyEvent& event) {

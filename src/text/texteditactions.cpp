@@ -66,4 +66,13 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     }
 }
 
+bool isTextInputKey(Key key, KeyModifier modifiers) {
+    if (hasFlag(modifiers, KeyModifier::Control) || hasFlag(modifiers, KeyModifier::Alt) || hasFlag(modifiers, KeyModifier::Super))
+        return false;
+    const int code = static_cast<int>(key);
+    const bool printable = code >= static_cast<int>(Key::Space) && code <= static_cast<int>(Key::GraveAccent);
+    const bool keypad = code >= static_cast<int>(Key::Kp0) && code <= static_cast<int>(Key::KpEqual) && key != Key::KpEnter;
+    return printable || keypad || key == Key::World1 || key == Key::World2;
+}
+
 }
