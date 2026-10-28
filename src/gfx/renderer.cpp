@@ -442,10 +442,48 @@ void Renderer::renderText(TextWidget& text) {
     vertices.reserve(content.size() * 6);
     int currentPage = -1;
 
+    const float op = text.effectiveOpacity();
+    const std::size_t selectionStart = std::min(text.selectionStart(), text.selectionEnd());
+    const std::size_t selectionEnd = std::max(text.selectionStart(), text.selectionEnd());
+
+    if (selectionStart < selectionEnd) {
+        auto advanceBetween = [&](std::size_t from, std::size_t to) {
+            float width = 0.0f;
+            for (std::size_t i = from; i < to; ) {
+                const Utf8Decoded d = decodeUtf8At(content, i);
+                const GlyphMetrics& m = face->glyph(d.codepoint);
+                if (m.valid)
+                    width += m.advance * scale;
+                i += d.length;
+            }
+            return width;
+        };
+
+        quadShader.use();
+        quadShader.setInt("uMaskMode", m_capturingMask ? 1 : 0);
+        quadShader.setVec4("uRadius", glm::vec4{0.0f});
+        quadShader.setFloat("uBorderWidth", 0.0f);
+        applyPaintUniforms(quadShader, "u", "uColor", text.selectionColor(), op);
+        applyPaintUniforms(quadShader, "uBorder", "uBorderColor", Color::Transparent, op);
+
+        for (std::size_t li = 0; li < lines.size(); ++li) {
+            const TextLine& line = lines[li];
+            const std::size_t from = std::max(selectionStart, line.byteStart);
+            const std::size_t to = std::min(selectionEnd, line.byteEnd);
+            if (!line.overrideText.empty() || from >= to)
+                continue;
+            const float x0 = lineStartX(li) + advanceBetween(line.byteStart, from);
+            const float width = advanceBetween(from, to);
+            const float top = blockStartY + lineHeight * static_cast<float>(li);
+            quadShader.setMat4("world", text.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{x0, top, 0.0f}));
+            quadShader.setVec2("uHalfSize", glm::vec2{width, lineHeight} * 0.5f);
+            drawQuad(width, lineHeight);
+        }
+    }
+
     textShader.use();
     textShader.setInt("uMaskMode", m_capturingMask ? 1 : 0);
     textShader.setMat4("world", text.worldMatrix());
-    const float op = text.effectiveOpacity();
     applyPaintUniforms(textShader, "u", "uColor", text.color(), op);
 
     const float boxW = text.resolvedWidth();
@@ -487,19 +525,27 @@ void Renderer::renderText(TextWidget& text) {
         penX += m.advance * scale;
     };
 
+    bool drawingSelected = false;
     for (std::size_t li = 0; li < lines.size(); ++li) {
         float penX = lineStartX(li);
         float baselineY = blockStartY + face->ascender() * scale + lineHeight * static_cast<float>(li);
 
-        const std::string& source = lines[li].overrideText.empty() ? content : lines[li].overrideText;
-        std::size_t i = lines[li].overrideText.empty() ? lines[li].byteStart : 0;
-        std::size_t end = lines[li].overrideText.empty() ? lines[li].byteEnd : source.size();
+        const bool original = lines[li].overrideText.empty();
+        const std::string& source = original ? content : lines[li].overrideText;
+        std::size_t i = original ? lines[li].byteStart : 0;
+        std::size_t end = original ? lines[li].byteEnd : source.size();
 
         while (i < end) {
+            const bool selected = original && i >= selectionStart && i < selectionEnd;
             Utf8Decoded d = decodeUtf8At(source, i);
             i += d.length;
             const GlyphMetrics& m = face->glyph(d.codepoint);
             if (!m.valid) continue;
+            if (selected != drawingSelected) {
+                flush();
+                applyPaintUniforms(textShader, "u", "uColor", selected ? text.selectedTextColor() : text.color(), op);
+                drawingSelected = selected;
+            }
             emitGlyph(m, penX, baselineY);
         }
     }
