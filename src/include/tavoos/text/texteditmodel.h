@@ -7,6 +7,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace Tavoos {
 
@@ -19,6 +20,7 @@ public:
     std::size_t selectionStart() const { return std::min(m_anchor, m_cursor); }
     std::size_t selectionEnd() const { return std::max(m_anchor, m_cursor); }
     std::string selectedText() const;
+    std::pair<std::size_t, std::size_t> wordAt(std::size_t position) const;
     bool singleLine() const { return m_singleLine; }
 
     void setSingleLine(bool singleLine) { m_singleLine = singleLine; }
@@ -31,11 +33,15 @@ public:
     void insert(std::string_view text);
     void deleteBackward();
     void deleteForward();
+    void deleteWordBackward();
+    void deleteWordForward();
 
     void moveLeft(bool extend = false);
     void moveRight(bool extend = false);
     void moveToStart(bool extend = false);
     void moveToEnd(bool extend = false);
+    void moveWordLeft(bool extend = false);
+    void moveWordRight(bool extend = false);
 
     void onTextChanged(std::function<void()> callback) { m_onTextChanged = std::move(callback); }
     void onCursorChanged(std::function<void()> callback) { m_onCursorChanged = std::move(callback); }
