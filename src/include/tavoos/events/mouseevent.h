@@ -34,13 +34,16 @@ public:
     float y() const { return m_y; }
     MouseButton button() const { return m_button; }
     KeyModifier modifiers() const { return m_mods; }
+    int clickCount() const { return m_clickCount; }
 
     void setPosition(const Point& point) { m_x = point.x; m_y = point.y; }
+    void setClickCount(int count) { m_clickCount = count; }
 
 private:
     float m_x, m_y;
     MouseButton m_button;
     KeyModifier m_mods;
+    int m_clickCount{0};
 };
 
 }

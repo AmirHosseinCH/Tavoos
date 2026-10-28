@@ -90,7 +90,7 @@ private:
     }
 
     static void runInBuilderScope(Widget& slot, const std::function<void()>& call);
-    void sendClick(float x, float y, KeyModifier modifiers);
+    void sendClick(float x, float y, KeyModifier modifiers, int clickCount);
     void sendClickFromKeyboard(KeyModifier modifiers);
 
     State<bool> m_pressed{false};

@@ -42,6 +42,41 @@ constexpr Utf8Decoded decodeUtf8At(const std::string& content, std::size_t i) {
     return { codepoint, len };
 }
 
+inline std::size_t previousCodepointStart(const std::string& content, std::size_t i) {
+    if (i == 0)
+        return 0;
+    std::size_t j = i - 1;
+    while (j > 0 && (static_cast<unsigned char>(content[j]) & 0xC0) == 0x80)
+        --j;
+    return j;
+}
+
+inline std::size_t codepointStartAt(const std::string& content, std::size_t i) {
+    if (i >= content.size())
+        return content.size();
+    while (i > 0 && (static_cast<unsigned char>(content[i]) & 0xC0) == 0x80)
+        --i;
+    return i;
+}
+
+inline std::size_t byteOffsetOfCharacter(const std::string& content, std::size_t character) {
+    std::size_t i = 0;
+    for (; character > 0 && i < content.size(); --character)
+        i += decodeUtf8At(content, i).length;
+    return i;
+}
+
+inline std::size_t characterIndexAt(const std::string& content, std::size_t byte) {
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < byte && i < content.size(); i += decodeUtf8At(content, i).length)
+        ++count;
+    return count;
+}
+
+inline std::size_t characterCount(const std::string& content) {
+    return characterIndexAt(content, content.size());
+}
+
 template <typename Fn>
 inline void forEachUtf8Codepoint(const std::string& content, Fn&& fn) {
     for (std::size_t i = 0; i < content.size(); ) {

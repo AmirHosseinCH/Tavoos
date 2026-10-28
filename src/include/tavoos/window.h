@@ -122,6 +122,7 @@ private:
     static Widget* dispatchMouseBubble(Widget* start, MouseEvent& event, const Point& windowPoint, void (Widget::*trigger)(MouseEvent&));
 
     static Widget* hitTestChildren(Window* self, double x, double y, const Widget* skip = nullptr);
+    static Widget* clickTarget(Widget* hit);
     void layoutTree();
     Point dragHotSpotInWindow() const;
     void updateDropTarget();
@@ -160,6 +161,8 @@ private:
     double m_lastClickTime{0.0};
     float m_lastClickX{0.0f};
     float m_lastClickY{0.0f};
+    int m_clickCount{0};
+    Widget* m_clickTarget{nullptr};
 
     static constexpr double kDoubleClickTimeThreshold = 0.4;
     static constexpr float kDoubleClickDistanceThreshold = 5.0f;

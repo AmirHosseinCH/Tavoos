@@ -1,5 +1,6 @@
 set(TAVOOS_SOURCES
     application.cpp
+    clipboard.cpp
     object.cpp
     window.cpp
     builder.cpp
@@ -69,6 +70,9 @@ set(TAVOOS_SOURCES
     text/systemfont.cpp
     text/glyphatlas.cpp
     text/textlayout.cpp
+    text/texteditmodel.cpp
+    text/texteditactions.cpp
+    text/validators.cpp
     third_party/glad/glad.c
     third_party/stb_image/stb_image_impl.cpp
 )
@@ -81,6 +85,7 @@ target_sources(Tavoos
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
     FILES
     include/tavoos/application.h
+    include/tavoos/clipboard.h
     include/tavoos/theme.h
     include/tavoos/object.h
     include/tavoos/window.h
@@ -203,6 +208,9 @@ target_sources(Tavoos
     include/tavoos/text/glyphatlas.h
     include/tavoos/text/utf8.h
     include/tavoos/text/textlayout.h
+    include/tavoos/text/texteditmodel.h
+    include/tavoos/text/texteditactions.h
+    include/tavoos/text/validators.h
     include/tavoos/text/text.h
     include/tavoos/third_party/glad/glad.h
     include/tavoos/third_party/KHR/khrplatform.h

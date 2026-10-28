@@ -13,7 +13,10 @@ struct TextFieldStyle {
     Paint disabledBorderColor{Color::rgba(220, 222, 230)};
     Paint textColor{Color::Black};
     Paint placeholderColor{Color::rgba(160, 163, 175)};
+    Paint disabledTextColor{Color::rgba(160, 163, 175)};
     Paint caretColor{Color::Black};
+    Paint selectionColor{Color::rgba(85, 112, 241)};
+    Paint selectedTextColor{Color::White};
     int radius{6};
     float borderWidth{1.5f};
     float innerPaddingLeft{10.0f};

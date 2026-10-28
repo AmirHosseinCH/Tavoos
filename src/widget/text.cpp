@@ -6,7 +6,7 @@ namespace Tavoos {
 
 TextWidget::TextWidget(Object* parent) : Widget{parent} {
     bindRelayoutTriggers(m_text, m_family, m_weight, m_style, m_fontSize, m_wrapMode, m_elideMode, m_maxLines);
-    bindRepaintTriggers(m_color, m_textAlignment);
+    bindRepaintTriggers(m_color, m_textAlignment, m_selectionStart, m_selectionEnd, m_selectionColor, m_selectedTextColor);
     m_font.onChange([this](const Font& font) {
         family(font.family).weight(font.weight).style(font.style).fontSize(font.size);
     });
@@ -75,6 +75,13 @@ Widget::Size TextWidget::computeIntrinsicSize() {
         (width()  > 0) ? static_cast<float>(width())  : measuredWidth,
         (height() > 0) ? static_cast<float>(height()) : measuredHeight
     };
+}
+
+float TextWidget::lineHeight() {
+    FontFace* face = resolvedFace();
+    if (!face)
+        return 0.0f;
+    return face->lineHeight() * m_fontSize.get() / FontFace::ReferencePixelSize;
 }
 
 float TextWidget::xOffsetForByteIndex(std::size_t byteIndex) {

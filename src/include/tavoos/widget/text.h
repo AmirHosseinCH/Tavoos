@@ -80,6 +80,22 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) selection(this auto&& self, std::size_t start, std::size_t end) {
+        self.m_selectionStart.set(start);
+        self.m_selectionEnd.set(end);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) selectionColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_selectionColor);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) selectedTextColor(this auto&& self, PropertyArg<Paint> color) {
+        color.applyTo(self.m_selectedTextColor);
+        return std::forward<decltype(self)>(self);
+    }
+
     std::string text() const { return m_text; }
     Font font() const { return {m_family, m_fontSize, m_weight, m_style}; }
     std::string family() const { return m_family; }
@@ -91,7 +107,12 @@ public:
     WrapMode wrapMode() const { return m_wrapMode; }
     ElideMode elideMode() const { return m_elideMode; }
     int maxLines() const { return m_maxLines; }
+    std::size_t selectionStart() const { return m_selectionStart; }
+    std::size_t selectionEnd() const { return m_selectionEnd; }
+    Paint selectionColor() const { return m_selectionColor; }
+    Paint selectedTextColor() const { return m_selectedTextColor; }
 
+    float lineHeight();
     float xOffsetForByteIndex(std::size_t byteIndex);
     std::size_t byteIndexForXOffset(float x);
 
@@ -134,6 +155,10 @@ private:
     Property<WrapMode> m_wrapMode{WrapMode::NoWrap};
     Property<ElideMode> m_elideMode{ElideMode::None};
     Property<int> m_maxLines{0};
+    Property<std::size_t> m_selectionStart{0};
+    Property<std::size_t> m_selectionEnd{0};
+    Property<Paint> m_selectionColor{Color::rgba(85, 112, 241)};
+    Property<Paint> m_selectedTextColor{Color::White};
 };
 
 }

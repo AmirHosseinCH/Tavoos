@@ -94,7 +94,7 @@ void ButtonBase::triggerRelease(MouseEvent& event) {
         m_pressed.setIfChanged(false);
 
     if (hovered() && event.button() == MouseButton::Left)
-        sendClick(event.x(), event.y(), event.modifiers());
+        sendClick(event.x(), event.y(), event.modifiers(), event.clickCount());
 }
 
 void ButtonBase::triggerKeyPress(KeyEvent& event) {
@@ -135,13 +135,14 @@ void ButtonBase::triggerFocusOut(Event& event) {
     Widget::triggerFocusOut(event);
 }
 
-void ButtonBase::sendClick(float x, float y, KeyModifier modifiers) {
+void ButtonBase::sendClick(float x, float y, KeyModifier modifiers, int clickCount) {
     MouseEvent click{EventType::MouseClick, x, y, MouseButton::Left, modifiers};
+    click.setClickCount(clickCount);
     handleClick(click);
 }
 
 void ButtonBase::sendClickFromKeyboard(KeyModifier modifiers) {
-    sendClick(displayedWidth() * 0.5f, displayedHeight() * 0.5f, modifiers);
+    sendClick(displayedWidth() * 0.5f, displayedHeight() * 0.5f, modifiers, 1);
 }
 
 }
