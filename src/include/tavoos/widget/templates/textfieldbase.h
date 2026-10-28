@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace Tavoos {
 
@@ -160,6 +161,8 @@ private:
     void resetCaretBlink();
     void moveCursorTo(int position);
     void moveCursorToPoint(const Point& windowPoint, bool extend);
+    void extendWordSelection(const Point& windowPoint);
+    std::size_t characterAtPoint(const Point& windowPoint);
 
     Property<std::string> m_text{};
     State<std::string> m_textState{};
@@ -189,6 +192,8 @@ private:
     State<bool> m_caretVisible{false};
 
     Point m_pressPoint{};
+    int m_pressClickCount{1};
+    std::pair<std::size_t, std::size_t> m_pressWord{};
     int m_scrollOffset{0};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};

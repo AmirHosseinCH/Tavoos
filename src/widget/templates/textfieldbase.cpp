@@ -120,14 +120,29 @@ bool TextFieldBase::hasHandlerFor(EventType type) {
 void TextFieldBase::triggerPress(MouseEvent& event) {
     if (enabled()) {
         m_pressPoint = mapToWindow({event.x(), event.y()});
-        moveCursorToPoint(m_pressPoint, m_selectByMouse.get() && hasFlag(event.modifiers(), KeyModifier::Shift));
+        m_pressClickCount = m_selectByMouse.get() ? event.clickCount() : 1;
+        if (m_pressClickCount >= 3) {
+            m_model.selectAll();
+            resetCaretBlink();
+        } else if (m_pressClickCount == 2) {
+            m_pressWord = m_model.wordAt(characterAtPoint(m_pressPoint));
+            m_model.select(m_pressWord.first, m_pressWord.second);
+            resetCaretBlink();
+        } else {
+            moveCursorToPoint(m_pressPoint, m_selectByMouse.get() && hasFlag(event.modifiers(), KeyModifier::Shift));
+        }
     }
     Widget::triggerPress(event);
 }
 
 void TextFieldBase::triggerDragMove(DragEvent& event) {
-    if (m_selectByMouse.get() && enabled())
-        moveCursorToPoint({m_pressPoint.x + event.totalDx(), m_pressPoint.y + event.totalDy()}, true);
+    if (m_selectByMouse.get() && enabled()) {
+        const Point point{m_pressPoint.x + event.totalDx(), m_pressPoint.y + event.totalDy()};
+        if (m_pressClickCount == 2)
+            extendWordSelection(point);
+        else if (m_pressClickCount == 1)
+            moveCursorToPoint(point, true);
+    }
     Widget::triggerDragMove(event);
 }
 
@@ -233,6 +248,25 @@ void TextFieldBase::moveCursorToPoint(const Point& windowPoint, bool extend) {
     const Point local = m_textDisplay->mapFromWindow(windowPoint);
     m_model.setCursor(m_textDisplay->byteIndexForXOffset(local.x), extend);
     resetCaretBlink();
+}
+
+void TextFieldBase::extendWordSelection(const Point& windowPoint) {
+    const auto word = m_model.wordAt(characterAtPoint(windowPoint));
+    if (word.first < m_pressWord.first)
+        m_model.select(m_pressWord.second, word.first);
+    else
+        m_model.select(m_pressWord.first, std::max(word.second, m_pressWord.second));
+    resetCaretBlink();
+}
+
+std::size_t TextFieldBase::characterAtPoint(const Point& windowPoint) {
+    if (!m_textDisplay)
+        return 0;
+    const float x = m_textDisplay->mapFromWindow(windowPoint).x;
+    const std::size_t index = m_textDisplay->byteIndexForXOffset(x);
+    if (index > 0 && m_textDisplay->xOffsetForByteIndex(index) > x)
+        return previousCodepointStart(m_model.text(), index);
+    return index;
 }
 
 void TextFieldBase::updateSelection() {
