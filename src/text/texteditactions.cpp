@@ -8,27 +8,40 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
     const bool plain = modifiers == KeyModifier::None;
     const bool shift = modifiers == KeyModifier::Shift;
     const bool control = modifiers == KeyModifier::Control;
+    const bool controlShift = modifiers == (KeyModifier::Control | KeyModifier::Shift);
 
     switch (key) {
     case Key::Backspace:
         if (plain || shift)
             return TextEditAction::DeleteBackward;
+        if (control)
+            return TextEditAction::DeleteWordBackward;
         break;
     case Key::Delete:
         if (plain)
             return TextEditAction::DeleteForward;
+        if (control)
+            return TextEditAction::DeleteWordForward;
         break;
     case Key::Left:
         if (plain)
             return TextEditAction::MoveLeft;
         if (shift)
             return TextEditAction::SelectLeft;
+        if (control)
+            return TextEditAction::MoveWordLeft;
+        if (controlShift)
+            return TextEditAction::SelectWordLeft;
         break;
     case Key::Right:
         if (plain)
             return TextEditAction::MoveRight;
         if (shift)
             return TextEditAction::SelectRight;
+        if (control)
+            return TextEditAction::MoveWordRight;
+        if (controlShift)
+            return TextEditAction::SelectWordRight;
         break;
     case Key::Home:
         if (plain)
@@ -66,17 +79,23 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
 
 void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     switch (action) {
-    case TextEditAction::DeleteBackward: model.deleteBackward(); break;
-    case TextEditAction::DeleteForward:  model.deleteForward(); break;
-    case TextEditAction::MoveLeft:       model.moveLeft(); break;
-    case TextEditAction::MoveRight:      model.moveRight(); break;
-    case TextEditAction::MoveToStart:    model.moveToStart(); break;
-    case TextEditAction::MoveToEnd:      model.moveToEnd(); break;
-    case TextEditAction::SelectLeft:     model.moveLeft(true); break;
-    case TextEditAction::SelectRight:    model.moveRight(true); break;
-    case TextEditAction::SelectToStart:  model.moveToStart(true); break;
-    case TextEditAction::SelectToEnd:    model.moveToEnd(true); break;
-    case TextEditAction::SelectAll:      model.selectAll(); break;
+    case TextEditAction::DeleteBackward:     model.deleteBackward(); break;
+    case TextEditAction::DeleteForward:      model.deleteForward(); break;
+    case TextEditAction::DeleteWordBackward: model.deleteWordBackward(); break;
+    case TextEditAction::DeleteWordForward:  model.deleteWordForward(); break;
+    case TextEditAction::MoveLeft:           model.moveLeft(); break;
+    case TextEditAction::MoveRight:          model.moveRight(); break;
+    case TextEditAction::MoveToStart:        model.moveToStart(); break;
+    case TextEditAction::MoveToEnd:          model.moveToEnd(); break;
+    case TextEditAction::MoveWordLeft:       model.moveWordLeft(); break;
+    case TextEditAction::MoveWordRight:      model.moveWordRight(); break;
+    case TextEditAction::SelectLeft:         model.moveLeft(true); break;
+    case TextEditAction::SelectRight:        model.moveRight(true); break;
+    case TextEditAction::SelectToStart:      model.moveToStart(true); break;
+    case TextEditAction::SelectToEnd:        model.moveToEnd(true); break;
+    case TextEditAction::SelectWordLeft:     model.moveWordLeft(true); break;
+    case TextEditAction::SelectWordRight:    model.moveWordRight(true); break;
+    case TextEditAction::SelectAll:          model.selectAll(); break;
     case TextEditAction::Copy:
         if (model.hasSelection())
             Clipboard::setText(model.selectedText());
