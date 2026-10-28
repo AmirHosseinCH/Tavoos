@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -81,6 +82,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) maximumLength(this auto&& self, PropertyArg<int> length) {
+        length.applyTo(self.m_maximumLength);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) cursorPosition(this auto&& self, int position) {
         self.moveCursorTo(position);
         return std::forward<decltype(self)>(self);
@@ -119,7 +125,7 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
-    std::string text() const { return m_text; }
+    std::string text() const { return m_model.text(); }
     State<std::string>& textState() { return m_textState; }
     std::string placeholder() const { return m_placeholder; }
     Font font() const { return m_font; }
@@ -135,6 +141,7 @@ public:
     float innerPaddingBottom() const { return m_innerPaddingBottom; }
     bool selectByMouse() const { return m_selectByMouse; }
     bool readOnly() const { return m_readOnly; }
+    int maximumLength() const { return m_maximumLength; }
 
     int cursorPosition() const;
     int selectionStart() const;
@@ -192,6 +199,7 @@ private:
     BindableState<float> m_innerPaddingBottom{0.0f};
     Property<bool> m_selectByMouse{true};
     Property<bool> m_readOnly{false};
+    Property<int> m_maximumLength{std::numeric_limits<int>::max()};
 
     std::function<void(const std::string&)> m_onSubmit;
 
@@ -209,6 +217,7 @@ private:
     Point m_pressPoint{};
     int m_pressClickCount{1};
     std::pair<std::size_t, std::size_t> m_pressWord{};
+    bool m_changeFromCode{false};
     int m_scrollOffset{0};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};

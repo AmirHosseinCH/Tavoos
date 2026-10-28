@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -24,11 +25,13 @@ public:
     std::pair<std::size_t, std::size_t> wordAt(std::size_t position) const;
     bool singleLine() const { return m_singleLine; }
     bool readOnly() const { return m_readOnly; }
+    std::size_t maximumLength() const { return m_maximumLength; }
     bool canUndo() const { return !m_undoStack.empty(); }
     bool canRedo() const { return !m_redoStack.empty(); }
 
     void setSingleLine(bool singleLine) { m_singleLine = singleLine; }
     void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
+    void setMaximumLength(std::size_t length);
     void setText(std::string text);
     void setCursor(std::size_t position, bool extend = false);
     void select(std::size_t start, std::size_t end);
@@ -77,6 +80,7 @@ private:
     std::size_t m_anchor{0};
     bool m_singleLine{false};
     bool m_readOnly{false};
+    std::size_t m_maximumLength{std::numeric_limits<std::size_t>::max()};
     std::vector<Edit> m_undoStack;
     std::vector<Edit> m_redoStack;
     bool m_typing{false};

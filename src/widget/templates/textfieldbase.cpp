@@ -20,12 +20,19 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
     cursor(CursorShape::IBeam);
     m_model.setSingleLine(true);
     m_text.onChange([this](const std::string& value) {
-        m_textState.setIfChanged(value);
+        m_changeFromCode = true;
         m_model.setText(value);
+        m_changeFromCode = false;
+    });
+    m_maximumLength.onChange([this](const int& length) {
+        m_changeFromCode = true;
+        m_model.setMaximumLength(static_cast<std::size_t>(std::max(length, 0)));
+        m_changeFromCode = false;
     });
     m_model.onTextChanged([this] {
-        if (m_model.text() != m_text.get())
+        if (!m_changeFromCode && m_model.text() != m_text.get())
             m_text.set(m_model.text());
+        m_textState.setIfChanged(m_model.text());
         updateDisplayedText();
         updateCaretAndScroll();
         updateSelection();

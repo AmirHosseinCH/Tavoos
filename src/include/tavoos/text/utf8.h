@@ -73,6 +73,10 @@ inline std::size_t characterIndexAt(const std::string& content, std::size_t byte
     return count;
 }
 
+inline std::size_t characterCount(const std::string& content) {
+    return characterIndexAt(content, content.size());
+}
+
 template <typename Fn>
 inline void forEachUtf8Codepoint(const std::string& content, Fn&& fn) {
     for (std::size_t i = 0; i < content.size(); ) {

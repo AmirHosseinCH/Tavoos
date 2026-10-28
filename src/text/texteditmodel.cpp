@@ -76,7 +76,13 @@ std::pair<std::size_t, std::size_t> TextEditModel::wordAt(std::size_t position) 
     return {start, end};
 }
 
+void TextEditModel::setMaximumLength(std::size_t length) {
+    m_maximumLength = length;
+    setText(m_text);
+}
+
 void TextEditModel::setText(std::string text) {
+    text.resize(byteOffsetOfCharacter(text, m_maximumLength));
     if (text == m_text)
         return;
     m_text = std::move(text);
@@ -201,9 +207,13 @@ bool TextEditModel::removeSelection() {
 }
 
 void TextEditModel::insertText(std::string_view text, bool typing) {
-    if (text.empty())
+    std::string inserted = m_singleLine ? withoutLineBreaks(text) : std::string{text};
+    const std::size_t selected = characterIndexAt(m_text, selectionEnd()) - characterIndexAt(m_text, selectionStart());
+    const std::size_t kept = characterCount(m_text) - selected;
+    inserted.resize(byteOffsetOfCharacter(inserted, m_maximumLength > kept ? m_maximumLength - kept : 0));
+    if (inserted.empty())
         return;
-    replace(selectionStart(), selectionEnd(), m_singleLine ? withoutLineBreaks(text) : std::string{text}, typing);
+    replace(selectionStart(), selectionEnd(), std::move(inserted), typing);
 }
 
 void TextEditModel::replace(std::size_t start, std::size_t end, std::string inserted, bool typing) {
