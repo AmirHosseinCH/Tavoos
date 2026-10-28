@@ -135,7 +135,7 @@ private:
     BindableState<Font> m_font;
     Property<Paint> m_textColor{Color::Black};
     Property<Paint> m_placeholderColor{Color::rgba(160, 163, 175)};
-    Property<Paint> m_disabledTextColor{Color::rgba(228, 229, 235)};
+    Property<Paint> m_disabledTextColor{Color::rgba(160, 163, 175)};
     BindableState<Paint> m_caretColor{Color::rgba(85, 112, 241)};
     BindableState<float> m_innerPaddingLeft{10.0f};
     BindableState<float> m_innerPaddingTop{0.0f};
