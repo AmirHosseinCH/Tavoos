@@ -21,6 +21,9 @@ enum class TextEditAction {
     SelectToStart,
     SelectToEnd,
     SelectAll,
+    Copy,
+    Cut,
+    Paste,
 };
 
 TAVOOS_EXPORT std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers);

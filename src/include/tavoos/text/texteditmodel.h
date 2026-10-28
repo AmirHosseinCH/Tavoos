@@ -19,7 +19,9 @@ public:
     std::size_t selectionStart() const { return std::min(m_anchor, m_cursor); }
     std::size_t selectionEnd() const { return std::max(m_anchor, m_cursor); }
     std::string selectedText() const;
+    bool singleLine() const { return m_singleLine; }
 
+    void setSingleLine(bool singleLine) { m_singleLine = singleLine; }
     void setText(std::string text);
     void setCursor(std::size_t position, bool extend = false);
     void select(std::size_t start, std::size_t end);
@@ -47,6 +49,7 @@ private:
     std::string m_text;
     std::size_t m_cursor{0};
     std::size_t m_anchor{0};
+    bool m_singleLine{false};
     std::function<void()> m_onTextChanged;
     std::function<void()> m_onCursorChanged;
 };

@@ -18,6 +18,7 @@ constexpr float kBlinkInterval = 0.5f;
 
 TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
     cursor(CursorShape::IBeam);
+    m_model.setSingleLine(true);
     m_text.onChange([this](const std::string& value) {
         m_textState.setIfChanged(value);
         m_model.setText(value);

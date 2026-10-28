@@ -1,5 +1,7 @@
 #include <tavoos/text/texteditactions.h>
 
+#include <tavoos/clipboard.h>
+
 namespace Tavoos {
 
 std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) {
@@ -44,6 +46,18 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
         if (control)
             return TextEditAction::SelectAll;
         break;
+    case Key::C:
+        if (control)
+            return TextEditAction::Copy;
+        break;
+    case Key::X:
+        if (control)
+            return TextEditAction::Cut;
+        break;
+    case Key::V:
+        if (control)
+            return TextEditAction::Paste;
+        break;
     default:
         break;
     }
@@ -63,6 +77,19 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     case TextEditAction::SelectToStart:  model.moveToStart(true); break;
     case TextEditAction::SelectToEnd:    model.moveToEnd(true); break;
     case TextEditAction::SelectAll:      model.selectAll(); break;
+    case TextEditAction::Copy:
+        if (model.hasSelection())
+            Clipboard::setText(model.selectedText());
+        break;
+    case TextEditAction::Cut:
+        if (model.hasSelection()) {
+            Clipboard::setText(model.selectedText());
+            model.deleteBackward();
+        }
+        break;
+    case TextEditAction::Paste:
+        model.insert(Clipboard::text());
+        break;
     }
 }
 

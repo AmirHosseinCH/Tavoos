@@ -4,6 +4,21 @@
 
 namespace Tavoos {
 
+namespace {
+
+std::string withoutLineBreaks(std::string_view text) {
+    std::string result;
+    result.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\r' && i + 1 < text.size() && text[i + 1] == '\n')
+            continue;
+        result += text[i] == '\r' || text[i] == '\n' ? ' ' : text[i];
+    }
+    return result;
+}
+
+}
+
 std::string TextEditModel::selectedText() const {
     return m_text.substr(selectionStart(), selectionEnd() - selectionStart());
 }
@@ -34,9 +49,10 @@ void TextEditModel::deselect() {
 void TextEditModel::insert(std::string_view text) {
     if (text.empty())
         return;
+    const std::string inserted = m_singleLine ? withoutLineBreaks(text) : std::string{text};
     const std::size_t start = selectionStart();
-    m_text.replace(start, selectionEnd() - start, text);
-    finishEdit(start + text.size());
+    m_text.replace(start, selectionEnd() - start, inserted);
+    finishEdit(start + inserted.size());
 }
 
 void TextEditModel::deleteBackward() {
