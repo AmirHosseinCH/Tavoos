@@ -4,6 +4,7 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/text/font.h>
+#include <tavoos/text/texteditmodel.h>
 #include <tavoos/types.h>
 #include <tavoos/widget/templates/control.h>
 #include <tavoos/widget/text.h>
@@ -123,11 +124,6 @@ private:
     void updateDisplayedText();
     void updateCaretAndScroll();
     void resetCaretBlink();
-    void insertText(const std::string& utf8);
-    void deleteBackward();
-    void deleteForward();
-    void moveCursorLeft();
-    void moveCursorRight();
 
     Property<std::string> m_text{};
     State<std::string> m_textState{};
@@ -144,6 +140,8 @@ private:
 
     std::function<void(const std::string&)> m_onSubmit;
 
+    TextEditModel m_model;
+
     TextWidget* m_textDisplay{nullptr};
     TextWidget* m_placeholderDisplay{nullptr};
     State<int> m_contentX{0};
@@ -151,7 +149,6 @@ private:
     State<int> m_caretHeight{0};
     State<bool> m_caretVisible{false};
 
-    std::size_t m_cursorByteIndex{0};
     int m_scrollOffset{0};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};

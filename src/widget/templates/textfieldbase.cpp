@@ -19,10 +19,15 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
     cursor(CursorShape::IBeam);
     m_text.onChange([this](const std::string& value) {
         m_textState.setIfChanged(value);
-        m_cursorByteIndex = std::min(m_cursorByteIndex, value.size());
+        m_model.setText(value);
+    });
+    m_model.onTextChanged([this] {
+        if (m_model.text() != m_text.get())
+            m_text.set(m_model.text());
         updateDisplayedText();
         updateCaretAndScroll();
     });
+    m_model.onCursorChanged([this] { updateCaretAndScroll(); });
     m_placeholder.onChange([this](const std::string&) { updateDisplayedText(); });
     m_textColor.onChange([this](const Paint&) { updateDisplayedText(); });
     m_placeholderColor.onChange([this](const Paint&) { updateDisplayedText(); });
@@ -100,8 +105,7 @@ bool TextFieldBase::hasHandlerFor(EventType type) {
 void TextFieldBase::triggerPress(MouseEvent& event) {
     if (enabled() && m_textDisplay) {
         const Point local = m_textDisplay->mapFromWindow(mapToWindow({event.x(), event.y()}));
-        m_cursorByteIndex = m_textDisplay->byteIndexForXOffset(local.x);
-        updateCaretAndScroll();
+        m_model.setCursor(m_textDisplay->byteIndexForXOffset(local.x));
         resetCaretBlink();
     }
     Widget::triggerPress(event);
@@ -131,25 +135,26 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
 
     const int key = event.keyCode();
     if (key == static_cast<int>(Key::Backspace)) {
-        deleteBackward();
+        m_model.deleteBackward();
     } else if (key == static_cast<int>(Key::Delete)) {
-        deleteForward();
+        m_model.deleteForward();
     } else if (key == static_cast<int>(Key::Left)) {
-        moveCursorLeft();
+        m_model.moveLeft();
     } else if (key == static_cast<int>(Key::Right)) {
-        moveCursorRight();
+        m_model.moveRight();
     } else if (key == static_cast<int>(Key::Home)) {
-        m_cursorByteIndex = 0;
-        updateCaretAndScroll();
+        m_model.moveToStart();
     } else if (key == static_cast<int>(Key::End)) {
-        m_cursorByteIndex = m_text.get().size();
-        updateCaretAndScroll();
+        m_model.moveToEnd();
     } else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter)) {
         if (m_onSubmit)
-            m_onSubmit(m_text.get());
+            m_onSubmit(m_model.text());
+        return;
     } else {
         event.ignore();
+        return;
     }
+    resetCaretBlink();
 }
 
 void TextFieldBase::triggerKeyRelease(KeyEvent&) {
@@ -158,7 +163,8 @@ void TextFieldBase::triggerKeyRelease(KeyEvent&) {
 void TextFieldBase::triggerTextInput(KeyEvent& event) {
     if (!enabled())
         return;
-    insertText(encodeUtf8(static_cast<char32_t>(event.keyCode())));
+    m_model.insert(encodeUtf8(static_cast<char32_t>(event.keyCode())));
+    resetCaretBlink();
 }
 
 bool TextFieldBase::tick(float dt) {
@@ -176,58 +182,10 @@ void TextFieldBase::resetCaretBlink() {
         m_caretVisible.set(true);
 }
 
-void TextFieldBase::insertText(const std::string& utf8) {
-    std::string value = m_text.get();
-    value.insert(m_cursorByteIndex, utf8);
-    m_cursorByteIndex += utf8.size();
-    m_text.set(value);
-    resetCaretBlink();
-}
-
-void TextFieldBase::deleteBackward() {
-    if (m_cursorByteIndex == 0)
-        return;
-    const std::size_t start = previousCodepointStart(m_text.get(), m_cursorByteIndex);
-    std::string value = m_text.get();
-    value.erase(start, m_cursorByteIndex - start);
-    m_cursorByteIndex = start;
-    m_text.set(value);
-    resetCaretBlink();
-}
-
-void TextFieldBase::deleteForward() {
-    const std::string& value = m_text.get();
-    if (m_cursorByteIndex >= value.size())
-        return;
-    const Utf8Decoded d = decodeUtf8At(value, m_cursorByteIndex);
-    std::string next = value;
-    next.erase(m_cursorByteIndex, d.length);
-    m_text.set(next);
-    resetCaretBlink();
-}
-
-void TextFieldBase::moveCursorLeft() {
-    if (m_cursorByteIndex == 0)
-        return;
-    m_cursorByteIndex = previousCodepointStart(m_text.get(), m_cursorByteIndex);
-    updateCaretAndScroll();
-    resetCaretBlink();
-}
-
-void TextFieldBase::moveCursorRight() {
-    const std::string& value = m_text.get();
-    if (m_cursorByteIndex >= value.size())
-        return;
-    const Utf8Decoded d = decodeUtf8At(value, m_cursorByteIndex);
-    m_cursorByteIndex += d.length;
-    updateCaretAndScroll();
-    resetCaretBlink();
-}
-
 void TextFieldBase::updateDisplayedText() {
     if (!m_textDisplay)
         return;
-    const std::string& value = m_text.get();
+    const std::string& value = m_model.text();
     const bool isEnabled = enabled();
     m_textDisplay->text(value);
     m_textDisplay->color(isEnabled ? m_textColor.get() : m_disabledTextColor.get());
@@ -247,7 +205,7 @@ void TextFieldBase::updateCaretAndScroll() {
     if (!m_textDisplay)
         return;
 
-    const float caretLocalX = m_textDisplay->xOffsetForByteIndex(m_cursorByteIndex);
+    const float caretLocalX = m_textDisplay->xOffsetForByteIndex(m_model.cursor());
     const float visibleWidth = std::max(0.0f, resolvedWidth() - paddingLeft() - paddingRight()
                                                  - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
     const float maxDisplayedCaretX = std::max(0.0f, visibleWidth - static_cast<float>(kCaretWidth));
@@ -257,7 +215,7 @@ void TextFieldBase::updateCaretAndScroll() {
         m_scrollOffset = static_cast<int>(std::round(caretLocalX));
     else if (displayedCaretX > maxDisplayedCaretX)
         m_scrollOffset = static_cast<int>(std::round(caretLocalX - maxDisplayedCaretX));
-    const float textEndX = m_textDisplay->xOffsetForByteIndex(m_text.get().size());
+    const float textEndX = m_textDisplay->xOffsetForByteIndex(m_model.text().size());
     const int maxScroll = std::max(0, static_cast<int>(std::round(textEndX + static_cast<float>(kCaretWidth) - visibleWidth)));
     m_scrollOffset = std::clamp(m_scrollOffset, 0, maxScroll);
 
