@@ -61,6 +61,8 @@ void Window::clearReferencesTo(Object* subtreeRoot) {
     }
     if (isOrDescendantOf(m_lastClickWidget))
         m_lastClickWidget = nullptr;
+    if (isOrDescendantOf(m_clickTarget))
+        m_clickTarget = nullptr;
     if (isOrDescendantOf(m_focusedWidget))
         setFocusedWidget(nullptr);
     std::erase_if(m_overlays, isOrDescendantOf);
@@ -351,6 +353,15 @@ void Window::finishDrag() {
     m_dropRejected.clear();
 }
 
+Widget* Window::clickTarget(Widget* hit) {
+    for (Widget* widget = hit; widget; widget = dynamic_cast<Widget*>(widget->parent())) {
+        if (widget->hasHandlerFor(EventType::MousePress) || widget->hasHandlerFor(EventType::MouseClick)
+            || widget->hasHandlerFor(EventType::MouseDoubleClick))
+            return widget;
+    }
+    return hit;
+}
+
 std::vector<Widget*> Window::hoverChainAt(Widget* hit, const Point& windowPoint) {
     std::vector<Widget*> chain;
     for (Widget* widget = hit; widget; widget = widget->isOverlay() ? nullptr : dynamic_cast<Widget*>(widget->parent())) {
@@ -536,10 +547,12 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             const double now = glfwGetTime();
             const float dx = static_cast<float>(mx) - self->m_lastClickX;
             const float dy = static_cast<float>(my) - self->m_lastClickY;
-            const bool isRepeat = hit == self->m_lastClickWidget &&
+            Widget* const target = clickTarget(hit);
+            const bool isRepeat = target == self->m_lastClickWidget &&
                                   (now - self->m_lastClickTime) <= Window::kDoubleClickTimeThreshold &&
                                   (dx * dx + dy * dy) <= Window::kDoubleClickDistanceThreshold * Window::kDoubleClickDistanceThreshold;
             self->m_clickCount = isRepeat ? self->m_clickCount + 1 : 1;
+            self->m_clickTarget = target;
 
             MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
             pressEvent.setClickCount(self->m_clickCount);
@@ -570,13 +583,13 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
         }
 
-        if (hit && hit == self->m_pressedWidget && !dragHandled) {
+        if (hit && self->m_clickTarget && clickTarget(hit) == self->m_clickTarget && !dragHandled) {
             MouseEvent clickEvent{EventType::MouseClick, 0.0f, 0.0f, mb, km};
             clickEvent.setClickCount(self->m_clickCount);
             dispatchMouseBubble(hit, clickEvent, windowPoint, &Widget::triggerClick);
 
-            if (self->m_pressedWidget == hit) {
-                self->m_lastClickWidget = hit;
+            if (self->m_clickTarget) {
+                self->m_lastClickWidget = self->m_clickTarget;
                 self->m_lastClickTime = glfwGetTime();
                 self->m_lastClickX = static_cast<float>(mx);
                 self->m_lastClickY = static_cast<float>(my);
@@ -584,6 +597,7 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
         }
 
         self->m_pressedWidget = nullptr;
+        self->m_clickTarget = nullptr;
         self->m_pressedChain.clear();
         self->updateCursor();
     }
