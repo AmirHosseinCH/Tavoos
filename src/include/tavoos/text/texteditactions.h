@@ -37,5 +37,6 @@ enum class TextEditAction {
 TAVOOS_EXPORT std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers);
 TAVOOS_EXPORT void applyTextEditAction(TextEditModel& model, TextEditAction action);
 TAVOOS_EXPORT bool isTextInputKey(Key key, KeyModifier modifiers);
+TAVOOS_EXPORT bool changesText(TextEditAction action);
 
 }

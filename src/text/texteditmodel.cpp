@@ -169,7 +169,7 @@ void TextEditModel::moveWordRight(bool extend) {
 }
 
 void TextEditModel::undo() {
-    if (m_undoStack.empty())
+    if (m_readOnly || m_undoStack.empty())
         return;
     Edit edit = std::move(m_undoStack.back());
     m_undoStack.pop_back();
@@ -182,7 +182,7 @@ void TextEditModel::undo() {
 }
 
 void TextEditModel::redo() {
-    if (m_redoStack.empty())
+    if (m_readOnly || m_redoStack.empty())
         return;
     Edit edit = std::move(m_redoStack.back());
     m_redoStack.pop_back();
@@ -207,6 +207,8 @@ void TextEditModel::insertText(std::string_view text, bool typing) {
 }
 
 void TextEditModel::replace(std::size_t start, std::size_t end, std::string inserted, bool typing) {
+    if (m_readOnly)
+        return;
     const bool merge = typing && m_typing && start == end && !m_undoStack.empty()
                        && m_undoStack.back().position + m_undoStack.back().inserted.size() == start;
     if (merge)

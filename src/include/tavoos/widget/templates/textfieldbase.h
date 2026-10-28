@@ -76,6 +76,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) readOnly(this auto&& self, PropertyArg<bool> value) {
+        value.applyTo(self.m_readOnly);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) cursorPosition(this auto&& self, int position) {
         self.moveCursorTo(position);
         return std::forward<decltype(self)>(self);
@@ -129,6 +134,7 @@ public:
     float innerPaddingRight() const { return m_innerPaddingRight; }
     float innerPaddingBottom() const { return m_innerPaddingBottom; }
     bool selectByMouse() const { return m_selectByMouse; }
+    bool readOnly() const { return m_readOnly; }
 
     int cursorPosition() const;
     int selectionStart() const;
@@ -185,6 +191,7 @@ private:
     BindableState<float> m_innerPaddingRight{10.0f};
     BindableState<float> m_innerPaddingBottom{0.0f};
     Property<bool> m_selectByMouse{true};
+    Property<bool> m_readOnly{false};
 
     std::function<void(const std::string&)> m_onSubmit;
 

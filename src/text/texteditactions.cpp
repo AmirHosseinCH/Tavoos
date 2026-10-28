@@ -128,6 +128,22 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     }
 }
 
+bool changesText(TextEditAction action) {
+    switch (action) {
+    case TextEditAction::DeleteBackward:
+    case TextEditAction::DeleteForward:
+    case TextEditAction::DeleteWordBackward:
+    case TextEditAction::DeleteWordForward:
+    case TextEditAction::Cut:
+    case TextEditAction::Paste:
+    case TextEditAction::Undo:
+    case TextEditAction::Redo:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool isTextInputKey(Key key, KeyModifier modifiers) {
     if (hasFlag(modifiers, KeyModifier::Control) || hasFlag(modifiers, KeyModifier::Alt) || hasFlag(modifiers, KeyModifier::Super))
         return false;

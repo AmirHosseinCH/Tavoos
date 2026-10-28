@@ -48,6 +48,10 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
 
     m_innerPaddingLeft.onChange([this](const float&) { updateCaretAndScroll(); });
     m_innerPaddingRight.onChange([this](const float&) { updateCaretAndScroll(); });
+    m_readOnly.onChange([this](const bool& value) {
+        m_model.setReadOnly(value);
+        resetCaretBlink();
+    });
 
     content<RectangleWidget>([this](RectangleWidget& viewport) {
         viewport.fill(Fill::Both)
@@ -172,7 +176,8 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
         return;
 
     const Key key = static_cast<Key>(event.keyCode());
-    if (const auto action = textEditActionFor(key, event.modifiers())) {
+    const auto action = textEditActionFor(key, event.modifiers());
+    if (action && (!m_readOnly.get() || !changesText(*action))) {
         applyTextEditAction(m_model, *action);
         resetCaretBlink();
     } else if (key == Key::Enter || key == Key::KpEnter) {
@@ -188,13 +193,15 @@ void TextFieldBase::triggerKeyRelease(KeyEvent&) {
 
 void TextFieldBase::triggerShortcutOverride(KeyEvent& event) {
     const Key key = static_cast<Key>(event.keyCode());
-    if (enabled() && (textEditActionFor(key, event.modifiers()) || isTextInputKey(key, event.modifiers())))
+    const auto action = textEditActionFor(key, event.modifiers());
+    const bool editable = !m_readOnly.get();
+    if (enabled() && ((action && (editable || !changesText(*action))) || (editable && isTextInputKey(key, event.modifiers()))))
         event.accept();
     Widget::triggerShortcutOverride(event);
 }
 
 void TextFieldBase::triggerTextInput(KeyEvent& event) {
-    if (!enabled())
+    if (!enabled() || m_readOnly.get())
         return;
     m_model.type(encodeUtf8(static_cast<char32_t>(event.keyCode())));
     resetCaretBlink();
@@ -204,7 +211,7 @@ bool TextFieldBase::tick(float dt) {
     m_blinkElapsed += dt;
     if (m_blinkElapsed >= kBlinkInterval) {
         m_blinkElapsed -= kBlinkInterval;
-        m_caretVisible.set(!m_caretVisible.get());
+        m_caretVisible.set(!m_readOnly.get() && !m_caretVisible.get());
     }
     return true;
 }
@@ -212,7 +219,7 @@ bool TextFieldBase::tick(float dt) {
 void TextFieldBase::resetCaretBlink() {
     m_blinkElapsed = 0.0f;
     if (m_blinking)
-        m_caretVisible.set(true);
+        m_caretVisible.set(!m_readOnly.get());
 }
 
 int TextFieldBase::cursorPosition() const {
