@@ -77,6 +77,13 @@ Widget::Size TextWidget::computeIntrinsicSize() {
     };
 }
 
+float TextWidget::lineHeight() {
+    FontFace* face = resolvedFace();
+    if (!face)
+        return 0.0f;
+    return face->lineHeight() * m_fontSize.get() / FontFace::ReferencePixelSize;
+}
+
 float TextWidget::xOffsetForByteIndex(std::size_t byteIndex) {
     FontFace* face = resolvedFace();
     if (!face)

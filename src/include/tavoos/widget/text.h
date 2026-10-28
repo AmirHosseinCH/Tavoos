@@ -92,6 +92,7 @@ public:
     ElideMode elideMode() const { return m_elideMode; }
     int maxLines() const { return m_maxLines; }
 
+    float lineHeight();
     float xOffsetForByteIndex(std::size_t byteIndex);
     std::size_t byteIndexForXOffset(float x);
 

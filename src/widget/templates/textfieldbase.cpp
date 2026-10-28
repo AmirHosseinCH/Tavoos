@@ -11,7 +11,6 @@ namespace Tavoos {
 namespace {
 
 constexpr int kCaretWidth = 1;
-constexpr int kCaretHeight = 18;
 constexpr float kBlinkInterval = 0.5f;
 
 std::size_t previousCodepointStart(const std::string& text, std::size_t i) {
@@ -74,13 +73,15 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
             text.addChild<RectangleWidget>([this](RectangleWidget& caret) {
                 caret.alignment(Alignment::CenterVertical)
                     .width(kCaretWidth)
-                    .height(kCaretHeight)
+                    .height(m_caretHeight)
                     .x(m_caretX)
                     .color(m_caretColor.state())
                     .visible(m_caretVisible);
             });
         });
     });
+
+    m_font.onChange([this](const Font&) { updateCaretAndScroll(); });
 
     updateDisplayedText();
     updateCaretAndScroll();
@@ -271,6 +272,7 @@ void TextFieldBase::updateCaretAndScroll() {
 
     m_contentX.set(-m_scrollOffset);
     m_caretX.set(static_cast<int>(std::round(caretLocalX)));
+    m_caretHeight.set(static_cast<int>(std::round(m_textDisplay->lineHeight())));
 }
 
 }

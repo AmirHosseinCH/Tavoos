@@ -148,6 +148,7 @@ private:
     TextWidget* m_placeholderDisplay{nullptr};
     State<int> m_contentX{0};
     State<int> m_caretX{0};
+    State<int> m_caretHeight{0};
     State<bool> m_caretVisible{false};
 
     std::size_t m_cursorByteIndex{0};
