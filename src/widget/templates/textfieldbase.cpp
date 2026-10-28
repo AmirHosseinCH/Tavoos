@@ -104,18 +104,29 @@ bool TextFieldBase::hasHandlerFor(EventType type) {
     case EventType::KeyRelease:
     case EventType::TextInput:
         return true;
+    case EventType::DragStart:
+    case EventType::DragMove:
+    case EventType::DragEnd:
+        if (m_selectByMouse.get() && enabled())
+            return true;
+        return Control::hasHandlerFor(type);
     default:
         return Control::hasHandlerFor(type);
     }
 }
 
 void TextFieldBase::triggerPress(MouseEvent& event) {
-    if (enabled() && m_textDisplay) {
-        const Point local = m_textDisplay->mapFromWindow(mapToWindow({event.x(), event.y()}));
-        m_model.setCursor(m_textDisplay->byteIndexForXOffset(local.x));
-        resetCaretBlink();
+    if (enabled()) {
+        m_pressPoint = mapToWindow({event.x(), event.y()});
+        moveCursorToPoint(m_pressPoint, m_selectByMouse.get() && hasFlag(event.modifiers(), KeyModifier::Shift));
     }
     Widget::triggerPress(event);
+}
+
+void TextFieldBase::triggerDragMove(DragEvent& event) {
+    if (m_selectByMouse.get() && enabled())
+        moveCursorToPoint({m_pressPoint.x + event.totalDx(), m_pressPoint.y + event.totalDy()}, true);
+    Widget::triggerDragMove(event);
 }
 
 void TextFieldBase::triggerFocusIn(Event& event) {
@@ -205,6 +216,14 @@ void TextFieldBase::deselect() {
 
 void TextFieldBase::moveCursorTo(int position) {
     m_model.setCursor(byteOffsetOfCharacter(m_model.text(), static_cast<std::size_t>(std::max(position, 0))));
+}
+
+void TextFieldBase::moveCursorToPoint(const Point& windowPoint, bool extend) {
+    if (!m_textDisplay)
+        return;
+    const Point local = m_textDisplay->mapFromWindow(windowPoint);
+    m_model.setCursor(m_textDisplay->byteIndexForXOffset(local.x), extend);
+    resetCaretBlink();
 }
 
 void TextFieldBase::updateSelection() {

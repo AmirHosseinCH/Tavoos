@@ -70,6 +70,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) selectByMouse(this auto&& self, PropertyArg<bool> enabled) {
+        enabled.applyTo(self.m_selectByMouse);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) cursorPosition(this auto&& self, int position) {
         self.moveCursorTo(position);
         return std::forward<decltype(self)>(self);
@@ -122,6 +127,7 @@ public:
     float innerPaddingTop() const { return m_innerPaddingTop; }
     float innerPaddingRight() const { return m_innerPaddingRight; }
     float innerPaddingBottom() const { return m_innerPaddingBottom; }
+    bool selectByMouse() const { return m_selectByMouse; }
 
     int cursorPosition() const;
     int selectionStart() const;
@@ -134,6 +140,7 @@ public:
 protected:
     bool hasHandlerFor(EventType type) override;
     void triggerPress(MouseEvent& event) override;
+    void triggerDragMove(DragEvent& event) override;
     void triggerFocusIn(Event& event) override;
     void triggerFocusOut(Event& event) override;
     void triggerKeyPress(KeyEvent& event) override;
@@ -151,6 +158,7 @@ private:
     void updateSelection();
     void resetCaretBlink();
     void moveCursorTo(int position);
+    void moveCursorToPoint(const Point& windowPoint, bool extend);
 
     Property<std::string> m_text{};
     State<std::string> m_textState{};
@@ -166,6 +174,7 @@ private:
     BindableState<float> m_innerPaddingTop{0.0f};
     BindableState<float> m_innerPaddingRight{10.0f};
     BindableState<float> m_innerPaddingBottom{0.0f};
+    Property<bool> m_selectByMouse{true};
 
     std::function<void(const std::string&)> m_onSubmit;
 
@@ -178,6 +187,7 @@ private:
     State<int> m_caretHeight{0};
     State<bool> m_caretVisible{false};
 
+    Point m_pressPoint{};
     int m_scrollOffset{0};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};
