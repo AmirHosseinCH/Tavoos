@@ -50,6 +50,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [Coordinate mapping and mouse dispatch](#coordinate-mapping-and-mouse-dispatch)
    - [Dragging](#dragging)
    - [Drag and drop](#drag-and-drop)
+   - [Text editing](#text-editing)
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
    - [Scroll areas](#scroll-areas)
@@ -64,6 +65,7 @@ document is where the "why" behind non-obvious code lives instead.
 11. [Text rendering](#text-rendering)
     - [`FontFace` / `FontManager` / `GlyphAtlas`](#fontface--fontmanager--glyphatlas)
     - [Wrap, elide, and line-clamp](#wrap-elide-and-line-clamp)
+    - [Selection](#selection)
 12. [Resource embedding](#resource-embedding)
 13. [Application & Window lifecycle](#application--window-lifecycle)
 14. [Adding a new widget type](#adding-a-new-widget-type)
@@ -2100,33 +2102,38 @@ hovered one.
 
 ```cpp
 void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-    Widget* const hit = hitTestChildren(self, mx, my);   // fresh hit-test every call
+    Widget* const hit = hitTestChildren(self, mx, my);
 
     if (action == GLFW_PRESS) {
         self->m_pressedWidget = hit;
         if (hit) {
-            dispatchBubble(hit, pressEvent, &Widget::triggerPress);
-
-            const bool isDoubleClick = hit == self->m_lastClickWidget &&
+            Widget* const target = clickTarget(hit);
+            const bool isRepeat = target == self->m_lastClickWidget &&
                 (now - self->m_lastClickTime) <= kDoubleClickTimeThreshold &&
                 (dx*dx + dy*dy) <= kDoubleClickDistanceThreshold * kDoubleClickDistanceThreshold;
-            if (isDoubleClick)
-                dispatchBubble(hit, doubleClickEvent, &Widget::triggerDoubleClick);
+            self->m_clickCount = isRepeat ? self->m_clickCount + 1 : 1;
+            self->m_clickTarget = target;
+
+            pressEvent.setClickCount(self->m_clickCount);
+            dispatchMouseBubble(hit, pressEvent, windowPoint, &Widget::triggerPress);
+            if (isRepeat)
+                dispatchMouseBubble(hit, doubleClickEvent, windowPoint, &Widget::triggerDoubleClick);
         }
     } else if (action == GLFW_RELEASE) {
         if (self->m_pressedWidget)
-            dispatchBubble(self->m_pressedWidget, releaseEvent, &Widget::triggerRelease);
+            dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
 
-        if (hit && hit == self->m_pressedWidget) {   // click only fires if release landed back on the pressed widget
-            dispatchBubble(hit, clickEvent, &Widget::triggerClick);
-            if (self->m_pressedWidget == hit) {       // still valid - the click handler may have removed it
-                self->m_lastClickWidget = hit;
+        if (hit && self->m_clickTarget && clickTarget(hit) == self->m_clickTarget && !dragHandled) {
+            dispatchMouseBubble(hit, clickEvent, windowPoint, &Widget::triggerClick);
+            if (self->m_clickTarget) {
+                self->m_lastClickWidget = self->m_clickTarget;
                 self->m_lastClickTime = glfwGetTime();
                 self->m_lastClickX = static_cast<float>(mx);
                 self->m_lastClickY = static_cast<float>(my);
             }
         }
         self->m_pressedWidget = nullptr;
+        self->m_clickTarget = nullptr;
     }
 }
 ```
@@ -2134,11 +2141,37 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 Note `MouseRelease` dispatches to `self->m_pressedWidget` (the widget that was actually
 pressed), not to a fresh `hit` at the release position - this is intentional mouse-capture
 behavior: dragging off a pressed widget before releasing still correctly delivers the release
-(and only the release, not a click, since `hit == m_pressedWidget` fails) to the originally
-pressed widget, rather than to whatever happens to be under the cursor now. A `MouseClick`
-additionally requires the same widget within `kDoubleClickTimeThreshold` (0.4s) *and*
-`kDoubleClickDistanceThreshold` (5px) of the *previous* click for `MouseDoubleClick` to also
-fire.
+to the originally pressed widget, rather than to whatever happens to be under the cursor now.
+
+A press and a release make a click when they have the same **click target**: the nearest widget,
+from the hit upward, that handles presses, clicks or double-clicks, or the hit itself when none
+does:
+
+```cpp
+Widget* Window::clickTarget(Widget* hit) {
+    for (Widget* widget = hit; widget; widget = dynamic_cast<Widget*>(widget->parent())) {
+        if (widget->hasHandlerFor(EventType::MousePress) || widget->hasHandlerFor(EventType::MouseClick)
+            || widget->hasHandlerFor(EventType::MouseDoubleClick))
+            return widget;
+    }
+    return hit;
+}
+```
+
+Comparing targets instead of hit widgets means a press on a button's label and a release on its
+background still click the button, and a text field's caret, which the press moves under the
+pointer, doesn't take the click from the field. Releasing over a different control still makes no
+click. The click event itself goes to the widget under the pointer and bubbles as usual. The
+`m_clickTarget` check after dispatching it covers a click handler that removed the target, which
+`clearReferencesTo` nulls.
+
+Repeated clicks are counted by the same target. A press continues a series when it has the last
+click's target and comes within `kDoubleClickTimeThreshold` (0.4 s) and
+`kDoubleClickDistanceThreshold` (5 px) of it; `m_clickCount` then goes up, and otherwise restarts at
+1. The press, double-click, release and click events of that press carry it as
+`MouseEvent::clickCount()`. `MouseDoubleClick` is sent for every repeat press, so a widget that needs
+a triple-click reads the count. `ButtonBase` builds its own click event on release and copies the
+count into it.
 
 A click is also not sent after a drag that some widget handled. On release, the result of
 dispatching `DragEnd` is kept: if a widget accepted it, the release is still delivered but no
@@ -2379,9 +2412,10 @@ calls `commitText`; the base knows nothing about `TextField`.
 
 **`TextFieldBase`** (`templates/textfieldbase.h`) follows the QML `TextField` model instead of exposing
 slots: the user supplies only a `background`, and the base builds its own clipped viewport, text
-item, placeholder, and caret internally, owning all editing - insert, delete, cursor movement,
-click-to-position, horizontal scrolling, and the caret blink (see the note on private
-`AnimatableBase` inheritance under [Animation](#animation-system)). Everything about how the
+item, placeholder, and caret internally. The editing itself is a `TextEditModel` that the base
+feeds keys and pointer positions into (see [Text editing](#text-editing)); the base owns what the
+model doesn't know about: horizontal scrolling, echo modes, and the caret blink (see the note on
+private `AnimatableBase` inheritance under [Animation](#animation-system)). Everything about how the
 text looks is a property of the base (`textColor`, `placeholderColor`, `caretColor`, `font`,
 `innerPadding*`, applied as margins on the internal viewport), never a user-supplied visual, and
 `content()` is hidden so the internals can't be replaced. The viewport clips to its own rect, so
@@ -2672,6 +2706,130 @@ There is no hot spot, so it uses the pointer, the same hit test as a click, and 
 that accepts `"text/uri-list"`. GLFW reports a file drag only when it is dropped, which is why there
 is no enter or exit. On X11, GLFW moves the cursor position along with the drag, so
 `glfwGetCursorPos` is the drop point; on Wayland it does not, and the last pointer position is used.
+
+### Text editing
+
+Editing is split into three pieces that a text field, and later a multi-line editor, share: a
+model, a key mapping, and the control that connects them to a `TextWidget`.
+
+**`TextEditModel`** (`text/texteditmodel.h`) holds the text, a cursor and an anchor, with no widget
+code. Positions are byte offsets that always sit at the start of a character (`codepointStartAt` and
+`previousCodepointStart` in `utf8.h`). The selection is the text between the anchor and the cursor,
+and every move takes an `extend` flag that moves only the cursor, so the anchor stays where the
+selection began. A control converts to character counts for its public API with
+`byteOffsetOfCharacter` and `characterIndexAt`.
+
+Every edit, from a typed character to a deleted word, ends in one private function:
+
+```cpp
+void TextEditModel::replace(std::size_t start, std::size_t end, std::string inserted, bool typing) {
+    if (m_readOnly)
+        return;
+    if (m_validator) {
+        std::string next = m_text;
+        next.replace(start, end - start, inserted);
+        if (m_validator(next) == ValidatorState::Invalid)
+            return;
+    }
+    const bool merge = typing && m_typing && start == end && !m_undoStack.empty()
+                       && m_undoStack.back().position + m_undoStack.back().inserted.size() == start;
+    if (merge)
+        m_undoStack.back().inserted += inserted;
+    else
+        m_undoStack.push_back({start, m_text.substr(start, end - start), inserted, m_anchor, m_cursor});
+    m_redoStack.clear();
+    m_text.replace(start, end - start, inserted);
+    m_typing = typing;
+    finishEdit(start + inserted.size());
+}
+```
+
+Because every edit passes here, read-only and validation are each one check, and the history is one
+record per edit: the position, the removed and inserted text, and the selection before it. `undo`
+puts the removed text back and restores that selection, and `redo` applies the edit again. `type`
+is an `insert` that may join the previous record, when it continues exactly where that record ended
+with nothing selected. Any move, selection change or other edit clears `m_typing`, so the next
+keystroke starts a new record. `setText`, for text from code, clears both stacks.
+
+Limits apply before `replace`. A single-line model turns inserted line breaks into spaces, and
+`insertText` cuts the inserted text to the characters still free under `maximumLength`. `setText`
+truncates to the maximum too, but is not validated.
+
+Words come from three kinds of character: word characters (ASCII letters, digits, `_`, and every
+non-ASCII character, which keeps other scripts working without Unicode tables), spaces, and
+punctuation. A word is a run of one kind. `moveWordRight` skips the run it is in, unless it is
+spaces, and then any spaces; `moveWordLeft` skips spaces backwards and then the run before them.
+`wordAt` returns the run at a position, for double-click.
+
+The model reports `onTextChanged` and then, only if the cursor or anchor moved, `onCursorChanged`, so
+an owner can lay out the new text before placing the caret on it.
+
+**The key mapping** (`text/texteditactions.h`) is two halves with a named list of actions between
+them:
+
+```cpp
+if (const auto action = textEditActionFor(key, event.modifiers()))
+    applyTextEditAction(m_model, *action);
+```
+
+`textEditActionFor` matches modifiers exactly, so Ctrl+Left and Ctrl+Shift+Left are different
+actions, and any combination it doesn't list stays free. A control asks it first and handles its own
+keys only when it returns nothing: the text field adds Enter, and a multi-line editor would add Enter
+as a line break and the vertical arrows. `applyTextEditAction` is a switch of model calls, plus the
+clipboard for Copy, Cut and Paste, so a menu can run an action without a key. `changesText` tells
+which actions edit the text, and `isTextInputKey` which keys type a character: those without Ctrl,
+Alt or Super.
+
+The same two answers decide which keys a focused control claims from window shortcuts (see
+[Shortcuts](#shortcuts)). `TextFieldBase::triggerShortcutOverride` accepts a key when it maps to an
+action the field allows, or when it types text and the field is editable, and then runs the user's
+`onShortcutOverride`, which can still ignore it. Because the claim and the handling come from the
+same mapping, they cannot disagree, and a newly mapped action is claimed without any other change.
+
+**`TextFieldBase`** connects the model to its inner `TextWidget`. On `onTextChanged` it writes user
+edits back to its `text` property, updates `textState`, `canUndo`, `canRedo` and
+`acceptableInput`, and redraws the text, caret and selection; `onCursorChanged` redraws the caret and
+selection.
+
+*What is drawn.* `shown()` reduces the echo mode to `Plain`, `Masked` or `Hidden`.
+`PasswordEchoOnEdit` is masked until `beginPasswordEdit` runs on the first edit after focusing, which
+clears the text through `setText` so the history can't bring the old password back. `displayText()`
+builds the string the inner text widget draws, and two functions translate positions between it and
+the model:
+
+```cpp
+std::size_t TextFieldBase::toDisplay(std::size_t position) const {
+    switch (shown()) {
+    case Shown::Plain:
+        return position;
+    case Shown::Hidden:
+        return 0;
+    case Shown::Masked:
+        break;
+    }
+    return characterIndexAt(m_model.text(), position) * mask().size();
+}
+```
+
+`toModel` is the reverse, with `Hidden` returning the current cursor so a click doesn't move it. The
+caret, the scroll offset and the selection go through `toDisplay`, and presses, drags and
+double-clicks through `toModel`. `allows` refuses actions that change the text in a read-only field,
+and Copy and Cut in every mode but `Normal`, where `applyAction` also turns word actions into
+start-or-end ones so word boundaries stay hidden.
+
+*The mouse.* A press stores its window position, and a drag moves the cursor to that position plus
+`totalDx`/`totalDy` with `extend` set. Each point is mapped into the scrolled text widget, which is
+what makes the text scroll as the pointer passes an edge. `MouseEvent::clickCount()` picks the unit:
+2 selects `wordAt` the character under the pointer and drags by words around it, and 3 or more
+selects everything. The character under the pointer is not where a click puts the caret:
+`byteIndexForXOffset` rounds to the nearest gap between characters, so `characterAtPoint` steps back
+one character when that gap is to the right of the pointer.
+
+*Bindings.* User edits write the model's text back into the `text` property, which replaces a
+binding there, as typing always has. Changes from code, meaning the `text` or `maximumLength`
+property changing, run with `m_changeFromCode` set, and the write-back is skipped. A bound value the
+model truncated therefore stays bound, and `text()` and `textState` report the model's text. The
+same flag keeps `onTextEdited` to edits the user makes.
 
 ### Overlays and popups
 
@@ -3417,6 +3575,40 @@ whichever allows fewer lines wins. `clampLines` then either leaves the elide-che
 last natural line (if nothing was actually truncated) or slices to the limit and re-elides
 whichever line(s) sit at the cut boundary (`Right` re-elides the last kept line; `Left` the
 first; `Middle` re-elides the line just before the gap).
+
+### Selection
+
+`TextWidget::selection(start, end)` marks a byte range, and `Renderer::renderText` draws it in two
+steps around the glyph loop.
+
+First, before any glyph, each laid-out line the range covers gets a highlight behind it. The range
+is cut to that line's bytes, and the x where the cut starts and its width are summed from the same
+glyph advances the glyph loop uses. The rectangle is drawn with the rectangle shader, placed by the
+text's world matrix times a translation, so a rotated or tilted text widget carries its highlight
+along, and a range over three wrapped lines draws three rectangles.
+
+Then the glyph loop recolors the selected characters:
+
+```cpp
+while (i < end) {
+    const bool selected = original && i >= selectionStart && i < selectionEnd;
+    Utf8Decoded d = decodeUtf8At(source, i);
+    i += d.length;
+    const GlyphMetrics& m = face->glyph(d.codepoint);
+    if (!m.valid) continue;
+    if (selected != drawingSelected) {
+        flush();
+        applyPaintUniforms(textShader, "u", "uColor", selected ? text.selectedTextColor() : text.color(), op);
+        drawingSelected = selected;
+    }
+    emitGlyph(m, penX, baselineY);
+}
+```
+
+When a glyph's byte position crosses into or out of the range, the glyphs collected so far are drawn
+in the current color before the color uniform switches, so a selection in the middle of a line costs
+at most two extra draw calls. Elided lines draw a separate shortened string whose bytes don't match
+the text's (`original` is false for them), so they get neither a highlight nor recoloring.
 
 ## Resource embedding
 

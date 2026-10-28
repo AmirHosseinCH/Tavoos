@@ -55,6 +55,7 @@ quick-start example in [README.md](../README.md).
 13. [Resource embedding](#resource-embedding)
 14. [Keyboard & focus](#keyboard--focus)
    - [Keyboard shortcuts](#keyboard-shortcuts)
+15. [Clipboard](#clipboard)
 
 ## Core concepts
 
@@ -162,7 +163,7 @@ Every widget (Rectangle, Text, Image, SVG, Column, Row, Grid, Flex) has all of t
 
 Plus, on every widget:
 
-- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput`, `onShortcutOverride` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window. `onMouseEnter`/`onMouseLeave` fire once as the pointer enters and leaves the widget: moving over its children keeps it hovered, a child that sticks out of the widget's rectangle hovers only the child, and nested widgets each get their own enter and leave.
+- **Event callbacks** - `onClick`, `onPress`, `onRelease`, `onDoubleClick`, `onMouseMove`, `onMouseEnter`, `onMouseLeave` (all take `std::function<void(MouseEvent&)>`), `onWheel` (`WheelEvent&`), `onKeyPress`, `onKeyRelease`, `onTextInput`, `onShortcutOverride` (`KeyEvent&`), `onFocusIn`, `onFocusOut` (`Event&`). Keyboard/focus callbacks only fire on the currently-focused widget (see [Keyboard & focus](#keyboard--focus)). `MouseEvent::x()`/`y()` are always relative to the widget whose handler is currently running, not the window. `MouseEvent::clickCount()` is 1 for a single click and goes up by one for each quick click that follows on the same widget, within 0.4 s and 5 px, so `onPress` or `onClick` can tell a triple-click; `onDoubleClick` fires for every press after the first in such a series. The same widget means the nearest one that handles presses, clicks or double-clicks, so clicks on a control's label and on its background count together, and a press and release on different parts of it still make a click. `onMouseEnter`/`onMouseLeave` fire once as the pointer enters and leaves the widget: moving over its children keeps it hovered, a child that sticks out of the widget's rectangle hovers only the child, and nested widgets each get their own enter and leave.
 - **`focus()`** - programmatically focuses this widget.
 - **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects). Controls and layouts don't take shadows; put them on a slot or a wrapping rectangle instead.
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
@@ -262,6 +263,12 @@ control's `background` and `content` slots.
 | `wrapMode()` | `WrapMode` - `NoWrap`/`WordWrap`/`WrapAnywhere`. |
 | `elideMode()` | `ElideMode` - `None`/`Left`/`Right`/`Middle`, applied when a line still doesn't fit after wrapping. |
 | `maxLines()` | `int` - `0` means unlimited. |
+| `selection(start, end)` | `std::size_t`, `std::size_t` - a range of **bytes** drawn as selected: a `selectionColor()` highlight behind each laid-out line it covers, and the characters in `selectedTextColor()`. An empty range, the default, draws nothing; elided lines aren't highlighted. |
+| `selectionColor()`, `selectedTextColor()` | `Paint` |
+
+For building an editor on top of a text widget, `lineHeight()` gives the height of one line, and
+`xOffsetForByteIndex()` and `byteIndexForXOffset()` convert between a byte position in a single
+line of text and its x coordinate.
 
 ### `ImageWidget`
 
@@ -503,24 +510,119 @@ TB::TextField([](Tavoos::TextFieldWidget& f) {
 });
 ```
 
-Single-line text entry - no selection/clipboard yet.
+Single-line text entry with selection, the clipboard, undo and redo, word editing, read-only and
+password modes, a length limit and validation. The editing itself is shared with other text
+controls through `TextEditModel` (see [ARCHITECTURE.md](ARCHITECTURE.md#text-editing)).
 
 | Property | Type | Notes |
 |---|---|---|
-| `text()` | `std::string` |
-| `textState()` | `State<std::string>&` |
-| `placeholder()` | `std::string` - shown (in `placeholderColor()`) whenever `text()` is empty. |
-| `font()` | `Font` |
-| `backgroundColor()`, `borderColor()`, `focusedBorderColor()` | `Paint` |
-| `disabledColor()`, `disabledBorderColor()` | `Paint` |
-| `textColor()`, `placeholderColor()`, `caretColor()` | `Paint` |
-| `radius()`, `borderWidth()` | `int` / `float` |
-| `innerPadding()`, `innerPaddingLeft/Top/Right/Bottom()` | `float` - gap between the border and the text/caret. |
-| `transition()` | `float` |
-| `onSubmit(fn)` | `std::function<void(const std::string&)>` | Fires on Enter. |
+| `text()`, `textState()` | `std::string` / `State<std::string>&` | The field's text. Typing replaces a binding on `text`; text set from code is cut to `maximumLength()`, and a binding stays in place. |
+| `placeholder()` | `std::string` | Shown in `placeholderColor()` while the text is empty. |
+| `font()` | `Font` | |
+| `backgroundColor()`, `borderColor()`, `focusedBorderColor()` | `Paint` | |
+| `disabledColor()`, `disabledBorderColor()`, `disabledTextColor()` | `Paint` | |
+| `textColor()`, `placeholderColor()`, `caretColor()` | `Paint` | |
+| `selectionColor()`, `selectedTextColor()` | `Paint` | The selection highlight and the text drawn on it. |
+| `radius()`, `borderWidth()` | `int` / `float` | |
+| `innerPadding()`, `innerPaddingLeft/Top/Right/Bottom()` | `float` | Gap between the border and the text and caret. |
+| `transition()` | `float` | |
+| `readOnly()` | `bool` | The text can be selected and copied but not changed, and the caret is hidden. |
+| `maximumLength()` | `int` | The most characters the text can hold. Typing stops at it and pasted text is cut. No limit by default. |
+| `echoMode()`, `passwordCharacter()` | `EchoMode` / `std::string` | How the text is shown - see [Passwords](#passwords). |
+| `validator()` | `TextValidator` | Rejects input that can never be valid - see [Validation](#validation). |
+| `acceptableInput()`, `acceptableInputState()` | `bool` / `State<bool>&` | Whether the validator rates the text acceptable; always `true` without one. |
+| `selectByMouse()` | `bool` | Whether dragging, Shift+click and double- and triple-click select. Default `true`. |
+| `cursorPosition()` | `int` | The caret position in characters. Setting it clears the selection. |
+| `canUndo()`, `canRedo()`, `canUndoState()`, `canRedoState()` | `bool` / `State<bool>&` | Whether there is an edit to undo or redo, for binding a button's `enabled`. |
+| `displayText()` | `std::string` | What is drawn: the text, its mask, or nothing. Read-only. |
+| `onSubmit(fn)` | `std::function<void(const std::string&)>` | Enter was pressed and the input is acceptable. |
+| `onTextEdited(fn)` | `std::function<void(const std::string&)>` | After every change the user makes, including undo and redo, but not changes from code. |
+| `onEditingFinished(fn)` | `std::function<void(const std::string&)>` | After `onSubmit` on Enter, and when the field loses focus, if the input is acceptable. |
 
-Backspace/Delete/Left/Right/Home/End all work; typed text scrolls horizontally to keep the
-caret in view, clipped to stay inside the padded interior regardless of scroll position.
+`selectionStart()`, `selectionEnd()` and `selectedText()` read the selection, and `select(start, end)`,
+`selectAll()`, `deselect()`, `undo()` and `redo()` act on it from code. Like `cursorPosition()`, they
+count characters, not bytes.
+
+#### Editing keys
+
+| Keys | Action |
+|---|---|
+| ←, →, Home, End | Move the caret; with a selection, ← and → go to its start or end. |
+| Shift + ←, →, Home, End | Extend the selection. |
+| Ctrl+←, Ctrl+→ | Move to the start of the previous or next word. |
+| Ctrl+Shift+←, Ctrl+Shift+→ | Extend the selection by words. |
+| Backspace, Delete | Delete the character before or after the caret, or the selection. |
+| Ctrl+Backspace, Ctrl+Delete | Delete back to the start of the word, or forward to the start of the next one. |
+| Ctrl+A | Select all. |
+| Ctrl+C, Ctrl+X, Ctrl+V | Copy, cut and paste. Pasted line breaks become spaces. |
+| Ctrl+Z; Ctrl+Shift+Z or Ctrl+Y | Undo and redo. Typed characters are undone together until the caret moves or something else is edited. |
+| Enter | `onSubmit`, then `onEditingFinished`, if the input is acceptable. |
+
+A word is a run of letters, digits and `_`, a run of other punctuation, or a run of spaces; any
+character outside ASCII counts as a letter. While the field has focus it claims these keys and the
+keys that type text, so a window shortcut on the same key doesn't run. Enter, Escape, Tab, function
+keys and modifier combinations the field doesn't use still reach shortcuts, and a read-only field
+claims only what it still does: moving, selecting and copying. `onShortcutOverride` can give a key
+back by ignoring it.
+
+With the mouse, a press places the caret and Shift+click extends the selection. Dragging selects,
+scrolling the text as the pointer passes an edge. A double-click selects a word, and dragging after
+it extends by whole words; a triple-click selects everything. The text scrolls horizontally to keep
+the caret in view, clipped to the padded interior.
+
+#### Passwords
+
+```cpp
+TB::TextField([](Tavoos::TextFieldWidget& f) {
+    f.placeholder("Password").echoMode(Tavoos::EchoMode::Password);
+});
+```
+
+| `EchoMode` | Shows |
+|---|---|
+| `Normal` | The text. The default. |
+| `Password` | One `passwordCharacter()` per character, a bullet (`•`) by default. |
+| `NoEcho` | Nothing; the caret stays at the start. |
+| `PasswordEchoOnEdit` | Masked like `Password`, but what you type after focusing is shown. The first edit replaces the old text, so it is never shown, and leaving the field masks it again. |
+
+In every mode but `Normal`, copy and cut are off, and moving and deleting by word, and double-click,
+work on the whole text, so a password's spaces can't be found. `text()` still returns the real
+text, and `displayText()` what is drawn. Only the first character of `passwordCharacter()` is used,
+and it must exist in the field's font: a character the font lacks draws nothing.
+
+#### Validation
+
+A validator rates the text after each edit as `Acceptable`, `Intermediate` (not done, but it could
+still become acceptable) or `Invalid`. An edit that would make the text `Invalid` is refused, as if
+the key was never pressed. Enter only submits, and leaving the field only finishes editing, when the
+text is `Acceptable`.
+
+```cpp
+TB::TextField([](Tavoos::TextFieldWidget& f) {
+    f.placeholder("Age").validator(Tavoos::intValidator(0, 120));
+});
+```
+
+Three ready-made validators are in `tavoos/text/validators.h`:
+
+| Validator | Accepts |
+|---|---|
+| `intValidator(bottom, top)` | Whole numbers in the range, with an optional sign. A number that more digits could still bring into the range, like `1` for 10 to 99, is intermediate. |
+| `doubleValidator(bottom, top, decimals)` | Numbers in the range with at most `decimals` digits after the `.`. |
+| `regexValidator(pattern)` | Text the whole `std::regex` pattern matches. Anything else is intermediate rather than invalid, so typing is never refused; only `acceptableInput()` and Enter follow the pattern. |
+
+Any function from `const std::string&` to `ValidatorState` works too:
+
+```cpp
+f.validator([](const std::string& text) {
+    if (text.find(' ') != std::string::npos)
+        return Tavoos::ValidatorState::Invalid;
+    return text.size() >= 3 ? Tavoos::ValidatorState::Acceptable : Tavoos::ValidatorState::Intermediate;
+});
+```
+
+Text set from code isn't checked, and neither are undo and redo. If code sets text the validator
+rates `Invalid`, the user can still select all of it and type over it.
 
 ### `SpinBoxWidget`
 
@@ -2259,13 +2361,27 @@ for showing it in a tooltip or a menu. Modifiers must match exactly: `Ctrl+S` do
 
 A key that a shortcut takes does not reach the focused widget. The focused widget, or one of its
 ancestors, can keep a key for itself by accepting it in `onShortcutOverride`; shortcuts are then not
-checked at all, and the key is delivered as a normal key press:
+checked at all, and the key is delivered as a normal key press. Here a focusable list keeps Delete
+even if the window has a Delete shortcut:
+
+```cpp
+TB::Rectangle([](Tavoos::RectangleWidget& list) {
+    list.focusable(true).onShortcutOverride([](Tavoos::KeyEvent& event) {
+        if (event.keyCode() == Tavoos::Key::Delete)
+            event.accept();
+    });
+});
+```
+
+A text field already claims its editing keys and the keys that type text (see
+[Editing keys](#editing-keys)). It runs `onShortcutOverride` after making its own choice, so ignoring
+a key there gives it back to the window's shortcuts:
 
 ```cpp
 TB::TextField([](Tavoos::TextFieldWidget& field) {
     field.onShortcutOverride([](Tavoos::KeyEvent& event) {
         if (event.keyCode() == Tavoos::Key::A && event.modifiers() == Tavoos::KeyModifier::Control)
-            event.accept();
+            event.ignore();
     });
 });
 ```
@@ -2276,3 +2392,19 @@ releases always go to the focused widget.
 
 To add a shortcut after the window is built, use `addChild<Tavoos::Shortcut>` on a widget, and
 `removeChild` to remove it; it stops applying as soon as it is removed.
+
+## Clipboard
+
+```cpp
+#include <tavoos/clipboard.h>
+
+Tavoos::Clipboard::setText("Invite code: 4F7Q");
+std::string pasted = Tavoos::Clipboard::text();
+```
+
+`Clipboard::text()` and `Clipboard::setText()` read and write the system clipboard as UTF-8 text.
+They work from anywhere on the main thread, without a window, and `text()` returns an empty string
+when the clipboard holds no text. Text fields use the same clipboard for Ctrl+C, Ctrl+X and Ctrl+V.
+
+On X11 the application that copied the text is what serves it, so the text is gone once that
+application exits, unless a clipboard manager kept a copy. Most desktops run one.
