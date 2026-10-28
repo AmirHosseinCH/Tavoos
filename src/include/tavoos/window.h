@@ -160,6 +160,7 @@ private:
     double m_lastClickTime{0.0};
     float m_lastClickX{0.0f};
     float m_lastClickY{0.0f};
+    int m_clickCount{0};
 
     static constexpr double kDoubleClickTimeThreshold = 0.4;
     static constexpr float kDoubleClickDistanceThreshold = 5.0f;

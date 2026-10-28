@@ -533,18 +533,21 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             focusTarget->focus();
 
         if (hit) {
-            MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
-            dispatchMouseBubble(hit, pressEvent, windowPoint, &Widget::triggerPress);
-
             const double now = glfwGetTime();
             const float dx = static_cast<float>(mx) - self->m_lastClickX;
             const float dy = static_cast<float>(my) - self->m_lastClickY;
-            const bool isDoubleClick = hit == self->m_lastClickWidget &&
+            const bool isRepeat = hit == self->m_lastClickWidget &&
                                   (now - self->m_lastClickTime) <= Window::kDoubleClickTimeThreshold &&
                                   (dx * dx + dy * dy) <= Window::kDoubleClickDistanceThreshold * Window::kDoubleClickDistanceThreshold;
+            self->m_clickCount = isRepeat ? self->m_clickCount + 1 : 1;
 
-            if (isDoubleClick) {
+            MouseEvent pressEvent{EventType::MousePress, 0.0f, 0.0f, mb, km};
+            pressEvent.setClickCount(self->m_clickCount);
+            dispatchMouseBubble(hit, pressEvent, windowPoint, &Widget::triggerPress);
+
+            if (isRepeat) {
                 MouseEvent doubleClickEvent{EventType::MouseDoubleClick, 0.0f, 0.0f, mb, km};
+                doubleClickEvent.setClickCount(self->m_clickCount);
                 dispatchMouseBubble(hit, doubleClickEvent, windowPoint, &Widget::triggerDoubleClick);
             }
         }
@@ -563,11 +566,13 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
         if (self->m_pressedWidget) {
             MouseEvent releaseEvent{EventType::MouseRelease, 0.0f, 0.0f, mb, km};
+            releaseEvent.setClickCount(self->m_clickCount);
             dispatchMouseBubble(self->m_pressedWidget, releaseEvent, windowPoint, &Widget::triggerRelease);
         }
 
         if (hit && hit == self->m_pressedWidget && !dragHandled) {
             MouseEvent clickEvent{EventType::MouseClick, 0.0f, 0.0f, mb, km};
+            clickEvent.setClickCount(self->m_clickCount);
             dispatchMouseBubble(hit, clickEvent, windowPoint, &Widget::triggerClick);
 
             if (self->m_pressedWidget == hit) {
