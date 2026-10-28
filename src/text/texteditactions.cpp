@@ -71,6 +71,16 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
         if (control)
             return TextEditAction::Paste;
         break;
+    case Key::Z:
+        if (control)
+            return TextEditAction::Undo;
+        if (controlShift)
+            return TextEditAction::Redo;
+        break;
+    case Key::Y:
+        if (control)
+            return TextEditAction::Redo;
+        break;
     default:
         break;
     }
@@ -108,6 +118,12 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
         break;
     case TextEditAction::Paste:
         model.insert(Clipboard::text());
+        break;
+    case TextEditAction::Undo:
+        model.undo();
+        break;
+    case TextEditAction::Redo:
+        model.redo();
         break;
     }
 }

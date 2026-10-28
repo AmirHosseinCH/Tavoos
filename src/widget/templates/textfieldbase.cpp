@@ -29,6 +29,8 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
         updateDisplayedText();
         updateCaretAndScroll();
         updateSelection();
+        m_canUndo.setIfChanged(m_model.canUndo());
+        m_canRedo.setIfChanged(m_model.canRedo());
     });
     m_model.onCursorChanged([this] {
         updateCaretAndScroll();
@@ -194,7 +196,7 @@ void TextFieldBase::triggerShortcutOverride(KeyEvent& event) {
 void TextFieldBase::triggerTextInput(KeyEvent& event) {
     if (!enabled())
         return;
-    m_model.insert(encodeUtf8(static_cast<char32_t>(event.keyCode())));
+    m_model.type(encodeUtf8(static_cast<char32_t>(event.keyCode())));
     resetCaretBlink();
 }
 
@@ -236,6 +238,14 @@ void TextFieldBase::selectAll() {
 
 void TextFieldBase::deselect() {
     m_model.deselect();
+}
+
+void TextFieldBase::undo() {
+    m_model.undo();
+}
+
+void TextFieldBase::redo() {
+    m_model.redo();
 }
 
 void TextFieldBase::moveCursorTo(int position) {

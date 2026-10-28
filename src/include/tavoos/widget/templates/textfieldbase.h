@@ -137,6 +137,12 @@ public:
     void select(int start, int end);
     void selectAll();
     void deselect();
+    bool canUndo() const { return m_canUndo; }
+    bool canRedo() const { return m_canRedo; }
+    State<bool>& canUndoState() { return m_canUndo; }
+    State<bool>& canRedoState() { return m_canRedo; }
+    void undo();
+    void redo();
 
 protected:
     bool hasHandlerFor(EventType type) override;
@@ -190,6 +196,8 @@ private:
     State<int> m_caretX{0};
     State<int> m_caretHeight{0};
     State<bool> m_caretVisible{false};
+    State<bool> m_canUndo{false};
+    State<bool> m_canRedo{false};
 
     Point m_pressPoint{};
     int m_pressClickCount{1};
