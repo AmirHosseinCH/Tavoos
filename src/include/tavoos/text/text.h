@@ -9,3 +9,4 @@
 #include <tavoos/text/utf8.h>
 #include <tavoos/text/textlayout.h>
 #include <tavoos/text/texteditmodel.h>
+#include <tavoos/text/texteditactions.h>
