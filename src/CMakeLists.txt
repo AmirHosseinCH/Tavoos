@@ -1,5 +1,6 @@
 set(TAVOOS_SOURCES
     application.cpp
+    clipboard.cpp
     object.cpp
     window.cpp
     builder.cpp
@@ -83,6 +84,7 @@ target_sources(Tavoos
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
     FILES
     include/tavoos/application.h
+    include/tavoos/clipboard.h
     include/tavoos/theme.h
     include/tavoos/object.h
     include/tavoos/window.h
