@@ -36,6 +36,7 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
         refreshDisplay();
         m_canUndo.setIfChanged(m_model.canUndo());
         m_canRedo.setIfChanged(m_model.canRedo());
+        m_acceptableInput.setIfChanged(m_model.validatorState() == ValidatorState::Acceptable);
     });
     m_model.onCursorChanged([this] {
         updateCaretAndScroll();
@@ -195,7 +196,7 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
         applyAction(*action);
         resetCaretBlink();
     } else if (key == Key::Enter || key == Key::KpEnter) {
-        if (m_onSubmit)
+        if (m_onSubmit && m_acceptableInput.get())
             m_onSubmit(m_model.text());
     } else {
         event.ignore();
@@ -271,6 +272,11 @@ void TextFieldBase::redo() {
 
 void TextFieldBase::moveCursorTo(int position) {
     m_model.setCursor(byteOffsetOfCharacter(m_model.text(), static_cast<std::size_t>(std::max(position, 0))));
+}
+
+void TextFieldBase::setValidator(TextValidator validator) {
+    m_model.setValidator(std::move(validator));
+    m_acceptableInput.setIfChanged(m_model.validatorState() == ValidatorState::Acceptable);
 }
 
 void TextFieldBase::moveCursorToPoint(const Point& windowPoint, bool extend) {

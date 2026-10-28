@@ -105,6 +105,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) validator(this auto&& self, TextValidator validator) {
+        self.setValidator(std::move(validator));
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) cursorPosition(this auto&& self, int position) {
         self.moveCursorTo(position);
         return std::forward<decltype(self)>(self);
@@ -163,6 +168,8 @@ public:
     EchoMode echoMode() const { return m_echoMode; }
     std::string passwordCharacter() const { return m_passwordCharacter; }
     std::string displayText() const;
+    bool acceptableInput() const { return m_acceptableInput; }
+    State<bool>& acceptableInputState() { return m_acceptableInput; }
 
     int cursorPosition() const;
     int selectionStart() const;
@@ -210,6 +217,7 @@ private:
     void updateSelection();
     void resetCaretBlink();
     void moveCursorTo(int position);
+    void setValidator(TextValidator validator);
     void moveCursorToPoint(const Point& windowPoint, bool extend);
     void extendWordSelection(const Point& windowPoint);
     std::size_t characterAtPoint(const Point& windowPoint);
@@ -246,6 +254,7 @@ private:
     State<bool> m_caretVisible{false};
     State<bool> m_canUndo{false};
     State<bool> m_canRedo{false};
+    State<bool> m_acceptableInput{true};
 
     Point m_pressPoint{};
     int m_pressClickCount{1};

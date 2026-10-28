@@ -76,6 +76,10 @@ std::pair<std::size_t, std::size_t> TextEditModel::wordAt(std::size_t position) 
     return {start, end};
 }
 
+ValidatorState TextEditModel::validatorState() const {
+    return m_validator ? m_validator(m_text) : ValidatorState::Acceptable;
+}
+
 void TextEditModel::setMaximumLength(std::size_t length) {
     m_maximumLength = length;
     setText(m_text);
@@ -219,6 +223,12 @@ void TextEditModel::insertText(std::string_view text, bool typing) {
 void TextEditModel::replace(std::size_t start, std::size_t end, std::string inserted, bool typing) {
     if (m_readOnly)
         return;
+    if (m_validator) {
+        std::string next = m_text;
+        next.replace(start, end - start, inserted);
+        if (m_validator(next) == ValidatorState::Invalid)
+            return;
+    }
     const bool merge = typing && m_typing && start == end && !m_undoStack.empty()
                        && m_undoStack.back().position + m_undoStack.back().inserted.size() == start;
     if (merge)
