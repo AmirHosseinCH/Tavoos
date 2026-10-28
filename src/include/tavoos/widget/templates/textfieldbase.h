@@ -148,6 +148,16 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) onTextEdited(this auto&& self, std::function<void(const std::string&)> callback) {
+        self.m_onTextEdited = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) onEditingFinished(this auto&& self, std::function<void(const std::string&)> callback) {
+        self.m_onEditingFinished = std::move(callback);
+        return std::forward<decltype(self)>(self);
+    }
+
     std::string text() const { return m_model.text(); }
     State<std::string>& textState() { return m_textState; }
     std::string placeholder() const { return m_placeholder; }
@@ -243,6 +253,8 @@ private:
     Property<std::string> m_passwordCharacter{"\xE2\x80\xA2"};
 
     std::function<void(const std::string&)> m_onSubmit;
+    std::function<void(const std::string&)> m_onTextEdited;
+    std::function<void(const std::string&)> m_onEditingFinished;
 
     TextEditModel m_model;
 

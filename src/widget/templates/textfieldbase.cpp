@@ -37,6 +37,8 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
         m_canUndo.setIfChanged(m_model.canUndo());
         m_canRedo.setIfChanged(m_model.canRedo());
         m_acceptableInput.setIfChanged(m_model.validatorState() == ValidatorState::Acceptable);
+        if (!m_changeFromCode && m_onTextEdited)
+            m_onTextEdited(m_model.text());
     });
     m_model.onCursorChanged([this] {
         updateCaretAndScroll();
@@ -183,6 +185,8 @@ void TextFieldBase::triggerFocusOut(Event& event) {
     m_model.deselect();
     m_passwordEditing = false;
     refreshDisplay();
+    if (m_onEditingFinished && m_acceptableInput.get())
+        m_onEditingFinished(m_model.text());
     Widget::triggerFocusOut(event);
 }
 
@@ -196,8 +200,12 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
         applyAction(*action);
         resetCaretBlink();
     } else if (key == Key::Enter || key == Key::KpEnter) {
-        if (m_onSubmit && m_acceptableInput.get())
-            m_onSubmit(m_model.text());
+        if (m_acceptableInput.get()) {
+            if (m_onSubmit)
+                m_onSubmit(m_model.text());
+            if (m_onEditingFinished)
+                m_onEditingFinished(m_model.text());
+        }
     } else {
         event.ignore();
     }
