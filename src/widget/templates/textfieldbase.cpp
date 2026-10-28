@@ -33,9 +33,7 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
         if (!m_changeFromCode && m_model.text() != m_text.get())
             m_text.set(m_model.text());
         m_textState.setIfChanged(m_model.text());
-        updateDisplayedText();
-        updateCaretAndScroll();
-        updateSelection();
+        refreshDisplay();
         m_canUndo.setIfChanged(m_model.canUndo());
         m_canRedo.setIfChanged(m_model.canRedo());
     });
@@ -59,6 +57,11 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
         m_model.setReadOnly(value);
         resetCaretBlink();
     });
+    m_echoMode.onChange([this](const EchoMode&) {
+        m_passwordEditing = false;
+        refreshDisplay();
+    });
+    m_passwordCharacter.onChange([this](const std::string&) { refreshDisplay(); });
 
     content<RectangleWidget>([this](RectangleWidget& viewport) {
         viewport.fill(Fill::Both)
@@ -134,6 +137,8 @@ void TextFieldBase::triggerPress(MouseEvent& event) {
     if (enabled()) {
         m_pressPoint = mapToWindow({event.x(), event.y()});
         m_pressClickCount = m_selectByMouse.get() ? event.clickCount() : 1;
+        if (m_pressClickCount == 2 && m_echoMode.get() != EchoMode::Normal)
+            m_pressClickCount = 3;
         if (m_pressClickCount >= 3) {
             m_model.selectAll();
             resetCaretBlink();
@@ -175,6 +180,8 @@ void TextFieldBase::triggerFocusOut(Event& event) {
     }
     m_caretVisible.set(false);
     m_model.deselect();
+    m_passwordEditing = false;
+    refreshDisplay();
     Widget::triggerFocusOut(event);
 }
 
@@ -184,8 +191,8 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
 
     const Key key = static_cast<Key>(event.keyCode());
     const auto action = textEditActionFor(key, event.modifiers());
-    if (action && (!m_readOnly.get() || !changesText(*action))) {
-        applyTextEditAction(m_model, *action);
+    if (action && allows(*action)) {
+        applyAction(*action);
         resetCaretBlink();
     } else if (key == Key::Enter || key == Key::KpEnter) {
         if (m_onSubmit)
@@ -201,8 +208,7 @@ void TextFieldBase::triggerKeyRelease(KeyEvent&) {
 void TextFieldBase::triggerShortcutOverride(KeyEvent& event) {
     const Key key = static_cast<Key>(event.keyCode());
     const auto action = textEditActionFor(key, event.modifiers());
-    const bool editable = !m_readOnly.get();
-    if (enabled() && ((action && (editable || !changesText(*action))) || (editable && isTextInputKey(key, event.modifiers()))))
+    if (enabled() && ((action && allows(*action)) || (!m_readOnly.get() && isTextInputKey(key, event.modifiers()))))
         event.accept();
     Widget::triggerShortcutOverride(event);
 }
@@ -210,6 +216,7 @@ void TextFieldBase::triggerShortcutOverride(KeyEvent& event) {
 void TextFieldBase::triggerTextInput(KeyEvent& event) {
     if (!enabled() || m_readOnly.get())
         return;
+    beginPasswordEdit();
     m_model.type(encodeUtf8(static_cast<char32_t>(event.keyCode())));
     resetCaretBlink();
 }
@@ -270,7 +277,7 @@ void TextFieldBase::moveCursorToPoint(const Point& windowPoint, bool extend) {
     if (!m_textDisplay)
         return;
     const Point local = m_textDisplay->mapFromWindow(windowPoint);
-    m_model.setCursor(m_textDisplay->byteIndexForXOffset(local.x), extend);
+    m_model.setCursor(toModel(m_textDisplay->byteIndexForXOffset(local.x)), extend);
     resetCaretBlink();
 }
 
@@ -289,13 +296,122 @@ std::size_t TextFieldBase::characterAtPoint(const Point& windowPoint) {
     const float x = m_textDisplay->mapFromWindow(windowPoint).x;
     const std::size_t index = m_textDisplay->byteIndexForXOffset(x);
     if (index > 0 && m_textDisplay->xOffsetForByteIndex(index) > x)
-        return previousCodepointStart(m_model.text(), index);
-    return index;
+        return toModel(previousCodepointStart(m_textDisplay->text(), index));
+    return toModel(index);
+}
+
+std::string TextFieldBase::displayText() const {
+    switch (shown()) {
+    case Shown::Plain:
+        return m_model.text();
+    case Shown::Hidden:
+        return {};
+    case Shown::Masked:
+        break;
+    }
+    const std::string character = mask();
+    const std::size_t count = characterCount(m_model.text());
+    std::string result;
+    result.reserve(count * character.size());
+    for (std::size_t i = 0; i < count; ++i)
+        result += character;
+    return result;
+}
+
+TextFieldBase::Shown TextFieldBase::shown() const {
+    switch (m_echoMode.get()) {
+    case EchoMode::Normal:
+        return Shown::Plain;
+    case EchoMode::NoEcho:
+        return Shown::Hidden;
+    case EchoMode::PasswordEchoOnEdit:
+        return m_passwordEditing ? Shown::Plain : Shown::Masked;
+    case EchoMode::Password:
+        break;
+    }
+    return Shown::Masked;
+}
+
+std::string TextFieldBase::mask() const {
+    const std::string& character = m_passwordCharacter.get();
+    if (character.empty())
+        return "\xE2\x80\xA2";
+    return character.substr(0, decodeUtf8At(character, 0).length);
+}
+
+std::size_t TextFieldBase::toDisplay(std::size_t position) const {
+    switch (shown()) {
+    case Shown::Plain:
+        return position;
+    case Shown::Hidden:
+        return 0;
+    case Shown::Masked:
+        break;
+    }
+    return characterIndexAt(m_model.text(), position) * mask().size();
+}
+
+std::size_t TextFieldBase::toModel(std::size_t position) const {
+    switch (shown()) {
+    case Shown::Plain:
+        return position;
+    case Shown::Hidden:
+        return m_model.cursor();
+    case Shown::Masked:
+        break;
+    }
+    return byteOffsetOfCharacter(m_model.text(), position / mask().size());
+}
+
+bool TextFieldBase::allows(TextEditAction action) const {
+    if (m_readOnly.get() && changesText(action))
+        return false;
+    if (m_echoMode.get() != EchoMode::Normal && (action == TextEditAction::Copy || action == TextEditAction::Cut))
+        return false;
+    return true;
+}
+
+void TextFieldBase::applyAction(TextEditAction action) {
+    if (m_echoMode.get() != EchoMode::Normal) {
+        switch (action) {
+        case TextEditAction::MoveWordLeft:    action = TextEditAction::MoveToStart; break;
+        case TextEditAction::MoveWordRight:   action = TextEditAction::MoveToEnd; break;
+        case TextEditAction::SelectWordLeft:  action = TextEditAction::SelectToStart; break;
+        case TextEditAction::SelectWordRight: action = TextEditAction::SelectToEnd; break;
+        case TextEditAction::DeleteWordBackward:
+            m_model.moveToStart(true);
+            m_model.deleteBackward();
+            return;
+        case TextEditAction::DeleteWordForward:
+            m_model.moveToEnd(true);
+            m_model.deleteForward();
+            return;
+        case TextEditAction::Paste:
+            beginPasswordEdit();
+            break;
+        default:
+            break;
+        }
+    }
+    applyTextEditAction(m_model, action);
+}
+
+void TextFieldBase::beginPasswordEdit() {
+    if (m_echoMode.get() != EchoMode::PasswordEchoOnEdit || m_passwordEditing)
+        return;
+    m_passwordEditing = true;
+    m_model.setText({});
+}
+
+void TextFieldBase::refreshDisplay() {
+    updateDisplayedText();
+    updateCaretAndScroll();
+    updateSelection();
 }
 
 void TextFieldBase::updateSelection() {
     if (m_textDisplay)
-        m_textDisplay->selection(m_model.selectionStart(), m_model.selectionEnd());
+        m_textDisplay->selection(toDisplay(m_model.selectionStart()), toDisplay(m_model.selectionEnd()));
 }
 
 void TextFieldBase::updateDisplayedText() {
@@ -303,7 +419,7 @@ void TextFieldBase::updateDisplayedText() {
         return;
     const std::string& value = m_model.text();
     const bool isEnabled = enabled();
-    m_textDisplay->text(value);
+    m_textDisplay->text(displayText());
     m_textDisplay->color(isEnabled ? m_textColor.get() : m_disabledTextColor.get());
 
     if (m_placeholderDisplay) {
@@ -321,7 +437,7 @@ void TextFieldBase::updateCaretAndScroll() {
     if (!m_textDisplay)
         return;
 
-    const float caretLocalX = m_textDisplay->xOffsetForByteIndex(m_model.cursor());
+    const float caretLocalX = m_textDisplay->xOffsetForByteIndex(toDisplay(m_model.cursor()));
     const float visibleWidth = std::max(0.0f, resolvedWidth() - paddingLeft() - paddingRight()
                                                  - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
     const float maxDisplayedCaretX = std::max(0.0f, visibleWidth - static_cast<float>(kCaretWidth));
@@ -331,7 +447,7 @@ void TextFieldBase::updateCaretAndScroll() {
         m_scrollOffset = static_cast<int>(std::round(caretLocalX));
     else if (displayedCaretX > maxDisplayedCaretX)
         m_scrollOffset = static_cast<int>(std::round(caretLocalX - maxDisplayedCaretX));
-    const float textEndX = m_textDisplay->xOffsetForByteIndex(m_model.text().size());
+    const float textEndX = m_textDisplay->xOffsetForByteIndex(toDisplay(m_model.text().size()));
     const int maxScroll = std::max(0, static_cast<int>(std::round(textEndX + static_cast<float>(kCaretWidth) - visibleWidth)));
     m_scrollOffset = std::clamp(m_scrollOffset, 0, maxScroll);
 

@@ -4,6 +4,7 @@
 #include <tavoos/export.hpp>
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/text/font.h>
+#include <tavoos/text/texteditactions.h>
 #include <tavoos/text/texteditmodel.h>
 #include <tavoos/types.h>
 #include <tavoos/widget/templates/control.h>
@@ -16,6 +17,13 @@
 #include <utility>
 
 namespace Tavoos {
+
+enum class EchoMode {
+    Normal,
+    Password,
+    NoEcho,
+    PasswordEchoOnEdit,
+};
 
 class TAVOOS_EXPORT TextFieldBase : public Control, private AnimatableBase {
 public:
@@ -87,6 +95,16 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) echoMode(this auto&& self, PropertyArg<EchoMode> mode) {
+        mode.applyTo(self.m_echoMode);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) passwordCharacter(this auto&& self, PropertyArg<std::string> character) {
+        character.applyTo(self.m_passwordCharacter);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) cursorPosition(this auto&& self, int position) {
         self.moveCursorTo(position);
         return std::forward<decltype(self)>(self);
@@ -142,6 +160,9 @@ public:
     bool selectByMouse() const { return m_selectByMouse; }
     bool readOnly() const { return m_readOnly; }
     int maximumLength() const { return m_maximumLength; }
+    EchoMode echoMode() const { return m_echoMode; }
+    std::string passwordCharacter() const { return m_passwordCharacter; }
+    std::string displayText() const;
 
     int cursorPosition() const;
     int selectionStart() const;
@@ -170,10 +191,20 @@ protected:
     void onResolvedSizeChanged() override;
 
 private:
+    enum class Shown { Plain, Masked, Hidden };
+
     using Control::content;
 
     bool tick(float dt) override;
 
+    Shown shown() const;
+    std::string mask() const;
+    std::size_t toDisplay(std::size_t position) const;
+    std::size_t toModel(std::size_t position) const;
+    bool allows(TextEditAction action) const;
+    void applyAction(TextEditAction action);
+    void beginPasswordEdit();
+    void refreshDisplay();
     void updateDisplayedText();
     void updateCaretAndScroll();
     void updateSelection();
@@ -200,6 +231,8 @@ private:
     Property<bool> m_selectByMouse{true};
     Property<bool> m_readOnly{false};
     Property<int> m_maximumLength{std::numeric_limits<int>::max()};
+    Property<EchoMode> m_echoMode{EchoMode::Normal};
+    Property<std::string> m_passwordCharacter{"\xE2\x80\xA2"};
 
     std::function<void(const std::string&)> m_onSubmit;
 
@@ -218,6 +251,7 @@ private:
     int m_pressClickCount{1};
     std::pair<std::size_t, std::size_t> m_pressWord{};
     bool m_changeFromCode{false};
+    bool m_passwordEditing{false};
     int m_scrollOffset{0};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};
