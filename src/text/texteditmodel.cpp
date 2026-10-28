@@ -80,6 +80,9 @@ void TextEditModel::setText(std::string text) {
     if (text == m_text)
         return;
     m_text = std::move(text);
+    m_undoStack.clear();
+    m_redoStack.clear();
+    m_typing = false;
     finishEdit(codepointStartAt(m_text, m_cursor));
 }
 
@@ -100,47 +103,39 @@ void TextEditModel::deselect() {
 }
 
 void TextEditModel::insert(std::string_view text) {
-    if (text.empty())
-        return;
-    const std::string inserted = m_singleLine ? withoutLineBreaks(text) : std::string{text};
-    const std::size_t start = selectionStart();
-    m_text.replace(start, selectionEnd() - start, inserted);
-    finishEdit(start + inserted.size());
+    insertText(text, false);
+}
+
+void TextEditModel::type(std::string_view text) {
+    insertText(text, true);
 }
 
 void TextEditModel::deleteBackward() {
     if (removeSelection() || m_cursor == 0)
         return;
-    const std::size_t start = previousCodepointStart(m_text, m_cursor);
-    m_text.erase(start, m_cursor - start);
-    finishEdit(start);
+    replace(previousCodepointStart(m_text, m_cursor), m_cursor, {}, false);
 }
 
 void TextEditModel::deleteForward() {
     if (removeSelection() || m_cursor >= m_text.size())
         return;
-    m_text.erase(m_cursor, decodeUtf8At(m_text, m_cursor).length);
-    finishEdit(m_cursor);
+    replace(m_cursor, m_cursor + decodeUtf8At(m_text, m_cursor).length, {}, false);
 }
 
 void TextEditModel::deleteWordBackward() {
     if (removeSelection())
         return;
     const std::size_t start = previousWordStart(m_text, m_cursor);
-    if (start == m_cursor)
-        return;
-    m_text.erase(start, m_cursor - start);
-    finishEdit(start);
+    if (start != m_cursor)
+        replace(start, m_cursor, {}, false);
 }
 
 void TextEditModel::deleteWordForward() {
     if (removeSelection())
         return;
     const std::size_t end = nextWordStart(m_text, m_cursor);
-    if (end == m_cursor)
-        return;
-    m_text.erase(m_cursor, end - m_cursor);
-    finishEdit(m_cursor);
+    if (end != m_cursor)
+        replace(m_cursor, end, {}, false);
 }
 
 void TextEditModel::moveLeft(bool extend) {
@@ -173,19 +168,65 @@ void TextEditModel::moveWordRight(bool extend) {
     moveTo(nextWordStart(m_text, m_cursor), extend);
 }
 
+void TextEditModel::undo() {
+    if (m_undoStack.empty())
+        return;
+    Edit edit = std::move(m_undoStack.back());
+    m_undoStack.pop_back();
+    m_text.replace(edit.position, edit.inserted.size(), edit.removed);
+    m_typing = false;
+    const std::size_t anchor = edit.anchorBefore;
+    const std::size_t cursor = edit.cursorBefore;
+    m_redoStack.push_back(std::move(edit));
+    finishChange(anchor, cursor);
+}
+
+void TextEditModel::redo() {
+    if (m_redoStack.empty())
+        return;
+    Edit edit = std::move(m_redoStack.back());
+    m_redoStack.pop_back();
+    m_text.replace(edit.position, edit.removed.size(), edit.inserted);
+    m_typing = false;
+    const std::size_t cursor = edit.position + edit.inserted.size();
+    m_undoStack.push_back(std::move(edit));
+    finishEdit(cursor);
+}
+
 bool TextEditModel::removeSelection() {
     if (!hasSelection())
         return false;
-    const std::size_t start = selectionStart();
-    m_text.erase(start, selectionEnd() - start);
-    finishEdit(start);
+    replace(selectionStart(), selectionEnd(), {}, false);
     return true;
 }
 
+void TextEditModel::insertText(std::string_view text, bool typing) {
+    if (text.empty())
+        return;
+    replace(selectionStart(), selectionEnd(), m_singleLine ? withoutLineBreaks(text) : std::string{text}, typing);
+}
+
+void TextEditModel::replace(std::size_t start, std::size_t end, std::string inserted, bool typing) {
+    const bool merge = typing && m_typing && start == end && !m_undoStack.empty()
+                       && m_undoStack.back().position + m_undoStack.back().inserted.size() == start;
+    if (merge)
+        m_undoStack.back().inserted += inserted;
+    else
+        m_undoStack.push_back({start, m_text.substr(start, end - start), inserted, m_anchor, m_cursor});
+    m_redoStack.clear();
+    m_text.replace(start, end - start, inserted);
+    m_typing = typing;
+    finishEdit(start + inserted.size());
+}
+
 void TextEditModel::finishEdit(std::size_t cursor) {
-    const bool cursorMoved = cursor != m_cursor || cursor != m_anchor;
+    finishChange(cursor, cursor);
+}
+
+void TextEditModel::finishChange(std::size_t anchor, std::size_t cursor) {
+    const bool cursorMoved = anchor != m_anchor || cursor != m_cursor;
+    m_anchor = anchor;
     m_cursor = cursor;
-    m_anchor = cursor;
     if (m_onTextChanged)
         m_onTextChanged();
     if (cursorMoved && m_onCursorChanged)
@@ -197,6 +238,7 @@ void TextEditModel::moveTo(std::size_t cursor, bool extend) {
 }
 
 void TextEditModel::setSelection(std::size_t anchor, std::size_t cursor) {
+    m_typing = false;
     if (anchor == m_anchor && cursor == m_cursor)
         return;
     m_anchor = anchor;

@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace Tavoos {
 
@@ -22,6 +23,8 @@ public:
     std::string selectedText() const;
     std::pair<std::size_t, std::size_t> wordAt(std::size_t position) const;
     bool singleLine() const { return m_singleLine; }
+    bool canUndo() const { return !m_undoStack.empty(); }
+    bool canRedo() const { return !m_redoStack.empty(); }
 
     void setSingleLine(bool singleLine) { m_singleLine = singleLine; }
     void setText(std::string text);
@@ -31,6 +34,7 @@ public:
     void deselect();
 
     void insert(std::string_view text);
+    void type(std::string_view text);
     void deleteBackward();
     void deleteForward();
     void deleteWordBackward();
@@ -43,12 +47,26 @@ public:
     void moveWordLeft(bool extend = false);
     void moveWordRight(bool extend = false);
 
+    void undo();
+    void redo();
+
     void onTextChanged(std::function<void()> callback) { m_onTextChanged = std::move(callback); }
     void onCursorChanged(std::function<void()> callback) { m_onCursorChanged = std::move(callback); }
 
 private:
+    struct Edit {
+        std::size_t position;
+        std::string removed;
+        std::string inserted;
+        std::size_t anchorBefore;
+        std::size_t cursorBefore;
+    };
+
     bool removeSelection();
+    void insertText(std::string_view text, bool typing);
+    void replace(std::size_t start, std::size_t end, std::string inserted, bool typing);
     void finishEdit(std::size_t cursor);
+    void finishChange(std::size_t anchor, std::size_t cursor);
     void moveTo(std::size_t cursor, bool extend);
     void setSelection(std::size_t anchor, std::size_t cursor);
 
@@ -56,6 +74,9 @@ private:
     std::size_t m_cursor{0};
     std::size_t m_anchor{0};
     bool m_singleLine{false};
+    std::vector<Edit> m_undoStack;
+    std::vector<Edit> m_redoStack;
+    bool m_typing{false};
     std::function<void()> m_onTextChanged;
     std::function<void()> m_onCursorChanged;
 };
