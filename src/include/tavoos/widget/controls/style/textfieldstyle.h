@@ -15,6 +15,8 @@ struct TextFieldStyle {
     Paint placeholderColor{Color::rgba(160, 163, 175)};
     Paint disabledTextColor{Color::rgba(160, 163, 175)};
     Paint caretColor{Color::Black};
+    Paint selectionColor{Color::rgba(85, 112, 241)};
+    Paint selectedTextColor{Color::White};
     int radius{6};
     float borderWidth{1.5f};
     float innerPaddingLeft{10.0f};

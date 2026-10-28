@@ -74,7 +74,8 @@ public:
     TextFieldStyle style() const {
         return { m_backgroundColor.get(), m_borderColor.get(), m_focusedBorderColor.get(),
                  m_disabledColor.get(), m_disabledBorderColor.get(), textColor(),
-                 placeholderColor(), disabledTextColor(), caretColor(), m_radius.get(),
+                 placeholderColor(), disabledTextColor(), caretColor(), selectionColor(),
+                 selectedTextColor(), m_radius.get(),
                  m_borderWidth.get(), innerPaddingLeft(), innerPaddingTop(),
                  innerPaddingRight(), innerPaddingBottom(), font(), m_transition.get() };
     }

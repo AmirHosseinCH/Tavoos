@@ -59,6 +59,20 @@ inline std::size_t codepointStartAt(const std::string& content, std::size_t i) {
     return i;
 }
 
+inline std::size_t byteOffsetOfCharacter(const std::string& content, std::size_t character) {
+    std::size_t i = 0;
+    for (; character > 0 && i < content.size(); --character)
+        i += decodeUtf8At(content, i).length;
+    return i;
+}
+
+inline std::size_t characterIndexAt(const std::string& content, std::size_t byte) {
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < byte && i < content.size(); i += decodeUtf8At(content, i).length)
+        ++count;
+    return count;
+}
+
 template <typename Fn>
 inline void forEachUtf8Codepoint(const std::string& content, Fn&& fn) {
     for (std::size_t i = 0; i < content.size(); ) {

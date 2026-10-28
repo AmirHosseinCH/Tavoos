@@ -60,6 +60,21 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) selectionColor(this auto&& self, PropertyArg<Paint> color) {
+        self.m_selectionColor.set(color);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) selectedTextColor(this auto&& self, PropertyArg<Paint> color) {
+        self.m_selectedTextColor.set(color);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) cursorPosition(this auto&& self, int position) {
+        self.moveCursorTo(position);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) innerPadding(this auto&& self, PropertyArg<float> value) {
         self.m_innerPaddingLeft.set(value);
         self.m_innerPaddingTop.set(value);
@@ -101,10 +116,20 @@ public:
     Paint placeholderColor() const { return m_placeholderColor; }
     Paint disabledTextColor() const { return m_disabledTextColor; }
     Paint caretColor() const { return m_caretColor; }
+    Paint selectionColor() const { return m_selectionColor; }
+    Paint selectedTextColor() const { return m_selectedTextColor; }
     float innerPaddingLeft() const { return m_innerPaddingLeft; }
     float innerPaddingTop() const { return m_innerPaddingTop; }
     float innerPaddingRight() const { return m_innerPaddingRight; }
     float innerPaddingBottom() const { return m_innerPaddingBottom; }
+
+    int cursorPosition() const;
+    int selectionStart() const;
+    int selectionEnd() const;
+    std::string selectedText() const { return m_model.selectedText(); }
+    void select(int start, int end);
+    void selectAll();
+    void deselect();
 
 protected:
     bool hasHandlerFor(EventType type) override;
@@ -123,7 +148,9 @@ private:
 
     void updateDisplayedText();
     void updateCaretAndScroll();
+    void updateSelection();
     void resetCaretBlink();
+    void moveCursorTo(int position);
 
     Property<std::string> m_text{};
     State<std::string> m_textState{};
@@ -133,6 +160,8 @@ private:
     Property<Paint> m_placeholderColor{Color::rgba(160, 163, 175)};
     Property<Paint> m_disabledTextColor{Color::rgba(160, 163, 175)};
     BindableState<Paint> m_caretColor{Color::rgba(85, 112, 241)};
+    BindableState<Paint> m_selectionColor{Color::rgba(85, 112, 241)};
+    BindableState<Paint> m_selectedTextColor{Color::White};
     BindableState<float> m_innerPaddingLeft{10.0f};
     BindableState<float> m_innerPaddingTop{0.0f};
     BindableState<float> m_innerPaddingRight{10.0f};

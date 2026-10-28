@@ -1,6 +1,7 @@
 #include <tavoos/widget/templates/textfieldbase.h>
 
 #include <tavoos/events/key.h>
+#include <tavoos/text/texteditactions.h>
 #include <tavoos/text/utf8.h>
 
 #include <algorithm>
@@ -26,8 +27,12 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
             m_text.set(m_model.text());
         updateDisplayedText();
         updateCaretAndScroll();
+        updateSelection();
     });
-    m_model.onCursorChanged([this] { updateCaretAndScroll(); });
+    m_model.onCursorChanged([this] {
+        updateCaretAndScroll();
+        updateSelection();
+    });
     m_placeholder.onChange([this](const std::string&) { updateDisplayedText(); });
     m_textColor.onChange([this](const Paint&) { updateDisplayedText(); });
     m_placeholderColor.onChange([this](const Paint&) { updateDisplayedText(); });
@@ -64,7 +69,9 @@ TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {
                 .x(m_contentX)
                 .wrapMode(WrapMode::NoWrap)
                 .textAlignment(Alignment::Left | Alignment::CenterVertical)
-                .font(m_font.state());
+                .font(m_font.state())
+                .selectionColor(m_selectionColor.state())
+                .selectedTextColor(m_selectedTextColor.state());
 
             text.addChild<RectangleWidget>([this](RectangleWidget& caret) {
                 caret.alignment(Alignment::CenterVertical)
@@ -126,6 +133,7 @@ void TextFieldBase::triggerFocusOut(Event& event) {
         AnimationManager::instance().unregisterAnimation(this);
     }
     m_caretVisible.set(false);
+    m_model.deselect();
     Widget::triggerFocusOut(event);
 }
 
@@ -133,28 +141,16 @@ void TextFieldBase::triggerKeyPress(KeyEvent& event) {
     if (!enabled())
         return;
 
-    const int key = event.keyCode();
-    if (key == static_cast<int>(Key::Backspace)) {
-        m_model.deleteBackward();
-    } else if (key == static_cast<int>(Key::Delete)) {
-        m_model.deleteForward();
-    } else if (key == static_cast<int>(Key::Left)) {
-        m_model.moveLeft();
-    } else if (key == static_cast<int>(Key::Right)) {
-        m_model.moveRight();
-    } else if (key == static_cast<int>(Key::Home)) {
-        m_model.moveToStart();
-    } else if (key == static_cast<int>(Key::End)) {
-        m_model.moveToEnd();
-    } else if (key == static_cast<int>(Key::Enter) || key == static_cast<int>(Key::KpEnter)) {
+    const Key key = static_cast<Key>(event.keyCode());
+    if (const auto action = textEditActionFor(key, event.modifiers())) {
+        applyTextEditAction(m_model, *action);
+        resetCaretBlink();
+    } else if (key == Key::Enter || key == Key::KpEnter) {
         if (m_onSubmit)
             m_onSubmit(m_model.text());
-        return;
     } else {
         event.ignore();
-        return;
     }
-    resetCaretBlink();
 }
 
 void TextFieldBase::triggerKeyRelease(KeyEvent&) {
@@ -180,6 +176,40 @@ void TextFieldBase::resetCaretBlink() {
     m_blinkElapsed = 0.0f;
     if (m_blinking)
         m_caretVisible.set(true);
+}
+
+int TextFieldBase::cursorPosition() const {
+    return static_cast<int>(characterIndexAt(m_model.text(), m_model.cursor()));
+}
+
+int TextFieldBase::selectionStart() const {
+    return static_cast<int>(characterIndexAt(m_model.text(), m_model.selectionStart()));
+}
+
+int TextFieldBase::selectionEnd() const {
+    return static_cast<int>(characterIndexAt(m_model.text(), m_model.selectionEnd()));
+}
+
+void TextFieldBase::select(int start, int end) {
+    m_model.select(byteOffsetOfCharacter(m_model.text(), static_cast<std::size_t>(std::max(start, 0))),
+                   byteOffsetOfCharacter(m_model.text(), static_cast<std::size_t>(std::max(end, 0))));
+}
+
+void TextFieldBase::selectAll() {
+    m_model.selectAll();
+}
+
+void TextFieldBase::deselect() {
+    m_model.deselect();
+}
+
+void TextFieldBase::moveCursorTo(int position) {
+    m_model.setCursor(byteOffsetOfCharacter(m_model.text(), static_cast<std::size_t>(std::max(position, 0))));
+}
+
+void TextFieldBase::updateSelection() {
+    if (m_textDisplay)
+        m_textDisplay->selection(m_model.selectionStart(), m_model.selectionEnd());
 }
 
 void TextFieldBase::updateDisplayedText() {

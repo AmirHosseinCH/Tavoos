@@ -56,6 +56,8 @@ void TextFieldWidget::applyStyle(const TextFieldStyle& value) {
     placeholderColor(value.placeholderColor);
     disabledTextColor(value.disabledTextColor);
     caretColor(value.caretColor);
+    selectionColor(value.selectionColor);
+    selectedTextColor(value.selectedTextColor);
     radius(value.radius);
     borderWidth(value.borderWidth);
     innerPaddingLeft(value.innerPaddingLeft);
