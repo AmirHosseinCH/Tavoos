@@ -8,3 +8,4 @@
 #include <tavoos/text/glyphatlas.h>
 #include <tavoos/text/utf8.h>
 #include <tavoos/text/textlayout.h>
+#include <tavoos/text/texteditmodel.h>

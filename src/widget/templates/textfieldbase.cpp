@@ -13,15 +13,6 @@ namespace {
 constexpr int kCaretWidth = 1;
 constexpr float kBlinkInterval = 0.5f;
 
-std::size_t previousCodepointStart(const std::string& text, std::size_t i) {
-    if (i == 0)
-        return 0;
-    std::size_t j = i - 1;
-    while (j > 0 && (static_cast<unsigned char>(text[j]) & 0xC0) == 0x80)
-        --j;
-    return j;
-}
-
 }
 
 TextFieldBase::TextFieldBase(Object* parent) : Control{parent} {

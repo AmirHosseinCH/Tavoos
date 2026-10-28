@@ -69,6 +69,7 @@ set(TAVOOS_SOURCES
     text/systemfont.cpp
     text/glyphatlas.cpp
     text/textlayout.cpp
+    text/texteditmodel.cpp
     third_party/glad/glad.c
     third_party/stb_image/stb_image_impl.cpp
 )
@@ -203,6 +204,7 @@ target_sources(Tavoos
     include/tavoos/text/glyphatlas.h
     include/tavoos/text/utf8.h
     include/tavoos/text/textlayout.h
+    include/tavoos/text/texteditmodel.h
     include/tavoos/text/text.h
     include/tavoos/third_party/glad/glad.h
     include/tavoos/third_party/KHR/khrplatform.h
