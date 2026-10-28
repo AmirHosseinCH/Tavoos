@@ -72,6 +72,7 @@ set(TAVOOS_SOURCES
     text/textlayout.cpp
     text/texteditmodel.cpp
     text/texteditactions.cpp
+    text/validators.cpp
     third_party/glad/glad.c
     third_party/stb_image/stb_image_impl.cpp
 )
@@ -209,6 +210,7 @@ target_sources(Tavoos
     include/tavoos/text/textlayout.h
     include/tavoos/text/texteditmodel.h
     include/tavoos/text/texteditactions.h
+    include/tavoos/text/validators.h
     include/tavoos/text/text.h
     include/tavoos/third_party/glad/glad.h
     include/tavoos/third_party/KHR/khrplatform.h

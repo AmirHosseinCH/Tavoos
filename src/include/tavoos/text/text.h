@@ -10,3 +10,4 @@
 #include <tavoos/text/textlayout.h>
 #include <tavoos/text/texteditmodel.h>
 #include <tavoos/text/texteditactions.h>
+#include <tavoos/text/validators.h>
