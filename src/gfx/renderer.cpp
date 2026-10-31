@@ -5,6 +5,7 @@
 #include <tavoos/effects/shadowbase.h>
 #include <tavoos/gfx/renderer.h>
 #include <tavoos/gfx/shader_sources.h>
+#include <tavoos/gfx/visibility.h>
 #include <tavoos/text/text.h>
 #include <tavoos/widget/image.h>
 #include <tavoos/widget/rectangle.h>
@@ -437,9 +438,19 @@ void Renderer::renderText(TextWidget& text) {
     else if (hasFlag(align, Alignment::CenterVertical))
         blockStartY = text.paddingTop() + (boxHeight - blockHeight) * 0.5f;
 
+    const auto advance = [&](char32_t codepoint) {
+        const GlyphMetrics& m = face->glyph(codepoint);
+        return m.valid ? m.advance * scale : 0.0f;
+    };
+    const std::vector<VisibleSpan> spans = visibleSpans(content, lines, blockStartY, lineHeight,
+                                                        visibleBounds(projection * text.worldMatrix()), lineStartX, advance);
+    std::size_t spanBytes = 0;
+    for (const VisibleSpan& span : spans)
+        spanBytes += span.end - span.start;
+
     struct Vertex { float x, y, u, v, lu, lv; };
     std::vector<Vertex> vertices;
-    vertices.reserve(content.size() * 6);
+    vertices.reserve(spanBytes * 6);
     int currentPage = -1;
 
     const float op = text.effectiveOpacity();
@@ -451,9 +462,7 @@ void Renderer::renderText(TextWidget& text) {
             float width = 0.0f;
             for (std::size_t i = from; i < to; ) {
                 const Utf8Decoded d = decodeUtf8At(content, i);
-                const GlyphMetrics& m = face->glyph(d.codepoint);
-                if (m.valid)
-                    width += m.advance * scale;
+                width += advance(d.codepoint);
                 i += d.length;
             }
             return width;
@@ -466,15 +475,14 @@ void Renderer::renderText(TextWidget& text) {
         applyPaintUniforms(quadShader, "u", "uColor", text.selectionColor(), op);
         applyPaintUniforms(quadShader, "uBorder", "uBorderColor", Color::Transparent, op);
 
-        for (std::size_t li = 0; li < lines.size(); ++li) {
-            const TextLine& line = lines[li];
-            const std::size_t from = std::max(selectionStart, line.byteStart);
-            const std::size_t to = std::min(selectionEnd, line.byteEnd);
-            if (!line.overrideText.empty() || from >= to)
+        for (const VisibleSpan& span : spans) {
+            const std::size_t from = std::max(selectionStart, span.start);
+            const std::size_t to = std::min(selectionEnd, span.end);
+            if (!lines[span.line].overrideText.empty() || from >= to)
                 continue;
-            const float x0 = lineStartX(li) + advanceBetween(line.byteStart, from);
+            const float x0 = span.x + advanceBetween(span.start, from);
             const float width = advanceBetween(from, to);
-            const float top = blockStartY + lineHeight * static_cast<float>(li);
+            const float top = blockStartY + lineHeight * static_cast<float>(span.line);
             quadShader.setMat4("world", text.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{x0, top, 0.0f}));
             quadShader.setVec2("uHalfSize", glm::vec2{width, lineHeight} * 0.5f);
             drawQuad(width, lineHeight);
@@ -526,16 +534,15 @@ void Renderer::renderText(TextWidget& text) {
     };
 
     bool drawingSelected = false;
-    for (std::size_t li = 0; li < lines.size(); ++li) {
-        float penX = lineStartX(li);
-        float baselineY = blockStartY + face->ascender() * scale + lineHeight * static_cast<float>(li);
+    for (const VisibleSpan& span : spans) {
+        float penX = span.x;
+        const float baselineY = blockStartY + face->ascender() * scale + lineHeight * static_cast<float>(span.line);
 
-        const bool original = lines[li].overrideText.empty();
-        const std::string& source = original ? content : lines[li].overrideText;
-        std::size_t i = original ? lines[li].byteStart : 0;
-        std::size_t end = original ? lines[li].byteEnd : source.size();
+        const bool original = lines[span.line].overrideText.empty();
+        const std::string& source = original ? content : lines[span.line].overrideText;
+        std::size_t i = span.start;
 
-        while (i < end) {
+        while (i < span.end) {
             const bool selected = original && i >= selectionStart && i < selectionEnd;
             Utf8Decoded d = decodeUtf8At(source, i);
             i += d.length;
