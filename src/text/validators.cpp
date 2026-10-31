@@ -1,10 +1,12 @@
 #include <tavoos/text/validators.h>
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <charconv>
-#include <regex>
+#include <memory>
 
 namespace Tavoos {
 
@@ -17,6 +19,16 @@ std::size_t digitCount(long long value) {
 
 bool signAllowed(char sign, double bottom, double top) {
     return sign == '-' ? bottom < 0 : top >= 0;
+}
+
+pcre2_code* compilePattern(const std::string& pattern, int& errorCode, PCRE2_SIZE& errorOffset) {
+    return pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), pattern.size(), PCRE2_UTF, &errorCode,
+                         &errorOffset, nullptr);
+}
+
+bool hitLimit(int result) {
+    return result == PCRE2_ERROR_MATCHLIMIT || result == PCRE2_ERROR_DEPTHLIMIT || result == PCRE2_ERROR_HEAPLIMIT
+           || result == PCRE2_ERROR_JIT_STACKLIMIT || result == PCRE2_ERROR_NOMEMORY;
 }
 
 }
@@ -86,14 +98,45 @@ TextValidator doubleValidator(double bottom, double top, int decimals) {
 }
 
 TextValidator regexValidator(const std::string& pattern) {
-    try {
-        return [expression = std::regex{pattern}](const std::string& text) {
-            return std::regex_match(text, expression) ? ValidatorState::Acceptable : ValidatorState::Intermediate;
-        };
-    } catch (const std::regex_error& error) {
-        spdlog::error("regexValidator: invalid pattern \"{}\": {}", pattern, error.what());
+    int errorCode = 0;
+    PCRE2_SIZE errorOffset = 0;
+    pcre2_code* const checked = compilePattern(pattern, errorCode, errorOffset);
+    if (!checked) {
+        PCRE2_UCHAR message[256];
+        pcre2_get_error_message(errorCode, message, sizeof(message));
+        spdlog::error("regexValidator: invalid pattern \"{}\" at offset {}: {}", pattern, errorOffset,
+                      reinterpret_cast<const char*>(message));
         return {};
     }
+    pcre2_code_free(checked);
+
+    pcre2_code* compiled = nullptr;
+    for (const char* close : {")\\z", "\\E)\\z", "\n)\\z"}) {
+        compiled = compilePattern("(?:" + pattern + close, errorCode, errorOffset);
+        if (compiled)
+            break;
+    }
+    if (!compiled) {
+        spdlog::error("regexValidator: cannot anchor pattern \"{}\" to the end of the text", pattern);
+        return {};
+    }
+    pcre2_jit_compile(compiled, PCRE2_JIT_COMPLETE | PCRE2_JIT_PARTIAL_HARD);
+    const std::shared_ptr<pcre2_code> code{compiled, pcre2_code_free};
+
+    return [code](const std::string& text) {
+        const std::unique_ptr<pcre2_match_data, decltype(&pcre2_match_data_free)> data{
+            pcre2_match_data_create_from_pattern(code.get(), nullptr), pcre2_match_data_free};
+        auto match = [&](uint32_t options) {
+            return pcre2_match(code.get(), reinterpret_cast<PCRE2_SPTR>(text.data()), text.size(), 0,
+                               PCRE2_ANCHORED | options, data.get(), nullptr);
+        };
+        if (match(0) >= 0)
+            return ValidatorState::Acceptable;
+        if (text.empty())
+            return ValidatorState::Intermediate;
+        const int partial = match(PCRE2_PARTIAL_HARD);
+        return partial == PCRE2_ERROR_PARTIAL || hitLimit(partial) ? ValidatorState::Intermediate : ValidatorState::Invalid;
+    };
 }
 
 }

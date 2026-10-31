@@ -256,6 +256,7 @@ target_link_libraries(Tavoos
     glfw
     spdlog::spdlog
     lunasvg::lunasvg
+    ${TAVOOS_PCRE2_TARGET}
 )
 
 if (UNIX AND NOT APPLE)

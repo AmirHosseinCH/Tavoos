@@ -32,6 +32,15 @@ if (UNIX AND NOT APPLE)
     find_package(Fontconfig REQUIRED)
 endif()
 
+find_package(PCRE2 CONFIG QUIET COMPONENTS 8BIT)
+if (TARGET PCRE2::8BIT)
+    set(TAVOOS_PCRE2_TARGET PCRE2::8BIT)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(TAVOOS_PCRE2 REQUIRED IMPORTED_TARGET libpcre2-8)
+    set(TAVOOS_PCRE2_TARGET PkgConfig::TAVOOS_PCRE2)
+endif()
+
 add_subdirectory(src)
 
 if (TAVOOS_BUILD_EXAMPLES)

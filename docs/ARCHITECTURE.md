@@ -2755,6 +2755,17 @@ Limits apply before `replace`. A single-line model turns inserted line breaks in
 `insertText` cuts the inserted text to the characters still free under `maximumLength`. `setText`
 truncates to the maximum too, but is not validated.
 
+`regexValidator` (`text/validators.cpp`) uses PCRE2 rather than `std::regex`, whose matcher recurses
+once per character and overflows the stack on long text. A validator needs partial matching, to tell
+whether more input could still match, and PCRE2 has it but refuses to combine it with end anchoring.
+So the pattern is compiled as `(?:pattern)\z` instead, after compiling it as written, so that a
+pattern with a stray `)` is reported rather than balanced by the wrapper. When an unterminated `\Q`
+or an extended-mode comment swallows the wrapper's `)`, the wrapped pattern fails to compile and is
+retried closed with `\E` or a newline. Each check is a full match, which is `Acceptable`, then a hard
+partial match: a partial result, or a PCRE2 resource limit, is `Intermediate`, and anything else is
+`Invalid`. Empty text is always `Intermediate`, since PCRE2 never reports a partial match before
+reading a character. The pattern is JIT-compiled where PCRE2 supports it.
+
 Words come from three kinds of character: word characters (ASCII letters, digits, `_`, and every
 non-ASCII character, which keeps other scripts working without Unicode tables), spaces, and
 punctuation. A word is a run of one kind. `moveWordRight` skips the run it is in, unless it is
