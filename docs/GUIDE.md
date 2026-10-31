@@ -609,7 +609,7 @@ Three ready-made validators are in `tavoos/text/validators.h`:
 |---|---|
 | `intValidator(bottom, top)` | Whole numbers in the range, with an optional sign. A number that more digits could still bring into the range, like `1` for 10 to 99, is intermediate. |
 | `doubleValidator(bottom, top, decimals)` | Numbers in the range with at most `decimals` digits after the `.`. |
-| `regexValidator(pattern)` | Text the whole `std::regex` pattern matches. Anything else is intermediate rather than invalid, so typing is never refused; only `acceptableInput()` and Enter follow the pattern. |
+| `regexValidator(pattern)` | Text the whole pattern matches, written in PCRE2 (Perl-compatible) syntax. Text that could still grow into a match is intermediate, and text that never can is invalid, so impossible keystrokes are refused. The text is matched as UTF-8, so `.` is one character, while `\w` and `\d` cover ASCII only. An invalid pattern is logged and validates nothing. |
 
 Any function from `const std::string&` to `ValidatorState` works too:
 
