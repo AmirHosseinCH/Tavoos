@@ -14,7 +14,7 @@ Developed and tested on Ubuntu 24.04 (Linux). Other platforms aren't validated.
 Install these from your package manager; on Debian-based systems:
 
 ```bash
-sudo apt install g++-14 libspdlog-dev libglm-dev libfreetype-dev libfontconfig-dev
+sudo apt install g++-14 libspdlog-dev libglm-dev libfreetype-dev libfontconfig-dev libpcre2-dev
 ```
 
 GLFW must be 3.4 or newer. Install it from your package manager if it provides 3.4 or later
