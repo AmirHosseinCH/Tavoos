@@ -574,14 +574,26 @@ void Renderer::renderWidgetContents(Widget& widget) {
         return;
     }
 
-    const int texW = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
-    const int texH = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    constexpr float kSnap = 1e-3f;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = std::max(widget.displayedWidth(), 0.0f);
+    float bottom = std::max(widget.displayedHeight(), 0.0f);
+    if (const auto visible = visibleBounds(projection * widget.worldMatrix())) {
+        left = std::max(left, std::floor(visible->left + kSnap));
+        top = std::max(top, std::floor(visible->top + kSnap));
+        right = std::min(right, std::ceil(visible->right - kSnap));
+        bottom = std::min(bottom, std::ceil(visible->bottom - kSnap));
+    }
+    const int texW = static_cast<int>(std::ceil(right - left));
+    const int texH = static_cast<int>(std::ceil(bottom - top));
     if (texW <= 0 || texH <= 0)
         return;
 
-    ensureClipMask(widget, texW, texH);
-    renderClipLayer(widget, texW, texH);
-    compositeClipLayer(widget, texW, texH);
+    const glm::mat4 layerWorld = widget.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{left, top, 0.0f});
+    ensureClipMask(widget, layerWorld, texW, texH);
+    renderClipLayer(widget, layerWorld, texW, texH);
+    compositeClipLayer(widget, layerWorld, texW, texH);
 }
 
 static void setClipTextureParams() {
@@ -641,7 +653,7 @@ static void endClipTarget(const SavedRenderTarget& saved, GLuint clipFBO, GLuint
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &projectionRef);
 }
 
-void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
+void Renderer::ensureClipMask(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     if (widget.m_clipMaskTexture == 0)
         glGenTextures(1, &widget.m_clipMaskTexture);
 
@@ -654,7 +666,7 @@ void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
         widget.m_clipMaskHeight = texH;
     }
 
-    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipMaskTexture, texW, texH, widget.worldMatrix());
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipMaskTexture, texW, texH, layerWorld);
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
 
     if (widget.isLayouter())
@@ -678,7 +690,7 @@ void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
     widget.render(*this);
 }
 
-void Renderer::renderClipLayer(Widget& widget, int texW, int texH) {
+void Renderer::renderClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     if (widget.m_clipColorTexture == 0)
         glGenTextures(1, &widget.m_clipColorTexture);
 
@@ -691,7 +703,7 @@ void Renderer::renderClipLayer(Widget& widget, int texW, int texH) {
         widget.m_clipColorHeight = texH;
     }
 
-    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipColorTexture, texW, texH, widget.worldMatrix());
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipColorTexture, texW, texH, layerWorld);
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
 
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -719,10 +731,10 @@ static bool isAxisAlignedUnitScale(const glm::mat4& m) {
            std::abs(m[0][3]) < eps && std::abs(m[1][3]) < eps && std::abs(m[3][3] - 1.0f) < eps;
 }
 
-void Renderer::compositeClipLayer(Widget& widget, int texW, int texH) {
+void Renderer::compositeClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     clipCompositeShader.use();
 
-    glm::mat4 world = widget.worldMatrix();
+    glm::mat4 world = layerWorld;
     if (isAxisAlignedUnitScale(world)) {
         world[3].x = std::round(world[3].x);
         world[3].y = std::round(world[3].y);
