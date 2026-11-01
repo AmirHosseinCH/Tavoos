@@ -22,6 +22,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [`SidedProperty<T>` / `CornerProperty<T>`](#sidedpropertyt--cornerpropertyt)
 5. [Layout system](#layout-system)
    - [Dirty-flag propagation](#dirty-flag-propagation)
+   - [Repeated layout passes](#repeated-layout-passes)
    - [`Widget::layout()` - the non-layouter default](#widgetlayout---the-non-layouter-default)
    - [Column & Row](#column--row)
    - [Grid](#grid)
@@ -51,8 +52,10 @@ document is where the "why" behind non-obvious code lives instead.
    - [Dragging](#dragging)
    - [Drag and drop](#drag-and-drop)
    - [Text editing](#text-editing)
+   - [Text areas](#text-areas)
    - [Overlays and popups](#overlays-and-popups)
    - [Flick areas](#flick-areas)
+   - [Keeping a rectangle in view](#keeping-a-rectangle-in-view)
    - [Scroll areas](#scroll-areas)
    - [List views](#list-views)
    - [Combo boxes](#combo-boxes)
@@ -65,6 +68,7 @@ document is where the "why" behind non-obvious code lives instead.
 11. [Text rendering](#text-rendering)
     - [`FontFace` / `FontManager` / `GlyphAtlas`](#fontface--fontmanager--glyphatlas)
     - [Wrap, elide, and line-clamp](#wrap-elide-and-line-clamp)
+    - [Text layout](#text-layout)
     - [Selection](#selection)
     - [Culling](#culling)
 12. [Resource embedding](#resource-embedding)
@@ -682,7 +686,12 @@ bindRepaintTriggers(m_opacity, m_visible, m_clip);
 Two things drive when layout actually runs. First, `Widget::m_layoutDirty`:
 
 ```cpp
-void Widget::markLayoutDirty() { m_layoutDirty = true; requestRepaint(); }
+void Widget::markLayoutDirty() {
+    m_layoutDirty = true;
+    if (m_ownerWindow)
+        m_ownerWindow->m_layoutRequested = true;
+    requestRepaint();
+}
 bool Widget::consumeLayoutDirty() {
     if (m_layoutDirty) { m_layoutDirty = false; return true; }
     return false;
@@ -764,6 +773,16 @@ Widget::ContentArea Widget::resolveContentArea() {
 
 Either the parent widget's padded interior, or (if the `Object` parent is a `Window`
 directly) the full window size.
+
+### Repeated layout passes
+
+`Window::layoutTree` runs the layout pass up to four times (`kMaxLayoutPasses`). `markLayoutDirty`
+also sets the window's `m_layoutRequested`, which is cleared before each pass; if laying out sets it
+again, the pass runs again before anything is drawn. This is for layout that depends on the result
+of layout. A text area gives its text an explicit width from its own resolved width, which changes
+its natural height, and revealing a caret scrolls a scroll area, which moves its children. Without
+the repeat, such a request would wait for the next input event. A tree that asks for nothing during
+layout takes one pass, and the limit keeps a widget that always asks again from stalling the frame.
 
 ### `Widget::layout()` - the non-layouter default
 
@@ -1277,15 +1296,20 @@ void Renderer::renderForWindow(Window& window) {
 }
 
 void Window::layoutTree() {
-    for (const auto& child : children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout();
-    }
-    std::vector<OverlayBase*> overlays = m_retiredOverlays;
-    overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
-    for (OverlayBase* const overlay : overlays) {
-        overlay->place();
-        overlay->layout(true);
+    for (int pass = 0; pass < kMaxLayoutPasses; ++pass) {
+        m_layoutRequested = false;
+        for (const auto& child : children()) {
+            if (auto* widget = dynamic_cast<Widget*>(child.get()))
+                widget->layout();
+        }
+        std::vector<OverlayBase*> overlays = m_retiredOverlays;
+        overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
+        for (OverlayBase* const overlay : overlays) {
+            overlay->place();
+            overlay->layout(true);
+        }
+        if (!m_layoutRequested)
+            return;
     }
 }
 ```
@@ -1343,29 +1367,51 @@ void Renderer::renderWidgetContents(Widget& widget) {
         return;
     }
 
-    const int texW = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
-    const int texH = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    constexpr float kSnap = 1e-3f;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = std::max(widget.displayedWidth(), 0.0f);
+    float bottom = std::max(widget.displayedHeight(), 0.0f);
+    if (const auto visible = visibleBounds(projection * widget.worldMatrix())) {
+        left = std::max(left, std::floor(visible->left + kSnap));
+        top = std::max(top, std::floor(visible->top + kSnap));
+        right = std::min(right, std::ceil(visible->right - kSnap));
+        bottom = std::min(bottom, std::ceil(visible->bottom - kSnap));
+    }
+    const int texW = static_cast<int>(std::ceil(right - left));
+    const int texH = static_cast<int>(std::ceil(bottom - top));
     if (texW <= 0 || texH <= 0)
         return;
 
-    ensureClipMask(widget, texW, texH);
-    renderClipLayer(widget, texW, texH);
-    compositeClipLayer(widget, texW, texH);
+    const glm::mat4 layerWorld = widget.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{left, top, 0.0f});
+    ensureClipMask(widget, layerWorld, texW, texH);
+    renderClipLayer(widget, layerWorld, texW, texH);
+    compositeClipLayer(widget, layerWorld, texW, texH);
 }
 ```
 
-A three-step offscreen composite, each step rendering into a texture sized to the widget's
-own displayed bounds via the shared `clipFBO`:
+The layer covers only the part of the widget the current target can show.
+`visibleBounds(projection * widget.worldMatrix())`, the mapping glyph culling uses (see
+[Culling](#culling)), gives the visible box in the widget's own coordinates. It is cut to the
+widget's bounds and rounded out to whole pixels, after a nudge by `kSnap` so that an edge the
+inverse matrix returns as 37.99999 doesn't gain a spare row. `layerWorld`, the world matrix moved to
+that box's corner, takes the world matrix's place in all three steps. A fully visible widget gets a
+layer of its whole bounds, as before; a partly visible one, such as a tall text area in a scroll
+area, costs only what is shown, and text inside it is culled to that part, because `projection` in
+the layer now describes only it. A widget with no visible part is skipped.
+
+A three-step offscreen composite, each step rendering into a texture of that size via the shared
+`clipFBO`:
 
 **1. `ensureClipMask`** - builds an alpha mask of the widget's *shape* (not its color) into
 an `R8` texture:
 
 ```cpp
-void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
+void Renderer::ensureClipMask(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     /* lazily (re)allocate widget.m_clipMaskTexture at texW x texH, GL_R8 */
 
     const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection,
-                                                     widget.m_clipMaskTexture, texW, texH, widget.worldMatrix());
+                                                     widget.m_clipMaskTexture, texW, texH, layerWorld);
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
 
     // A layouter (Column/Row/Grid/Flex) has no shape of its own to draw as a mask - clear to
@@ -1394,7 +1440,7 @@ children, since `m_capturingMask` is `false` again by the time this runs) into a
 
 **3. `compositeClipLayer`** - binds both textures (`uTexture` = color, `uMask` = mask) to a
 composite shader and draws one screen-aligned quad, multiplying color by mask alpha, straight
-into the real framebuffer at the widget's actual world-space position (with a pixel-snapping
+into the real framebuffer at the layer's place, `layerWorld` (with a pixel-snapping
 step for axis-aligned, unit-scale widgets, `isAxisAlignedUnitScale`, to avoid subpixel
 shimmer on the common case of an unrotated, unscaled clipped widget). The check also requires the
 matrix's `w` row to be `(0, 0, 0, 1)`, so a widget with perspective is never snapped.
@@ -2205,9 +2251,10 @@ void Window::focusNext(bool reverse) {
 }
 ```
 
-`keyCallback` intercepts Tab (`GLFW_KEY_TAB`) before anything else and calls `focusNext`
-(`Shift+Tab` reverses); other keys go through the shortcut check (see [Shortcuts](#shortcuts)) and
-then to `m_focusedWidget`, if one is set. The
+`keyCallback` handles a Tab press by calling `focusNext` (`Shift+Tab` reverses), unless the focused
+widget or one of its parents claims it through `claimsShortcut`, as a text area does to insert a
+tab; a claimed Tab goes on as an ordinary key press. Other keys go through the shortcut check (see
+[Shortcuts](#shortcuts)) and then to `m_focusedWidget`, if one is set. The
 chain is recomputed from scratch on every Tab press rather than cached - simple, and cheap
 enough in practice for typical UI sizes. While a modal overlay is open, the chain is collected
 from that overlay's subtree only, so Tab never leaves it.
@@ -2710,8 +2757,8 @@ is no enter or exit. On X11, GLFW moves the cursor position along with the drag,
 
 ### Text editing
 
-Editing is split into three pieces that a text field, and later a multi-line editor, share: a
-model, a key mapping, and the control that connects them to a `TextWidget`.
+Editing is split into three pieces that the text field and the text area share: a model, a key
+mapping, and `TextEditBase`, the control base that connects them to a `TextWidget`.
 
 **`TextEditModel`** (`text/texteditmodel.h`) holds the text, a cursor and an anchor, with no widget
 code. Positions are byte offsets that always sit at the start of a character (`codepointStartAt` and
@@ -2772,7 +2819,8 @@ Words come from three kinds of character: word characters (ASCII letters, digits
 non-ASCII character, which keeps other scripts working without Unicode tables), spaces, and
 punctuation. A word is a run of one kind. `moveWordRight` skips the run it is in, unless it is
 spaces, and then any spaces; `moveWordLeft` skips spaces backwards and then the run before them.
-`wordAt` returns the run at a position, for double-click.
+`wordAt` returns the run at a position, for double-click, and `paragraphAt` the text between the
+line breaks around it, for triple-click.
 
 The model reports `onTextChanged` and then, only if the cursor or anchor moved, `onCursorChanged`, so
 an owner can lay out the new text before placing the caret on it.
@@ -2786,25 +2834,43 @@ if (const auto action = textEditActionFor(key, event.modifiers()))
 ```
 
 `textEditActionFor` matches modifiers exactly, so Ctrl+Left and Ctrl+Shift+Left are different
-actions, and any combination it doesn't list stays free. A control asks it first and handles its own
-keys only when it returns nothing: the text field adds Enter, and a multi-line editor would add Enter
-as a line break and the vertical arrows. `applyTextEditAction` is a switch of model calls, plus the
-clipboard for Copy, Cut and Paste, so a menu can run an action without a key. `changesText` tells
-which actions edit the text, and `isTextInputKey` which keys type a character: those without Ctrl,
-Alt or Super.
+actions, and any combination it doesn't list stays free. It maps the keys of both controls: Enter
+and Tab insert a line break and a tab, Home and End go to the ends of the line, Ctrl+Home and
+Ctrl+End to the ends of the text, and the vertical arrows and Page Up/Down move between lines. A
+control decides through `allows` which of them it takes; the text field refuses the line break, the
+tab and the vertical moves, and handles Enter itself. `applyTextEditAction` is a switch of model
+calls, plus the clipboard for Copy, Cut and Paste, so a menu can run an action without a key. The
+line and page actions need the layout, which the model doesn't have, so `needsLayout` names them and
+`applyTextEditAction` leaves them to the control. `changesText` tells which actions edit the text,
+and `isTextInputKey` which keys type a character: those without Ctrl, Alt or Super.
 
 The same two answers decide which keys a focused control claims from window shortcuts (see
-[Shortcuts](#shortcuts)). `TextFieldBase::triggerShortcutOverride` accepts a key when it maps to an
-action the field allows, or when it types text and the field is editable, and then runs the user's
+[Shortcuts](#shortcuts)). `TextEditBase::triggerShortcutOverride` accepts a key when it maps to an
+action the control allows, or when it types text and the control is editable, and then runs the user's
 `onShortcutOverride`, which can still ignore it. Because the claim and the handling come from the
 same mapping, they cannot disagree, and a newly mapped action is claimed without any other change.
 
-**`TextFieldBase`** connects the model to its inner `TextWidget`. On `onTextChanged` it writes user
-edits back to its `text` property, updates `textState`, `canUndo`, `canRedo` and
-`acceptableInput`, and redraws the text, caret and selection; `onCursorChanged` redraws the caret and
-selection.
+**`TextEditBase`** (`templates/texteditbase.h`) connects the model to its inner `TextWidget` and
+holds what both controls share: the text property and its bindings, the caret and its blink, focus,
+keys, typing and the mouse. On `onTextChanged` it writes user edits back to its `text` property,
+updates `textState`, `canUndo` and `canRedo`, and redraws the text, caret and selection;
+`onCursorChanged` redraws the caret and selection. Where the controls differ, it calls a protected
+virtual function whose default suits the text area:
 
-*What is drawn.* `shown()` reduces the echo mode to `Plain`, `Masked` or `Hidden`.
+| Hook | Default | `TextFieldBase` |
+|---|---|---|
+| `displayText`, `toDisplay`, `toModel` | the model's text and positions | the echo mode's mask |
+| `allows`, `applyAction` | refuse edits when read-only; run the action | also refuse what one line or a password can't use, and map line start and end to text start and end |
+| `selectsWords`, `acceptableInput` | `true` | `false` for passwords; the validator's verdict |
+| `onModelTextChanged` | nothing | updates `acceptableInput` |
+| `keepCaretVisible(caret)` | nothing | scrolls the text sideways |
+
+`displayText` and `acceptableInput` are protected in the base and public in the field. The base
+builds the inner widgets, a clipping viewport inside the inner padding that holds the placeholder,
+the text and the caret, and each control sets their alignment and wrapping in its own constructor,
+because the base's constructor can't call the derived class's virtual functions.
+
+*What is drawn.* In the field, `shown()` reduces the echo mode to `Plain`, `Masked` or `Hidden`.
 `PasswordEchoOnEdit` is masked until `beginPasswordEdit` runs on the first edit after focusing, which
 clears the text through `setText` so the history can't bring the old password back. `displayText()`
 builds the string the inner text widget draws, and two functions translate positions between it and
@@ -2830,19 +2896,62 @@ double-clicks through `toModel`. `allows` refuses actions that change the text i
 and Copy and Cut in every mode but `Normal`, where `applyAction` also turns word actions into
 start-or-end ones so word boundaries stay hidden.
 
+*Lines.* The base carries out the layout actions with the text widget's `positionToRectangle` and
+`positionAt` (see [Text layout](#text-layout)). Home and End take the far left and far right of the
+caret's line, so they stop where the line is drawn to end. ↑ and ↓ take the position one line above
+or below the middle of the caret, at a goal x: the caret's x when the first vertical move began,
+kept in `m_goalX` until anything else moves the cursor or edits the text. Vertical moves set
+`m_movingVertically` around their own cursor change so that it doesn't reset the goal. Above the
+first line is the start of the text and below the last is the end. Page Up and Page Down move by
+`pageHeight`: the height of the text widget left after intersecting it, in window coordinates, with
+every clipping ancestor and the window.
+
 *The mouse.* A press stores its window position, and a drag moves the cursor to that position plus
 `totalDx`/`totalDy` with `extend` set. Each point is mapped into the scrolled text widget, which is
 what makes the text scroll as the pointer passes an edge. `MouseEvent::clickCount()` picks the unit:
 2 selects `wordAt` the character under the pointer and drags by words around it, and 3 or more
-selects everything. The character under the pointer is not where a click puts the caret:
-`byteIndexForXOffset` rounds to the nearest gap between characters, so `characterAtPoint` steps back
-one character when that gap is to the right of the pointer.
+selects `paragraphAt` it, which in a single-line field is the whole text. The character under the
+pointer is not where a click puts the caret: `positionAt` rounds to the nearest gap between
+characters, so `characterAtPoint` steps back one character when that gap is to the right of the
+pointer.
 
 *Bindings.* User edits write the model's text back into the `text` property, which replaces a
 binding there, as typing always has. Changes from code, meaning the `text` or `maximumLength`
 property changing, run with `m_changeFromCode` set, and the write-back is skipped. A bound value the
 model truncated therefore stays bound, and `text()` and `textState` report the model's text. The
 same flag keeps `onTextEdited` to edits the user makes.
+
+### Text areas
+
+`TextAreaBase` (`templates/textareabase.h`) is the multi-line control on `TextEditBase`. Its model
+keeps line breaks, its text and placeholder are top-aligned, `wrapMode` and `tabStopDistance` pass
+through to both, and it allows the `InsertNewline` and `InsertTab` actions. Four things are its own.
+
+*Growing.* `computeIntrinsicSize` is the larger of the text's and the placeholder's natural size,
+plus the caret width, inner padding and padding; an explicit width or height wins. The inner widgets
+sit in a viewport that isn't a layouter, so a change in the text doesn't reach the area's size on
+its own. `onDisplayChanged`, which the base calls when the displayed text, the placeholder, the
+font or the inner padding change, asks for a relayout.
+
+*Wrapping.* A widget's natural size is measured before its width is known, and a `TextWidget` wraps
+its natural height only at an explicit `width()`. So while wrapping, `applyWrapWidth` gives the text
+and the placeholder an explicit width, the room the area has minus padding and the caret, whenever
+the area's size or what it displays changes, and asks for a relayout when that width changes. The
+text's natural height is then its wrapped height. The width is set during layout, and the window
+runs the layout pass again before drawing (see [Repeated layout passes](#repeated-layout-passes)),
+so the right height shows in the same frame.
+
+*The caret after an edit.* A `TextWidget` drops lines that don't fit its resolved height. Between
+an edit and the next layout the text still has its old height, so a caret placed on a new last line
+would land on the line above. The base builds the text as a private `TextWidget` subclass that
+reports its own resize, and the area's `onDisplayResized` places the caret again at that moment, in
+the same layout pass and before the caret is laid out. The text field skips this: its sideways
+scroll sets a property of the text, which during layout would ask for yet another pass.
+
+*Keeping the caret in view.* `keepCaretVisible` calls `ensureVisible` on the text with the caret
+rectangle grown by the inner padding (see
+[Keeping a rectangle in view](#keeping-a-rectangle-in-view)). It does so only while the area has
+focus, so text set from code never scrolls the page.
 
 ### Overlays and popups
 
@@ -2879,7 +2988,7 @@ an overlay: `open()`/`close()`, `opened()`/`openedState()`, `onOpen`/`onClose`, 
 `modal`, and the `scrim` slot. It claims mouse, drag, and wheel events so nothing inside it
 bubbles on to the anchor, sizes itself to its children's extent plus padding (an explicit
 `width`/`height` wins), and gives its `background` the whole overlay rather than the padded area
-through `Widget::contentAreaFor()`. As with `TextFieldBase`, `content()` is hidden: the overlay's
+through `Widget::contentAreaFor()`. As with `TextEditBase`, `content()` is hidden: the overlay's
 children are declared inside it. A subclass overrides the virtual `place()` to choose where it
 sits.
 
@@ -2998,6 +3107,25 @@ children are scrolled content (the default is everything except the background);
 rejects is laid out against the whole viewport and does not count toward the content extent.
 `onOffsetsSynced(offsetsChanged)` runs at the end of every `syncOffsets()`, whether the offsets
 moved or only the size, direction, or content changed.
+
+### Keeping a rectangle in view
+
+`Widget::ensureVisible(rect)` takes a rectangle in the widget's own coordinates and walks up the
+parents. At each step it maps the rectangle's four corners into the parent with `mapToParent`, so
+transforms are honored and the result is their upright box, and hands it to the parent's protected
+virtual `revealRect`, which returns where the rectangle sits afterwards. The default returns it
+unchanged, so only scrolling widgets act. The walk stops at an overlay, whose parent isn't the
+container it is drawn in.
+
+`FlickAreaBase::revealRect` scrolls each axis by the smallest amount that brings the rectangle
+inside the viewport, or puts its start at the viewport's start when it is larger. It returns the
+rectangle moved by however much the clamped offsets actually changed, so the next area out reveals
+the right place. Children keep the positions of their last layout until the next one, so after a
+scroll since then, from the wheel or an earlier request, a second request would scroll again.
+`contentAreaFor` therefore records the offsets the content was laid out at (`m_laidOutOffset`), and
+`revealRect` first moves the rectangle by the difference between those and the current offsets,
+which makes repeated requests within one frame safe. `ListViewBase` keeps its own
+`ensureVisible(index)` and brings this one into scope with `using`.
 
 ### Scroll areas
 
@@ -3545,33 +3673,50 @@ These are free functions in `textlayout.h`/`.cpp` (`layoutTextLines`, `elideLine
 just calls them and caches the result. It keeps two `LineCache`s, one for measuring its size and one
 for drawing, keyed on everything that affects the final lines. Breaking the text into lines, the
 expensive part, goes through a third cache, `BreakCache`, shared by both. It is keyed only on the
-text, font, scale, wrap mode and wrap width, with the width ignored when wrapping is off. So text
+text, font, scale, tab stop distance, wrap mode and wrap width, with the width ignored when wrapping
+is off. So text
 whose two callers break it the same way, such as any single-line text, is broken once per change,
 and each `LineCache` only applies the line limit and eliding to those lines.
 
 **Wrapping** (`layoutTextLines`) walks the text codepoint-by-codepoint, tracking the last seen
-word-break opportunity (a space, under `WrapMode::WordWrap`):
+word-break opportunity (a space or tab, under `WrapMode::WordWrap`):
 
 ```cpp
+float width = advance(codepoint, lineWidth);
+const bool isSpace = (codepoint == ' ' || codepoint == '\t');
 const bool needsBreak = (wrapMode != WrapMode::NoWrap) && wrapWidth > 0.0f &&
-                  lineWidth + advance > wrapWidth && lineWidth > 0.0f;
+                  lineWidth + width > wrapWidth && lineWidth > 0.0f;
+
+if (needsBreak && wrapMode == WrapMode::WordWrap && isSpace) {
+    lines.push_back({lineStart, charStart, lineWidth, ""});
+    lineStart = i;
+    lineWidth = 0.0f;
+    lastBreakOpportunity = std::string::npos;
+    continue;
+}
 
 if (needsBreak) {
     if (wrapMode == WrapMode::WordWrap && lastBreakOpportunity != std::string::npos
         && lastBreakOpportunity > lineStart) {
-        // break at the last space, dropping it, carry the remainder's width forward
         lines.push_back({lineStart, lastBreakOpportunity, widthAtLastBreak, ""});
         lineStart = lastBreakOpportunity + 1;
-        lineWidth -= widthAtLastBreak;
+        lineWidth = measureWidth(text, lineStart, charStart, advance);
     } else {
-        // no usable word-break in this line (or it's WrapAnywhere) - hard break right here
         lines.push_back({lineStart, charStart, lineWidth, ""});
         lineStart = charStart;
         lineWidth = 0.0f;
     }
     lastBreakOpportunity = std::string::npos;
+    width = advance(codepoint, lineWidth);
 }
 ```
+
+A space or tab that would overflow ends the line where it is and is dropped, so whitespace hangs at
+the end of a line instead of pushing the word before it down. Otherwise a word-wrap break goes at
+the last space or tab, which is dropped, and the words carried to the new line are measured again
+from its start rather than subtracted from the running width. With no usable break, or under
+`WrapAnywhere`, the line breaks right before the character. After a break the character's width is
+taken again, because a tab's width depends on where it lands.
 
 The `lastBreakOpportunity > lineStart` condition guards against a break opportunity recorded
 at (or before) the *current* line's own start byte - e.g. a leading space before an overlong
@@ -3593,6 +3738,39 @@ last natural line (if nothing was actually truncated) or slices to the limit and
 whichever line(s) sit at the cut boundary (`Right` re-elides the last kept line; `Left` the
 first; `Middle` re-elides the line just before the gap).
 
+### Text layout
+
+Every walk over a line, whether it breaks, elides, culls, draws or places the caret, gets each
+character's width from one function object in `textlayout.h`:
+
+```cpp
+struct GlyphAdvance {
+    FontFace& face;
+    float scale;
+    float tabStopDistance;
+
+    float operator()(char32_t codepoint, float lineX) const;
+};
+```
+
+It returns the glyph's advance, except for a tab, which reaches the next multiple of
+`tabStopDistance` counted from the start of its line. A tab's width therefore depends on where it
+sits, so each walk carries two x values: its position, which includes the line's alignment and is
+what gets drawn, and `lineX`, which starts at 0 on every line and only feeds the tab rule. Adding up
+`lineX` the same way in every walk keeps layout, drawing and the caret in agreement at a stop.
+`VisibleSpan` records the `lineX` where a culled span starts, so drawing can continue from there. A
+tab draws no glyph; the pen just moves.
+
+The caret's geometry is three more free functions over the laid-out lines. `lineAt` binary-searches
+for the last line that starts at or before a byte position. `positionToRect` walks that line up to
+the position and returns the caret rectangle. `positionAt(x, y)` picks the line from `y`, clamped to
+the first and last, and returns the gap between characters nearest to `x`, decided at each
+character's midpoint. A word-wrap break drops the space it broke at, so that position ends the
+earlier line; at a wrap-anywhere break the boundary byte is shared, and it counts as the start of
+the later line. `TextWidget::positionToRectangle` and `positionAt` call them with the lines it draws
+(`renderLines`) and the same `lineStartX` and `blockStartY` the renderer uses, so the caret can't
+drift from the glyphs.
+
 ### Selection
 
 `TextWidget::selection(start, end)` marks a byte range, and `Renderer::renderText` draws it in two
@@ -3607,10 +3785,16 @@ along, and a range over three wrapped lines draws three rectangles.
 Then the glyph loop recolors the selected characters:
 
 ```cpp
-while (i < end) {
+while (i < span.end) {
     const bool selected = original && i >= selectionStart && i < selectionEnd;
     Utf8Decoded d = decodeUtf8At(source, i);
     i += d.length;
+    const float width = advance(d.codepoint, lineX);
+    lineX += width;
+    if (d.codepoint == '\t') {
+        penX += width;
+        continue;
+    }
     const GlyphMetrics& m = face->glyph(d.codepoint);
     if (!m.valid) continue;
     if (selected != drawingSelected) {
@@ -3633,8 +3817,8 @@ the text's (`original` is false for them), so they get neither a highlight nor r
 (`gfx/visibility.h`) maps the target's clip-space square back through the inverse of
 `projection * text.worldMatrix()` and returns the upright box around it in the text's own
 coordinates. Because `projection` always describes the current target, this is the window for a
-label, and the viewport for text inside a clip layer such as a text field's, with no walk over the
-parents. It returns nothing when a corner can't be mapped (a flattened widget, or a tilt that puts
+label, and the visible part of a clip layer for text inside one, such as a text field's, with no
+walk over the parents. It returns nothing when a corner can't be mapped (a flattened widget, or a tilt that puts
 it behind the viewer), and then nothing is culled.
 
 `visibleSpans` (`text/textlayout.h`) turns the laid-out lines and those bounds into the run of each
