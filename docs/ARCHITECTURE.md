@@ -66,6 +66,7 @@ document is where the "why" behind non-obvious code lives instead.
     - [`FontFace` / `FontManager` / `GlyphAtlas`](#fontface--fontmanager--glyphatlas)
     - [Wrap, elide, and line-clamp](#wrap-elide-and-line-clamp)
     - [Selection](#selection)
+    - [Culling](#culling)
 12. [Resource embedding](#resource-embedding)
 13. [Application & Window lifecycle](#application--window-lifecycle)
 14. [Adding a new widget type](#adding-a-new-widget-type)
@@ -3620,6 +3621,29 @@ When a glyph's byte position crosses into or out of the range, the glyphs collec
 in the current color before the color uniform switches, so a selection in the middle of a line costs
 at most two extra draw calls. Elided lines draw a separate shortened string whose bytes don't match
 the text's (`original` is false for them), so they get neither a highlight nor recoloring.
+
+### Culling
+
+`renderText` only builds glyphs for text the current render target can show. `visibleBounds`
+(`gfx/visibility.h`) maps the target's clip-space square back through the inverse of
+`projection * text.worldMatrix()` and returns the upright box around it in the text's own
+coordinates. Because `projection` always describes the current target, this is the window for a
+label, and the viewport for text inside a clip layer such as a text field's, with no walk over the
+parents. It returns nothing when a corner can't be mapped (a flattened widget, or a tilt that puts
+it behind the viewer), and then nothing is culled.
+
+`visibleSpans` (`text/textlayout.h`) turns the laid-out lines and those bounds into the run of each
+line worth drawing. Lines away from the view are skipped. Each kept line is walked by glyph width
+only, building no vertices, until the view starts, and the walk stops once it ends. One line height
+of margin on every side covers glyph overhang. It takes the line start and the glyph advance as
+callables, so it is tested with plain numbers.
+
+The highlight and glyph passes then loop over the spans instead of over whole lines, and the vertex
+buffer is sized for the spans. Deciding what to draw (the two functions) is separate from
+submitting it (the loops and `flush`), so a batching renderer can reuse the first half and only
+replace the submission. A text field holding 100,000 characters redraws in 0.65 ms instead of 4.5 ms.
+The walk to the visible part still grows with the text, which is the remaining cost for very long
+lines.
 
 ## Resource embedding
 
