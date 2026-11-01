@@ -2754,7 +2754,8 @@ keystroke starts a new record. `setText`, for text from code, clears both stacks
 
 Limits apply before `replace`. A single-line model turns inserted line breaks into spaces, and
 `insertText` cuts the inserted text to the characters still free under `maximumLength`. `setText`
-truncates to the maximum too, but is not validated.
+truncates to the maximum too, but is not validated. A character is at least one byte, so both count
+characters only when the byte count exceeds the maximum; without a limit, nothing is counted.
 
 `regexValidator` (`text/validators.cpp`) uses PCRE2 rather than `std::regex`, whose matcher recurses
 once per character and overflows the stack on long text. A validator needs partial matching, to tell
@@ -3541,8 +3542,12 @@ needed - so an app that never uses, say, CJK glyphs never pays to rasterize or u
 
 These are free functions in `textlayout.h`/`.cpp` (`layoutTextLines`, `elideLine`,
 `effectiveMaxLines`, `clampLines`), independently testable without a widget tree - `TextWidget`
-just calls them and caches the result (`LineCache`, keyed on text/font/scale/wrap settings, so
-re-wrapping unchanged text at an unchanged width is a cache hit).
+just calls them and caches the result. It keeps two `LineCache`s, one for measuring its size and one
+for drawing, keyed on everything that affects the final lines. Breaking the text into lines, the
+expensive part, goes through a third cache, `BreakCache`, shared by both. It is keyed only on the
+text, font, scale, wrap mode and wrap width, with the width ignored when wrapping is off. So text
+whose two callers break it the same way, such as any single-line text, is broken once per change,
+and each `LineCache` only applies the line limit and eliding to those lines.
 
 **Wrapping** (`layoutTextLines`) walks the text codepoint-by-codepoint, tracking the last seen
 word-break opportunity (a space, under `WrapMode::WordWrap`):
