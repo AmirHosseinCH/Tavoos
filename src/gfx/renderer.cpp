@@ -407,36 +407,9 @@ void Renderer::renderText(TextWidget& text) {
     const float scale = text.fontSize() / FontFace::ReferencePixelSize;
     const float lineHeight = face->lineHeight() * scale;
 
-    const float wrapWidth = (text.wrapMode() != WrapMode::NoWrap)
-                          ? text.resolvedWidth() - text.paddingLeft() - text.paddingRight()
-                          : 0.0f;
-    const float elideWidth = text.resolvedWidth() - text.paddingLeft() - text.paddingRight();
-
-    const auto& lines = text.layoutLines(text.m_renderLineCache, *face, scale,
-                                          wrapWidth, elideWidth, text.resolvedHeight());
-
-    float blockWidth = 0.0f;
-    for (auto& line : lines)
-        blockWidth = std::max(blockWidth, line.width);
-    const float blockHeight = lineHeight * static_cast<float>(lines.size());
-
-    const float boxWidth  = text.resolvedWidth()  - text.paddingLeft() - text.paddingRight();
-    const float boxHeight = text.resolvedHeight() - text.paddingTop()  - text.paddingBottom();
-
-    const Alignment align = text.textAlignment();
-
-    auto lineStartX = [&](std::size_t idx) -> float {
-        float w = lines[idx].width;
-        if (hasFlag(align, Alignment::Right))            return text.paddingLeft() + boxWidth - w;
-        if (hasFlag(align, Alignment::CenterHorizontal))  return text.paddingLeft() + (boxWidth - w) * 0.5f;
-        return text.paddingLeft();
-    };
-
-    float blockStartY = text.paddingTop();
-    if (hasFlag(align, Alignment::Bottom))
-        blockStartY = text.paddingTop() + boxHeight - blockHeight;
-    else if (hasFlag(align, Alignment::CenterVertical))
-        blockStartY = text.paddingTop() + (boxHeight - blockHeight) * 0.5f;
+    const auto& lines = text.renderLines(*face, scale);
+    const float blockStartY = text.blockStartY(lines.size(), lineHeight);
+    auto lineStartX = [&](std::size_t idx) { return text.lineStartX(lines[idx]); };
 
     const auto advance = [&](char32_t codepoint) {
         const GlyphMetrics& m = face->glyph(codepoint);

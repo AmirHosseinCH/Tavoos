@@ -113,8 +113,8 @@ public:
     Paint selectedTextColor() const { return m_selectedTextColor; }
 
     float lineHeight();
-    float xOffsetForByteIndex(std::size_t byteIndex);
-    std::size_t byteIndexForXOffset(float x);
+    Rect positionToRectangle(std::size_t position);
+    std::size_t positionAt(float x, float y);
 
 protected:
     void render(Renderer& r) override;
@@ -151,6 +151,9 @@ private:
                                               float layoutWrapWidth, float clampMaxWidth,
                                               float heightForMaxLines);
     const std::vector<TextLine>& brokenLines(FontFace& face, float scale, WrapMode wrap, float wrapWidth);
+    const std::vector<TextLine>& renderLines(FontFace& face, float scale);
+    float lineStartX(const TextLine& line);
+    float blockStartY(std::size_t lineCount, float lineHeight);
 
     LineCache m_intrinsicLineCache;
     LineCache m_renderLineCache;

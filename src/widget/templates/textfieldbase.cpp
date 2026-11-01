@@ -291,7 +291,7 @@ void TextFieldBase::moveCursorToPoint(const Point& windowPoint, bool extend) {
     if (!m_textDisplay)
         return;
     const Point local = m_textDisplay->mapFromWindow(windowPoint);
-    m_model.setCursor(toModel(m_textDisplay->byteIndexForXOffset(local.x)), extend);
+    m_model.setCursor(toModel(m_textDisplay->positionAt(local.x, local.y)), extend);
     resetCaretBlink();
 }
 
@@ -307,9 +307,9 @@ void TextFieldBase::extendWordSelection(const Point& windowPoint) {
 std::size_t TextFieldBase::characterAtPoint(const Point& windowPoint) {
     if (!m_textDisplay)
         return 0;
-    const float x = m_textDisplay->mapFromWindow(windowPoint).x;
-    const std::size_t index = m_textDisplay->byteIndexForXOffset(x);
-    if (index > 0 && m_textDisplay->xOffsetForByteIndex(index) > x)
+    const Point local = m_textDisplay->mapFromWindow(windowPoint);
+    const std::size_t index = m_textDisplay->positionAt(local.x, local.y);
+    if (index > 0 && m_textDisplay->positionToRectangle(index).x > local.x)
         return toModel(previousCodepointStart(m_textDisplay->text(), index));
     return toModel(index);
 }
@@ -451,23 +451,23 @@ void TextFieldBase::updateCaretAndScroll() {
     if (!m_textDisplay)
         return;
 
-    const float caretLocalX = m_textDisplay->xOffsetForByteIndex(toDisplay(m_model.cursor()));
+    const Rect caret = m_textDisplay->positionToRectangle(toDisplay(m_model.cursor()));
     const float visibleWidth = std::max(0.0f, resolvedWidth() - paddingLeft() - paddingRight()
                                                  - m_innerPaddingLeft.get() - m_innerPaddingRight.get());
     const float maxDisplayedCaretX = std::max(0.0f, visibleWidth - static_cast<float>(kCaretWidth));
 
-    const float displayedCaretX = caretLocalX - static_cast<float>(m_scrollOffset);
+    const float displayedCaretX = caret.x - static_cast<float>(m_scrollOffset);
     if (displayedCaretX < 0.0f)
-        m_scrollOffset = static_cast<int>(std::round(caretLocalX));
+        m_scrollOffset = static_cast<int>(std::round(caret.x));
     else if (displayedCaretX > maxDisplayedCaretX)
-        m_scrollOffset = static_cast<int>(std::round(caretLocalX - maxDisplayedCaretX));
-    const float textEndX = m_textDisplay->xOffsetForByteIndex(toDisplay(m_model.text().size()));
+        m_scrollOffset = static_cast<int>(std::round(caret.x - maxDisplayedCaretX));
+    const float textEndX = m_textDisplay->positionToRectangle(toDisplay(m_model.text().size())).x;
     const int maxScroll = std::max(0, static_cast<int>(std::round(textEndX + static_cast<float>(kCaretWidth) - visibleWidth)));
     m_scrollOffset = std::clamp(m_scrollOffset, 0, maxScroll);
 
     m_contentX.set(-m_scrollOffset);
-    m_caretX.set(static_cast<int>(std::round(caretLocalX)));
-    m_caretHeight.set(static_cast<int>(std::round(m_textDisplay->lineHeight())));
+    m_caretX.set(static_cast<int>(std::round(caret.x)));
+    m_caretHeight.set(static_cast<int>(std::round(caret.height)));
 }
 
 }

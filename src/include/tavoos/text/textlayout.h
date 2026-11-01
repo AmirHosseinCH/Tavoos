@@ -3,7 +3,9 @@
 #include <tavoos/gfx/visibility.h>
 #include <tavoos/text/fontenums.h>
 #include <tavoos/text/utf8.h>
+#include <tavoos/types.h>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <vector>
@@ -83,6 +85,51 @@ std::vector<VisibleSpan> visibleSpans(const std::string& text, const std::vector
             spans.push_back({li, start, stop, x});
     }
     return spans;
+}
+
+inline std::size_t lineAt(const std::vector<TextLine>& lines, std::size_t position) {
+    const auto after = std::upper_bound(lines.begin(), lines.end(), position,
+                                        [](std::size_t p, const TextLine& line) { return p < line.byteStart; });
+    return after == lines.begin() ? 0 : static_cast<std::size_t>(after - lines.begin()) - 1;
+}
+
+template <typename LineStartX, typename Advance>
+Rect positionToRect(const std::string& text, const std::vector<TextLine>& lines, std::size_t position,
+                    float firstLineTop, float lineHeight, LineStartX&& lineStartX, Advance&& advance) {
+    if (lines.empty())
+        return {0.0f, firstLineTop, 0.0f, lineHeight};
+    const std::size_t li = lineAt(lines, position);
+    const TextLine& line = lines[li];
+    const std::size_t end = std::min(position, line.byteEnd);
+    float x = lineStartX(li);
+    for (std::size_t i = line.byteStart; i < end; ) {
+        const Utf8Decoded d = decodeUtf8At(text, i);
+        x += advance(d.codepoint);
+        i += d.length;
+    }
+    return {x, firstLineTop + lineHeight * static_cast<float>(li), 0.0f, lineHeight};
+}
+
+template <typename LineStartX, typename Advance>
+std::size_t positionAt(const std::string& text, const std::vector<TextLine>& lines, float x, float y,
+                       float firstLineTop, float lineHeight, LineStartX&& lineStartX, Advance&& advance) {
+    if (lines.empty())
+        return 0;
+    std::size_t li = 0;
+    if (lineHeight > 0.0f && y > firstLineTop)
+        li = std::min(static_cast<std::size_t>((y - firstLineTop) / lineHeight), lines.size() - 1);
+    const TextLine& line = lines[li];
+    float pen = lineStartX(li);
+    std::size_t i = line.byteStart;
+    while (i < line.byteEnd) {
+        const Utf8Decoded d = decodeUtf8At(text, i);
+        const float width = advance(d.codepoint);
+        if (x < pen + width * 0.5f)
+            return i;
+        pen += width;
+        i += d.length;
+    }
+    return line.byteEnd;
 }
 
 }

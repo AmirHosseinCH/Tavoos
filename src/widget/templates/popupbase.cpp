@@ -9,7 +9,7 @@ namespace Tavoos {
 
 namespace {
 
-struct Rect { float left, top, right, bottom; };
+struct Edges { float left, top, right, bottom; };
 
 Placement opposite(Placement side) {
     switch (side) {
@@ -41,7 +41,7 @@ void PopupBase::place() {
     auto* const anchor = dynamic_cast<Widget*>(parent());
     const bool toWindow = m_target.get() == PlacementTarget::Window || !anchor;
 
-    Rect ref{0.0f, 0.0f, windowW, windowH};
+    Edges ref{0.0f, 0.0f, windowW, windowH};
     if (!toWindow) {
         const Point a = anchor->mapToWindow({0.0f, 0.0f});
         const Point b = anchor->mapToWindow({anchor->displayedWidth(), anchor->displayedHeight()});

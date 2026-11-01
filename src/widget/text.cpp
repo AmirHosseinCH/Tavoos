@@ -101,43 +101,63 @@ float TextWidget::lineHeight() {
     return face->lineHeight() * m_fontSize.get() / FontFace::ReferencePixelSize;
 }
 
-float TextWidget::xOffsetForByteIndex(std::size_t byteIndex) {
-    FontFace* face = resolvedFace();
-    if (!face)
-        return 0.0f;
-
-    const std::string& content = m_text.get();
-    const float scale = m_fontSize.get() / FontFace::ReferencePixelSize;
-
-    float x = 0.0f;
-    std::size_t i = 0;
-    while (i < content.size() && i < byteIndex) {
-        const Utf8Decoded d = decodeUtf8At(content, i);
-        x += face->glyph(d.codepoint).advance * scale;
-        i += d.length;
-    }
-    return x;
+const std::vector<TextLine>& TextWidget::renderLines(FontFace& face, float scale) {
+    const float boxWidth = resolvedWidth() - paddingLeft() - paddingRight();
+    const float wrapWidth = m_wrapMode.get() != WrapMode::NoWrap ? boxWidth : 0.0f;
+    return layoutLines(m_renderLineCache, face, scale, wrapWidth, boxWidth, resolvedHeight());
 }
 
-std::size_t TextWidget::byteIndexForXOffset(float x) {
+float TextWidget::lineStartX(const TextLine& line) {
+    const float boxWidth = resolvedWidth() - paddingLeft() - paddingRight();
+    const Alignment align = m_textAlignment.get();
+    if (hasFlag(align, Alignment::Right))
+        return paddingLeft() + boxWidth - line.width;
+    if (hasFlag(align, Alignment::CenterHorizontal))
+        return paddingLeft() + (boxWidth - line.width) * 0.5f;
+    return paddingLeft();
+}
+
+float TextWidget::blockStartY(std::size_t lineCount, float lineHeight) {
+    const float boxHeight = resolvedHeight() - paddingTop() - paddingBottom();
+    const float blockHeight = lineHeight * static_cast<float>(lineCount);
+    const Alignment align = m_textAlignment.get();
+    if (hasFlag(align, Alignment::Bottom))
+        return paddingTop() + boxHeight - blockHeight;
+    if (hasFlag(align, Alignment::CenterVertical))
+        return paddingTop() + (boxHeight - blockHeight) * 0.5f;
+    return paddingTop();
+}
+
+Rect TextWidget::positionToRectangle(std::size_t position) {
+    FontFace* face = resolvedFace();
+    if (!face)
+        return {};
+
+    const float scale = m_fontSize.get() / FontFace::ReferencePixelSize;
+    const float lineHeight = face->lineHeight() * scale;
+    const auto& lines = renderLines(*face, scale);
+    return positionToRect(m_text.get(), lines, position, blockStartY(lines.size(), lineHeight), lineHeight,
+                          [&](std::size_t li) { return lineStartX(lines[li]); },
+                          [&](char32_t codepoint) {
+                              const GlyphMetrics& m = face->glyph(codepoint);
+                              return m.valid ? m.advance * scale : 0.0f;
+                          });
+}
+
+std::size_t TextWidget::positionAt(float x, float y) {
     FontFace* face = resolvedFace();
     if (!face)
         return 0;
 
-    const std::string& content = m_text.get();
     const float scale = m_fontSize.get() / FontFace::ReferencePixelSize;
-
-    float cursorX = 0.0f;
-    std::size_t i = 0;
-    while (i < content.size()) {
-        const Utf8Decoded d = decodeUtf8At(content, i);
-        const float advance = face->glyph(d.codepoint).advance * scale;
-        if (x < cursorX + advance * 0.5f)
-            return i;
-        cursorX += advance;
-        i += d.length;
-    }
-    return content.size();
+    const float lineHeight = face->lineHeight() * scale;
+    const auto& lines = renderLines(*face, scale);
+    return Tavoos::positionAt(m_text.get(), lines, x, y, blockStartY(lines.size(), lineHeight), lineHeight,
+                              [&](std::size_t li) { return lineStartX(lines[li]); },
+                              [&](char32_t codepoint) {
+                                  const GlyphMetrics& m = face->glyph(codepoint);
+                                  return m.valid ? m.advance * scale : 0.0f;
+                              });
 }
 
 void TextWidget::render(Renderer& r) {
