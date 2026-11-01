@@ -551,6 +551,28 @@ Point Widget::mapToWindow(const Point& point) const {
     return projectPoint(worldMatrix(), point);
 }
 
+void Widget::ensureVisible(const Rect& rect) {
+    Rect area = rect;
+    const Widget* child = this;
+    for (auto* ancestor = dynamic_cast<Widget*>(parent()); ancestor && !child->isOverlay();
+         ancestor = dynamic_cast<Widget*>(ancestor->parent())) {
+        float left = std::numeric_limits<float>::max();
+        float top = std::numeric_limits<float>::max();
+        float right = std::numeric_limits<float>::lowest();
+        float bottom = std::numeric_limits<float>::lowest();
+        for (const Point corner : {Point{area.x, area.y}, Point{area.x + area.width, area.y},
+                                   Point{area.x, area.y + area.height}, Point{area.x + area.width, area.y + area.height}}) {
+            const Point mapped = child->mapToParent(corner);
+            left = std::min(left, mapped.x);
+            top = std::min(top, mapped.y);
+            right = std::max(right, mapped.x);
+            bottom = std::max(bottom, mapped.y);
+        }
+        area = ancestor->revealRect({left, top, right - left, bottom - top});
+        child = ancestor;
+    }
+}
+
 Point Widget::mapFromWindow(const Point& point) const {
     return projectPoint(glm::inverse(worldMatrix()), point);
 }

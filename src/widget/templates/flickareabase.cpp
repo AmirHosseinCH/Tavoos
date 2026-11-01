@@ -96,6 +96,23 @@ void FlickAreaBase::onBuilt() {
         syncOffsets();
 }
 
+Rect FlickAreaBase::revealRect(const Rect& rect) {
+    const auto overflow = [](float start, float size, float viewStart, float viewSize) {
+        if (start < viewStart)
+            return start - viewStart;
+        if (start + size > viewStart + viewSize)
+            return std::min(start + size - (viewStart + viewSize), start - viewStart);
+        return 0.0f;
+    };
+    const float beforeX = m_contentXState.get();
+    const float beforeY = m_contentYState.get();
+    const float x = rect.x - (beforeX - m_laidOutOffset.x);
+    const float y = rect.y - (beforeY - m_laidOutOffset.y);
+    scrollTo(beforeX + overflow(x, rect.width, paddingLeft(), viewportWidth()),
+             beforeY + overflow(y, rect.height, paddingTop(), viewportHeight()));
+    return { x - (m_contentXState.get() - beforeX), y - (m_contentYState.get() - beforeY), rect.width, rect.height };
+}
+
 void FlickAreaBase::scrollTo(float x, float y) {
     m_contentX.set(x);
     m_contentY.set(y);
@@ -189,6 +206,7 @@ Widget::ContentArea FlickAreaBase::contentAreaFor(const Widget& child) const {
 
     const float areaWidth = m_contentWidth.get() > 0.0f ? std::max(viewportWidth(), m_contentWidth.get()) : viewportWidth();
     const float areaHeight = m_contentHeight.get() > 0.0f ? std::max(viewportHeight(), m_contentHeight.get()) : viewportHeight();
+    m_laidOutOffset = {m_contentXState.get(), m_contentYState.get()};
     return { paddingLeft() - m_contentXState.get(), paddingTop() - m_contentYState.get(), areaWidth, areaHeight };
 }
 

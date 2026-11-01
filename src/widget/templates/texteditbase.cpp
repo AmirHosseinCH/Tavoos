@@ -2,10 +2,12 @@
 
 #include <tavoos/events/key.h>
 #include <tavoos/text/utf8.h>
+#include <tavoos/window.h>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace Tavoos {
 
@@ -375,9 +377,34 @@ void TextEditBase::moveVertically(const Rect& caret, float distance, bool extend
 }
 
 float TextEditBase::pageHeight(float lineHeight) const {
-    const float visible = resolvedHeight() - paddingTop() - paddingBottom()
-                        - m_innerPaddingTop.get() - m_innerPaddingBottom.get();
-    return std::max(visible, lineHeight);
+    const auto verticalExtent = [](const Widget& widget) {
+        float top = std::numeric_limits<float>::max();
+        float bottom = std::numeric_limits<float>::lowest();
+        for (const Point corner : {Point{0.0f, 0.0f}, Point{widget.displayedWidth(), 0.0f},
+                                   Point{0.0f, widget.displayedHeight()}, Point{widget.displayedWidth(), widget.displayedHeight()}}) {
+            const float y = widget.mapToWindow(corner).y;
+            top = std::min(top, y);
+            bottom = std::max(bottom, y);
+        }
+        return std::pair{top, bottom};
+    };
+
+    auto [top, bottom] = verticalExtent(*m_textDisplay);
+    for (auto* widget = dynamic_cast<const Widget*>(m_textDisplay->parent()); widget;
+         widget = dynamic_cast<const Widget*>(widget->parent())) {
+        if (widget->clip()) {
+            const auto [clipTop, clipBottom] = verticalExtent(*widget);
+            top = std::max(top, clipTop);
+            bottom = std::min(bottom, clipBottom);
+        }
+        if (widget->isOverlay())
+            break;
+    }
+    if (const Window* window = ownerWindow()) {
+        top = std::max(top, 0.0f);
+        bottom = std::min(bottom, static_cast<float>(window->height()));
+    }
+    return std::max(bottom - top, lineHeight);
 }
 
 void TextEditBase::sendEditingFinished() {

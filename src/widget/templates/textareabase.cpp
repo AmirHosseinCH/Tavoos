@@ -43,6 +43,13 @@ void TextAreaBase::onDisplayResized() {
     updateCaret();
 }
 
+void TextAreaBase::keepCaretVisible(const Rect& caret) {
+    if (focused())
+        m_textDisplay->ensureVisible({caret.x - innerPaddingLeft(), caret.y - innerPaddingTop(),
+                                      caret.width + innerPaddingLeft() + innerPaddingRight(),
+                                      caret.height + innerPaddingTop() + innerPaddingBottom()});
+}
+
 void TextAreaBase::applyWrapWidth() {
     const float available = resolvedWidth() - paddingLeft() - paddingRight()
                           - innerPaddingLeft() - innerPaddingRight() - static_cast<float>(CaretWidth);

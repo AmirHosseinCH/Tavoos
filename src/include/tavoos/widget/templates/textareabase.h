@@ -31,6 +31,7 @@ protected:
     void onResolvedSizeChanged() override;
     void onDisplayChanged() override;
     void onDisplayResized() override;
+    void keepCaretVisible(const Rect& caret) override;
 
 private:
     void applyWrapWidth();
