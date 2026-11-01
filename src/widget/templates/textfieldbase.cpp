@@ -126,12 +126,35 @@ std::size_t TextFieldBase::toModel(std::size_t position) const {
 }
 
 bool TextFieldBase::allows(TextEditAction action) const {
-    if (m_echoMode.get() != EchoMode::Normal && (action == TextEditAction::Copy || action == TextEditAction::Cut))
+    switch (action) {
+    case TextEditAction::MoveUp:
+    case TextEditAction::MoveDown:
+    case TextEditAction::MovePageUp:
+    case TextEditAction::MovePageDown:
+    case TextEditAction::SelectUp:
+    case TextEditAction::SelectDown:
+    case TextEditAction::SelectPageUp:
+    case TextEditAction::SelectPageDown:
         return false;
+    case TextEditAction::Copy:
+    case TextEditAction::Cut:
+        if (m_echoMode.get() != EchoMode::Normal)
+            return false;
+        break;
+    default:
+        break;
+    }
     return TextEditBase::allows(action);
 }
 
 void TextFieldBase::applyAction(TextEditAction action) {
+    switch (action) {
+    case TextEditAction::MoveToLineStart:   action = TextEditAction::MoveToStart; break;
+    case TextEditAction::MoveToLineEnd:     action = TextEditAction::MoveToEnd; break;
+    case TextEditAction::SelectToLineStart: action = TextEditAction::SelectToStart; break;
+    case TextEditAction::SelectToLineEnd:   action = TextEditAction::SelectToEnd; break;
+    default: break;
+    }
     if (m_echoMode.get() != EchoMode::Normal) {
         switch (action) {
         case TextEditAction::MoveWordLeft:    action = TextEditAction::MoveToStart; break;

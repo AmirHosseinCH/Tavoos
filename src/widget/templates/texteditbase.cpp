@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace Tavoos {
 
@@ -30,6 +31,7 @@ TextEditBase::TextEditBase(Object* parent) : Control{parent} {
         if (!m_changeFromCode && m_model.text() != m_text.get())
             m_text.set(m_model.text());
         m_textState.setIfChanged(m_model.text());
+        m_goalX.reset();
         refreshDisplay();
         m_canUndo.setIfChanged(m_model.canUndo());
         m_canRedo.setIfChanged(m_model.canRedo());
@@ -38,6 +40,8 @@ TextEditBase::TextEditBase(Object* parent) : Control{parent} {
             m_onTextEdited(m_model.text());
     });
     m_model.onCursorChanged([this] {
+        if (!m_movingVertically)
+            m_goalX.reset();
         updateCaret();
         updateSelection();
     });
@@ -123,6 +127,7 @@ bool TextEditBase::hasHandlerFor(EventType type) {
 
 void TextEditBase::triggerPress(MouseEvent& event) {
     if (enabled()) {
+        m_goalX.reset();
         m_pressPoint = mapToWindow({event.x(), event.y()});
         m_pressClickCount = m_selectByMouse.get() ? event.clickCount() : 1;
         if (m_pressClickCount == 2 && !selectsWords())
@@ -288,7 +293,64 @@ bool TextEditBase::allows(TextEditAction action) const {
 }
 
 void TextEditBase::applyAction(TextEditAction action) {
-    applyTextEditAction(m_model, action);
+    if (needsLayout(action))
+        applyLayoutAction(action);
+    else
+        applyTextEditAction(m_model, action);
+}
+
+void TextEditBase::applyLayoutAction(TextEditAction action) {
+    if (!m_textDisplay)
+        return;
+
+    const Rect caret = m_textDisplay->positionToRectangle(toDisplay(m_model.cursor()));
+    const float middle = caret.y + caret.height * 0.5f;
+    switch (action) {
+    case TextEditAction::MoveToLineStart:
+    case TextEditAction::SelectToLineStart:
+        m_model.setCursor(toModel(m_textDisplay->positionAt(std::numeric_limits<float>::lowest(), middle)),
+                          action == TextEditAction::SelectToLineStart);
+        break;
+    case TextEditAction::MoveToLineEnd:
+    case TextEditAction::SelectToLineEnd:
+        m_model.setCursor(toModel(m_textDisplay->positionAt(std::numeric_limits<float>::max(), middle)),
+                          action == TextEditAction::SelectToLineEnd);
+        break;
+    case TextEditAction::MoveUp:       moveVertically(caret, -caret.height, false); break;
+    case TextEditAction::MoveDown:     moveVertically(caret, caret.height, false); break;
+    case TextEditAction::MovePageUp:   moveVertically(caret, -pageHeight(caret.height), false); break;
+    case TextEditAction::MovePageDown: moveVertically(caret, pageHeight(caret.height), false); break;
+    case TextEditAction::SelectUp:       moveVertically(caret, -caret.height, true); break;
+    case TextEditAction::SelectDown:     moveVertically(caret, caret.height, true); break;
+    case TextEditAction::SelectPageUp:   moveVertically(caret, -pageHeight(caret.height), true); break;
+    case TextEditAction::SelectPageDown: moveVertically(caret, pageHeight(caret.height), true); break;
+    default:
+        break;
+    }
+}
+
+void TextEditBase::moveVertically(const Rect& caret, float distance, bool extend) {
+    if (!m_goalX)
+        m_goalX = caret.x;
+
+    const std::size_t end = toDisplay(m_model.text().size());
+    const float target = caret.y + caret.height * 0.5f + distance;
+    const Rect last = m_textDisplay->positionToRectangle(end);
+    std::size_t position = 0;
+    if (target >= last.y + last.height)
+        position = end;
+    else if (target >= m_textDisplay->positionToRectangle(0).y)
+        position = m_textDisplay->positionAt(*m_goalX, target);
+
+    m_movingVertically = true;
+    m_model.setCursor(toModel(position), extend);
+    m_movingVertically = false;
+}
+
+float TextEditBase::pageHeight(float lineHeight) const {
+    const float visible = resolvedHeight() - paddingTop() - paddingBottom()
+                        - m_innerPaddingTop.get() - m_innerPaddingBottom.get();
+    return std::max(visible, lineHeight);
 }
 
 void TextEditBase::sendEditingFinished() {

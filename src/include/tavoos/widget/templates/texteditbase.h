@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -205,6 +206,9 @@ private:
     void updateSelection();
     void resetCaretBlink();
     void moveCursorTo(int position);
+    void applyLayoutAction(TextEditAction action);
+    void moveVertically(const Rect& caret, float distance, bool extend);
+    float pageHeight(float lineHeight) const;
     void moveCursorToPoint(const Point& windowPoint, bool extend);
     void extendWordSelection(const Point& windowPoint);
     std::size_t characterAtPoint(const Point& windowPoint);
@@ -240,6 +244,8 @@ private:
     int m_pressClickCount{1};
     std::pair<std::size_t, std::size_t> m_pressWord{};
     bool m_changeFromCode{false};
+    std::optional<float> m_goalX;
+    bool m_movingVertically{false};
     float m_blinkElapsed{0.0f};
     bool m_blinking{false};
 };

@@ -45,15 +45,47 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
         break;
     case Key::Home:
         if (plain)
-            return TextEditAction::MoveToStart;
+            return TextEditAction::MoveToLineStart;
         if (shift)
+            return TextEditAction::SelectToLineStart;
+        if (control)
+            return TextEditAction::MoveToStart;
+        if (controlShift)
             return TextEditAction::SelectToStart;
         break;
     case Key::End:
         if (plain)
-            return TextEditAction::MoveToEnd;
+            return TextEditAction::MoveToLineEnd;
         if (shift)
+            return TextEditAction::SelectToLineEnd;
+        if (control)
+            return TextEditAction::MoveToEnd;
+        if (controlShift)
             return TextEditAction::SelectToEnd;
+        break;
+    case Key::Up:
+        if (plain)
+            return TextEditAction::MoveUp;
+        if (shift)
+            return TextEditAction::SelectUp;
+        break;
+    case Key::Down:
+        if (plain)
+            return TextEditAction::MoveDown;
+        if (shift)
+            return TextEditAction::SelectDown;
+        break;
+    case Key::PageUp:
+        if (plain)
+            return TextEditAction::MovePageUp;
+        if (shift)
+            return TextEditAction::SelectPageUp;
+        break;
+    case Key::PageDown:
+        if (plain)
+            return TextEditAction::MovePageDown;
+        if (shift)
+            return TextEditAction::SelectPageDown;
         break;
     case Key::A:
         if (control)
@@ -125,6 +157,19 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     case TextEditAction::Redo:
         model.redo();
         break;
+    case TextEditAction::MoveToLineStart:
+    case TextEditAction::MoveToLineEnd:
+    case TextEditAction::MoveUp:
+    case TextEditAction::MoveDown:
+    case TextEditAction::MovePageUp:
+    case TextEditAction::MovePageDown:
+    case TextEditAction::SelectToLineStart:
+    case TextEditAction::SelectToLineEnd:
+    case TextEditAction::SelectUp:
+    case TextEditAction::SelectDown:
+    case TextEditAction::SelectPageUp:
+    case TextEditAction::SelectPageDown:
+        break;
     }
 }
 
@@ -138,6 +183,26 @@ bool changesText(TextEditAction action) {
     case TextEditAction::Paste:
     case TextEditAction::Undo:
     case TextEditAction::Redo:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool needsLayout(TextEditAction action) {
+    switch (action) {
+    case TextEditAction::MoveToLineStart:
+    case TextEditAction::MoveToLineEnd:
+    case TextEditAction::MoveUp:
+    case TextEditAction::MoveDown:
+    case TextEditAction::MovePageUp:
+    case TextEditAction::MovePageDown:
+    case TextEditAction::SelectToLineStart:
+    case TextEditAction::SelectToLineEnd:
+    case TextEditAction::SelectUp:
+    case TextEditAction::SelectDown:
+    case TextEditAction::SelectPageUp:
+    case TextEditAction::SelectPageDown:
         return true;
     default:
         return false;
