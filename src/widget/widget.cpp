@@ -144,6 +144,8 @@ void Widget::updateEffectiveOpacity() {
 
 void Widget::markLayoutDirty() {
     m_layoutDirty = true;
+    if (m_ownerWindow)
+        m_ownerWindow->m_layoutRequested = true;
     requestRepaint();
 }
 
