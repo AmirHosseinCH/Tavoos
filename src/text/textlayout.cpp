@@ -7,23 +7,28 @@
 
 namespace Tavoos {
 
+float GlyphAdvance::operator()(char32_t codepoint, float lineX) const {
+    if (codepoint == '\t')
+        return tabStopDistance > 0.0f ? (std::floor(lineX / tabStopDistance) + 1.0f) * tabStopDistance - lineX : 0.0f;
+    const GlyphMetrics& m = face.glyph(codepoint);
+    return m.valid ? m.advance * scale : 0.0f;
+}
+
 namespace {
 
-float measureWidth(const std::string& s, std::size_t from, std::size_t to, FontFace& face, float scale) {
+float measureWidth(const std::string& s, std::size_t from, std::size_t to, const GlyphAdvance& advance) {
     float w = 0.0f;
     std::size_t i = from;
     while (i < to) {
         const Utf8Decoded d = decodeUtf8At(s, i);
         i += d.length;
-        const GlyphMetrics& m = face.glyph(d.codepoint);
-        if (m.valid)
-            w += m.advance * scale;
+        w += advance(d.codepoint, w);
     }
     return w;
 }
 
-float measureWidth(const std::string& s, FontFace& face, float scale) {
-    return measureWidth(s, 0, s.size(), face, scale);
+float measureWidth(const std::string& s, const GlyphAdvance& advance) {
+    return measureWidth(s, 0, s.size(), advance);
 }
 
 std::vector<std::pair<std::size_t,std::size_t>> codepointRanges(const std::string& s) {
@@ -40,7 +45,7 @@ std::vector<std::pair<std::size_t,std::size_t>> codepointRanges(const std::strin
 
 }
 
-std::vector<TextLine> layoutTextLines(const std::string& text, FontFace& face, float scale,
+std::vector<TextLine> layoutTextLines(const std::string& text, const GlyphAdvance& advance,
                                       WrapMode wrapMode, float wrapWidth) {
     std::vector<TextLine> lines;
 
@@ -64,25 +69,33 @@ std::vector<TextLine> layoutTextLines(const std::string& text, FontFace& face, f
             continue;
         }
 
-        const GlyphMetrics& m = face.glyph(codepoint);
-        const float advance = m.valid ? m.advance * scale : 0.0f;
+        float width = advance(codepoint, lineWidth);
         const bool isSpace = (codepoint == ' ' || codepoint == '\t');
 
         const bool needsBreak = (wrapMode != WrapMode::NoWrap) && wrapWidth > 0.0f &&
-                          lineWidth + advance > wrapWidth && lineWidth > 0.0f;
+                          lineWidth + width > wrapWidth && lineWidth > 0.0f;
+
+        if (needsBreak && wrapMode == WrapMode::WordWrap && isSpace) {
+            lines.push_back({lineStart, charStart, lineWidth, ""});
+            lineStart = i;
+            lineWidth = 0.0f;
+            lastBreakOpportunity = std::string::npos;
+            continue;
+        }
 
         if (needsBreak) {
             if (wrapMode == WrapMode::WordWrap && lastBreakOpportunity != std::string::npos
                 && lastBreakOpportunity > lineStart) {
                 lines.push_back({lineStart, lastBreakOpportunity, widthAtLastBreak, ""});
                 lineStart = lastBreakOpportunity + 1;
-                lineWidth = measureWidth(text, lineStart, charStart, face, scale);
+                lineWidth = measureWidth(text, lineStart, charStart, advance);
             } else {
                 lines.push_back({lineStart, charStart, lineWidth, ""});
                 lineStart = charStart;
                 lineWidth = 0.0f;
             }
             lastBreakOpportunity = std::string::npos;
+            width = advance(codepoint, lineWidth);
         }
 
         if (wrapMode == WrapMode::WordWrap && isSpace) {
@@ -90,17 +103,17 @@ std::vector<TextLine> layoutTextLines(const std::string& text, FontFace& face, f
             widthAtLastBreak = lineWidth;
         }
 
-        lineWidth += advance;
+        lineWidth += width;
     }
 
     lines.push_back({lineStart, text.size(), lineWidth, ""});
     return lines;
 }
 
-ElidedLine elideLine(const std::string& line, FontFace& face, float scale, ElideMode mode, float maxWidth) {
+ElidedLine elideLine(const std::string& line, const GlyphAdvance& advance, ElideMode mode, float maxWidth) {
     const std::string ellipsis = "\xE2\x80\xA6";
-    const float fullWidth = measureWidth(line, face, scale);
-    const float ellipsisWidth = measureWidth(ellipsis, face, scale);
+    const float fullWidth = measureWidth(line, advance);
+    const float ellipsisWidth = measureWidth(ellipsis, advance);
 
     if (mode == ElideMode::None || fullWidth + ellipsisWidth <= maxWidth)
         return { line, fullWidth };
@@ -115,11 +128,11 @@ ElidedLine elideLine(const std::string& line, FontFace& face, float scale, Elide
 
     auto fitsPrefix = [&](std::size_t count) {
         std::size_t byteLen = (count == 0) ? 0 : cps[count-1].first + cps[count-1].second;
-        return measureWidth(line.substr(0, byteLen), face, scale) <= available;
+        return measureWidth(line.substr(0, byteLen), advance) <= available;
     };
     auto fitsSuffix = [&](std::size_t count) {
         std::size_t startByte = (count == 0) ? line.size() : cps[cps.size()-count].first;
-        return measureWidth(line.substr(startByte), face, scale) <= available;
+        return measureWidth(line.substr(startByte), advance) <= available;
     };
 
     if (mode == ElideMode::Right) {
@@ -130,7 +143,7 @@ ElidedLine elideLine(const std::string& line, FontFace& face, float scale, Elide
         }
         const std::size_t byteLen = (lo == 0) ? 0 : cps[lo-1].first + cps[lo-1].second;
         const std::string result = line.substr(0, byteLen) + ellipsis;
-        return { result, measureWidth(result, face, scale) };
+        return { result, measureWidth(result, advance) };
     }
 
     if (mode == ElideMode::Left) {
@@ -141,14 +154,14 @@ ElidedLine elideLine(const std::string& line, FontFace& face, float scale, Elide
         }
         const std::size_t startByte = (lo == 0) ? line.size() : cps[cps.size()-lo].first;
         const std::string result = ellipsis + line.substr(startByte);
-        return { result, measureWidth(result, face, scale) };
+        return { result, measureWidth(result, advance) };
     }
 
     float half = available * 0.5f;
     std::size_t prefixCount = 0;
     while (prefixCount < cps.size()) {
         std::size_t byteLen = cps[prefixCount].first + cps[prefixCount].second;
-        if (measureWidth(line.substr(0, byteLen), face, scale) > half)
+        if (measureWidth(line.substr(0, byteLen), advance) > half)
             break;
         prefixCount++;
     }
@@ -157,14 +170,14 @@ ElidedLine elideLine(const std::string& line, FontFace& face, float scale, Elide
         std::size_t startByte = cps[cps.size()-suffixCount-1].first;
         std::string prefixPart = line.substr(0, (prefixCount==0)?0:cps[prefixCount-1].first+cps[prefixCount-1].second);
         std::string candidate = prefixPart + ellipsis + line.substr(startByte);
-        if (measureWidth(candidate, face, scale) > maxWidth)
+        if (measureWidth(candidate, advance) > maxWidth)
             break;
         suffixCount++;
     }
     std::string prefixPart = line.substr(0, (prefixCount==0)?0:cps[prefixCount-1].first+cps[prefixCount-1].second);
     std::string suffixPart = (suffixCount==0) ? "" : line.substr(cps[cps.size()-suffixCount].first);
     std::string result = prefixPart + ellipsis + suffixPart;
-    return { result, measureWidth(result, face, scale) };
+    return { result, measureWidth(result, advance) };
 }
 
 int effectiveMaxLines(int explicitMaxLines, float resolvedHeight, float lineHeight) {
@@ -183,7 +196,7 @@ int effectiveMaxLines(int explicitMaxLines, float resolvedHeight, float lineHeig
 
 namespace {
 
-void spliceEllipsis(TextLine& line, const std::string& text, FontFace& face, float scale,
+void spliceEllipsis(TextLine& line, const std::string& text, const GlyphAdvance& advance,
                     float maxWidth, bool prepend) {
     const std::string lineText = line.overrideText.empty()
     ? text.substr(line.byteStart, line.byteEnd - line.byteStart)
@@ -191,7 +204,7 @@ void spliceEllipsis(TextLine& line, const std::string& text, FontFace& face, flo
 
     const std::string ellipsis = "\xE2\x80\xA6";
     const std::string withEllipsis = prepend ? (ellipsis + lineText) : (lineText + ellipsis);
-    const float widthWithEllipsis = measureWidth(withEllipsis, face, scale);
+    const float widthWithEllipsis = measureWidth(withEllipsis, advance);
 
     if (widthWithEllipsis <= maxWidth) {
         line.overrideText = withEllipsis;
@@ -199,7 +212,7 @@ void spliceEllipsis(TextLine& line, const std::string& text, FontFace& face, flo
         return;
     }
 
-    ElidedLine e = elideLine(lineText, face, scale, prepend ? ElideMode::Left : ElideMode::Right, maxWidth);
+    ElidedLine e = elideLine(lineText, advance, prepend ? ElideMode::Left : ElideMode::Right, maxWidth);
     line.overrideText = e.text;
     line.width = e.width;
 }
@@ -207,7 +220,7 @@ void spliceEllipsis(TextLine& line, const std::string& text, FontFace& face, flo
 }
 
 std::vector<TextLine> clampLines(std::vector<TextLine> lines, int effectiveLimit,
-                                 const std::string& text, FontFace& face, float scale,
+                                 const std::string& text, const GlyphAdvance& advance,
                                  ElideMode elideMode, float maxWidth) {
     const int totalLines = static_cast<int>(lines.size());
     const bool wasLineClamped = effectiveLimit > 0 && totalLines > effectiveLimit;
@@ -218,7 +231,7 @@ std::vector<TextLine> clampLines(std::vector<TextLine> lines, int effectiveLimit
         TextLine& last = lines.back();
         if (last.width <= maxWidth)
             return lines;
-        spliceEllipsis(last, text, face, scale, maxWidth, elideMode == ElideMode::Left);
+        spliceEllipsis(last, text, advance, maxWidth, elideMode == ElideMode::Left);
         return lines;
     }
 
@@ -229,13 +242,13 @@ std::vector<TextLine> clampLines(std::vector<TextLine> lines, int effectiveLimit
 
     if (elideMode == ElideMode::Right) {
         std::vector<TextLine> kept(lines.begin(), lines.begin() + effectiveLimit);
-        spliceEllipsis(kept.back(), text, face, scale, maxWidth, false);
+        spliceEllipsis(kept.back(), text, advance, maxWidth, false);
         return kept;
     }
 
     if (elideMode == ElideMode::Left) {
         std::vector<TextLine> kept(lines.end() - effectiveLimit, lines.end());
-        spliceEllipsis(kept.front(), text, face, scale, maxWidth, true);
+        spliceEllipsis(kept.front(), text, advance, maxWidth, true);
         return kept;
     }
 
@@ -246,7 +259,7 @@ std::vector<TextLine> clampLines(std::vector<TextLine> lines, int effectiveLimit
     for (int k = totalLines - suffixCount; k < totalLines; ++k)
         kept.push_back(lines[k]);
 
-    spliceEllipsis(kept[prefixCount - 1], text, face, scale, maxWidth, false);
+    spliceEllipsis(kept[prefixCount - 1], text, advance, maxWidth, false);
     return kept;
 }
 

@@ -5,7 +5,8 @@
 namespace Tavoos {
 
 TextWidget::TextWidget(Object* parent) : Widget{parent} {
-    bindRelayoutTriggers(m_text, m_family, m_weight, m_style, m_fontSize, m_wrapMode, m_elideMode, m_maxLines);
+    bindRelayoutTriggers(m_text, m_family, m_weight, m_style, m_fontSize, m_wrapMode, m_elideMode, m_maxLines,
+                         m_tabStopDistance);
     bindRepaintTriggers(m_color, m_textAlignment, m_selectionStart, m_selectionEnd, m_selectionColor, m_selectedTextColor);
     m_font.onChange([this](const Font& font) {
         family(font.family).weight(font.weight).style(font.style).fontSize(font.size);
@@ -26,9 +27,10 @@ const std::vector<TextLine>& TextWidget::layoutLines(LineCache& cache, FontFace&
     WrapMode wrap = m_wrapMode.get();
     ElideMode elide = m_elideMode.get();
     int maxLines = m_maxLines.get();
+    const float tabStop = m_tabStopDistance.get();
 
     if (cache.valid && cache.text == text && cache.face == &face && cache.scale == scale &&
-        cache.wrapMode == wrap && cache.layoutWrapWidth == layoutWrapWidth &&
+        cache.tabStopDistance == tabStop && cache.wrapMode == wrap && cache.layoutWrapWidth == layoutWrapWidth &&
         cache.clampMaxWidth == clampMaxWidth && cache.elideMode == elide &&
         cache.maxLines == maxLines && cache.heightForMaxLines == heightForMaxLines) {
         return cache.lines;
@@ -36,12 +38,14 @@ const std::vector<TextLine>& TextWidget::layoutLines(LineCache& cache, FontFace&
 
     float lineHeight = face.lineHeight() * scale;
     int limit = effectiveMaxLines(maxLines, heightForMaxLines, lineHeight);
-    auto lines = clampLines(brokenLines(face, scale, wrap, layoutWrapWidth), limit, text, face, scale, elide, clampMaxWidth);
+    auto lines = clampLines(brokenLines(face, scale, wrap, layoutWrapWidth), limit, text,
+                            GlyphAdvance{face, scale, tabStop}, elide, clampMaxWidth);
 
     cache.valid = true;
     cache.text = text;
     cache.face = &face;
     cache.scale = scale;
+    cache.tabStopDistance = tabStop;
     cache.wrapMode = wrap;
     cache.layoutWrapWidth = layoutWrapWidth;
     cache.clampMaxWidth = clampMaxWidth;
@@ -78,19 +82,21 @@ Widget::Size TextWidget::computeIntrinsicSize() {
 
 const std::vector<TextLine>& TextWidget::brokenLines(FontFace& face, float scale, WrapMode wrap, float wrapWidth) {
     const std::string& text = m_text.get();
+    const float tabStop = m_tabStopDistance.get();
     if (wrap == WrapMode::NoWrap)
         wrapWidth = 0.0f;
     if (m_breakCache.valid && m_breakCache.text == text && m_breakCache.face == &face && m_breakCache.scale == scale &&
-        m_breakCache.wrapMode == wrap && m_breakCache.wrapWidth == wrapWidth)
+        m_breakCache.tabStopDistance == tabStop && m_breakCache.wrapMode == wrap && m_breakCache.wrapWidth == wrapWidth)
         return m_breakCache.lines;
 
     m_breakCache.valid = true;
     m_breakCache.text = text;
     m_breakCache.face = &face;
     m_breakCache.scale = scale;
+    m_breakCache.tabStopDistance = tabStop;
     m_breakCache.wrapMode = wrap;
     m_breakCache.wrapWidth = wrapWidth;
-    m_breakCache.lines = layoutTextLines(text, face, scale, wrap, wrapWidth);
+    m_breakCache.lines = layoutTextLines(text, GlyphAdvance{face, scale, tabStop}, wrap, wrapWidth);
     return m_breakCache.lines;
 }
 
@@ -138,10 +144,7 @@ Rect TextWidget::positionToRectangle(std::size_t position) {
     const auto& lines = renderLines(*face, scale);
     return positionToRect(m_text.get(), lines, position, blockStartY(lines.size(), lineHeight), lineHeight,
                           [&](std::size_t li) { return lineStartX(lines[li]); },
-                          [&](char32_t codepoint) {
-                              const GlyphMetrics& m = face->glyph(codepoint);
-                              return m.valid ? m.advance * scale : 0.0f;
-                          });
+                          GlyphAdvance{*face, scale, m_tabStopDistance.get()});
 }
 
 std::size_t TextWidget::positionAt(float x, float y) {
@@ -154,10 +157,7 @@ std::size_t TextWidget::positionAt(float x, float y) {
     const auto& lines = renderLines(*face, scale);
     return Tavoos::positionAt(m_text.get(), lines, x, y, blockStartY(lines.size(), lineHeight), lineHeight,
                               [&](std::size_t li) { return lineStartX(lines[li]); },
-                              [&](char32_t codepoint) {
-                                  const GlyphMetrics& m = face->glyph(codepoint);
-                                  return m.valid ? m.advance * scale : 0.0f;
-                              });
+                              GlyphAdvance{*face, scale, m_tabStopDistance.get()});
 }
 
 void TextWidget::render(Renderer& r) {

@@ -411,10 +411,7 @@ void Renderer::renderText(TextWidget& text) {
     const float blockStartY = text.blockStartY(lines.size(), lineHeight);
     auto lineStartX = [&](std::size_t idx) { return text.lineStartX(lines[idx]); };
 
-    const auto advance = [&](char32_t codepoint) {
-        const GlyphMetrics& m = face->glyph(codepoint);
-        return m.valid ? m.advance * scale : 0.0f;
-    };
+    const GlyphAdvance advance{*face, scale, text.tabStopDistance()};
     const std::vector<VisibleSpan> spans = visibleSpans(content, lines, blockStartY, lineHeight,
                                                         visibleBounds(projection * text.worldMatrix()), lineStartX, advance);
     std::size_t spanBytes = 0;
@@ -431,11 +428,13 @@ void Renderer::renderText(TextWidget& text) {
     const std::size_t selectionEnd = std::max(text.selectionStart(), text.selectionEnd());
 
     if (selectionStart < selectionEnd) {
-        auto advanceBetween = [&](std::size_t from, std::size_t to) {
+        auto advanceBetween = [&](std::size_t from, std::size_t to, float& lineX) {
             float width = 0.0f;
             for (std::size_t i = from; i < to; ) {
                 const Utf8Decoded d = decodeUtf8At(content, i);
-                width += advance(d.codepoint);
+                const float w = advance(d.codepoint, lineX);
+                width += w;
+                lineX += w;
                 i += d.length;
             }
             return width;
@@ -453,8 +452,9 @@ void Renderer::renderText(TextWidget& text) {
             const std::size_t to = std::min(selectionEnd, span.end);
             if (!lines[span.line].overrideText.empty() || from >= to)
                 continue;
-            const float x0 = span.x + advanceBetween(span.start, from);
-            const float width = advanceBetween(from, to);
+            float lineX = span.lineX;
+            const float x0 = span.x + advanceBetween(span.start, from, lineX);
+            const float width = advanceBetween(from, to, lineX);
             const float top = blockStartY + lineHeight * static_cast<float>(span.line);
             quadShader.setMat4("world", text.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{x0, top, 0.0f}));
             quadShader.setVec2("uHalfSize", glm::vec2{width, lineHeight} * 0.5f);
@@ -509,6 +509,7 @@ void Renderer::renderText(TextWidget& text) {
     bool drawingSelected = false;
     for (const VisibleSpan& span : spans) {
         float penX = span.x;
+        float lineX = span.lineX;
         const float baselineY = blockStartY + face->ascender() * scale + lineHeight * static_cast<float>(span.line);
 
         const bool original = lines[span.line].overrideText.empty();
@@ -519,6 +520,12 @@ void Renderer::renderText(TextWidget& text) {
             const bool selected = original && i >= selectionStart && i < selectionEnd;
             Utf8Decoded d = decodeUtf8At(source, i);
             i += d.length;
+            const float width = advance(d.codepoint, lineX);
+            lineX += width;
+            if (d.codepoint == '\t') {
+                penX += width;
+                continue;
+            }
             const GlyphMetrics& m = face->glyph(d.codepoint);
             if (!m.valid) continue;
             if (selected != drawingSelected) {

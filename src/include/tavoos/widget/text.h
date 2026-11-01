@@ -80,6 +80,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) tabStopDistance(this auto&& self, PropertyArg<float> distance) {
+        distance.applyTo(self.m_tabStopDistance);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) selection(this auto&& self, std::size_t start, std::size_t end) {
         self.m_selectionStart.set(start);
         self.m_selectionEnd.set(end);
@@ -107,6 +112,7 @@ public:
     WrapMode wrapMode() const { return m_wrapMode; }
     ElideMode elideMode() const { return m_elideMode; }
     int maxLines() const { return m_maxLines; }
+    float tabStopDistance() const { return m_tabStopDistance; }
     std::size_t selectionStart() const { return m_selectionStart; }
     std::size_t selectionEnd() const { return m_selectionEnd; }
     Paint selectionColor() const { return m_selectionColor; }
@@ -128,6 +134,7 @@ private:
         std::string text;
         FontFace* face = nullptr;
         float scale = 0.0f;
+        float tabStopDistance = 0.0f;
         WrapMode wrapMode = WrapMode::NoWrap;
         float layoutWrapWidth = 0.0f;
         float clampMaxWidth = 0.0f;
@@ -142,6 +149,7 @@ private:
         std::string text;
         FontFace* face = nullptr;
         float scale = 0.0f;
+        float tabStopDistance = 0.0f;
         WrapMode wrapMode = WrapMode::NoWrap;
         float wrapWidth = 0.0f;
         std::vector<TextLine> lines;
@@ -170,6 +178,7 @@ private:
     Property<WrapMode> m_wrapMode{WrapMode::NoWrap};
     Property<ElideMode> m_elideMode{ElideMode::None};
     Property<int> m_maxLines{0};
+    Property<float> m_tabStopDistance{80.0f};
     Property<std::size_t> m_selectionStart{0};
     Property<std::size_t> m_selectionEnd{0};
     Property<Paint> m_selectionColor{Color::rgba(85, 112, 241)};
