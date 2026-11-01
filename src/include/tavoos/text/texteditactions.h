@@ -14,6 +14,8 @@ enum class TextEditAction {
     DeleteForward,
     DeleteWordBackward,
     DeleteWordForward,
+    InsertNewline,
+    InsertTab,
     MoveLeft,
     MoveRight,
     MoveToStart,

@@ -127,6 +127,8 @@ std::size_t TextFieldBase::toModel(std::size_t position) const {
 
 bool TextFieldBase::allows(TextEditAction action) const {
     switch (action) {
+    case TextEditAction::InsertNewline:
+    case TextEditAction::InsertTab:
     case TextEditAction::MoveUp:
     case TextEditAction::MoveDown:
     case TextEditAction::MovePageUp:

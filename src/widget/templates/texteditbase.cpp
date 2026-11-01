@@ -13,6 +13,19 @@ namespace {
 
 constexpr float kBlinkInterval = 0.5f;
 
+class TextDisplay : public TextWidget {
+public:
+    TextDisplay(Object* parent) : TextWidget{parent} {}
+
+    std::function<void()> resized;
+
+protected:
+    void onResolvedSizeChanged() override {
+        if (resized)
+            resized();
+    }
+};
+
 }
 
 TextEditBase::TextEditBase(Object* parent) : Control{parent} {
@@ -55,8 +68,16 @@ TextEditBase::TextEditBase(Object* parent) : Control{parent} {
     });
     focusable(true);
 
-    m_innerPaddingLeft.onChange([this](const float&) { updateCaret(); });
-    m_innerPaddingRight.onChange([this](const float&) { updateCaret(); });
+    m_innerPaddingLeft.onChange([this](const float&) {
+        updateCaret();
+        onDisplayChanged();
+    });
+    m_innerPaddingTop.onChange([this](const float&) { onDisplayChanged(); });
+    m_innerPaddingRight.onChange([this](const float&) {
+        updateCaret();
+        onDisplayChanged();
+    });
+    m_innerPaddingBottom.onChange([this](const float&) { onDisplayChanged(); });
     m_readOnly.onChange([this](const bool& value) {
         m_model.setReadOnly(value);
         resetCaretBlink();
@@ -76,8 +97,9 @@ TextEditBase::TextEditBase(Object* parent) : Control{parent} {
             placeholder.font(m_font.state());
         });
 
-        viewport.addChild<TextWidget>([this](TextWidget& text) {
+        viewport.addChild<TextDisplay>([this](TextDisplay& text) {
             m_textDisplay = &text;
+            text.resized = [this] { onDisplayResized(); };
             text.font(m_font.state())
                 .selectionColor(m_selectionColor.state())
                 .selectedTextColor(m_selectedTextColor.state());
@@ -87,13 +109,17 @@ TextEditBase::TextEditBase(Object* parent) : Control{parent} {
                 caret.width(CaretWidth)
                     .height(m_caretHeight)
                     .x(m_caretX)
+                    .y(m_caretY)
                     .color(m_caretColor.state())
                     .visible(m_caretVisible);
             });
         });
     });
 
-    m_font.onChange([this](const Font&) { updateCaret(); });
+    m_font.onChange([this](const Font&) {
+        updateCaret();
+        onDisplayChanged();
+    });
 
     updateDisplayedText();
     updateCaret();
@@ -133,7 +159,8 @@ void TextEditBase::triggerPress(MouseEvent& event) {
         if (m_pressClickCount == 2 && !selectsWords())
             m_pressClickCount = 3;
         if (m_pressClickCount >= 3) {
-            m_model.selectAll();
+            const auto paragraph = m_model.paragraphAt(characterAtPoint(m_pressPoint));
+            m_model.select(paragraph.first, paragraph.second);
             resetCaretBlink();
         } else if (m_pressClickCount == 2) {
             m_pressWord = m_model.wordAt(characterAtPoint(m_pressPoint));
@@ -382,6 +409,7 @@ void TextEditBase::updateDisplayedText() {
         m_placeholderDisplay->color(isEnabled ? m_placeholderColor.get() : m_disabledTextColor.get());
         m_placeholderDisplay->visible(value.empty());
     }
+    onDisplayChanged();
 }
 
 void TextEditBase::onResolvedSizeChanged() {
@@ -395,6 +423,7 @@ void TextEditBase::updateCaret() {
     const Rect caret = m_textDisplay->positionToRectangle(toDisplay(m_model.cursor()));
     keepCaretVisible(caret);
     m_caretX.set(static_cast<int>(std::round(caret.x)));
+    m_caretY.set(static_cast<int>(std::round(caret.y)));
     m_caretHeight.set(static_cast<int>(std::round(caret.height)));
 }
 

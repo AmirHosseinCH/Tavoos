@@ -15,3 +15,4 @@
 #include <tavoos/widget/templates/swipeviewbase.h>
 #include <tavoos/widget/templates/texteditbase.h>
 #include <tavoos/widget/templates/textfieldbase.h>
+#include <tavoos/widget/templates/textareabase.h>

@@ -31,6 +31,7 @@ public:
     std::size_t selectionEnd() const { return std::max(m_anchor, m_cursor); }
     std::string selectedText() const;
     std::pair<std::size_t, std::size_t> wordAt(std::size_t position) const;
+    std::pair<std::size_t, std::size_t> paragraphAt(std::size_t position) const;
     bool singleLine() const { return m_singleLine; }
     bool readOnly() const { return m_readOnly; }
     std::size_t maximumLength() const { return m_maximumLength; }

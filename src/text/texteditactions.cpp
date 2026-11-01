@@ -11,6 +11,15 @@ std::optional<TextEditAction> textEditActionFor(Key key, KeyModifier modifiers) 
     const bool controlShift = modifiers == (KeyModifier::Control | KeyModifier::Shift);
 
     switch (key) {
+    case Key::Enter:
+    case Key::KpEnter:
+        if (plain || shift)
+            return TextEditAction::InsertNewline;
+        break;
+    case Key::Tab:
+        if (plain)
+            return TextEditAction::InsertTab;
+        break;
     case Key::Backspace:
         if (plain || shift)
             return TextEditAction::DeleteBackward;
@@ -125,6 +134,8 @@ void applyTextEditAction(TextEditModel& model, TextEditAction action) {
     case TextEditAction::DeleteForward:      model.deleteForward(); break;
     case TextEditAction::DeleteWordBackward: model.deleteWordBackward(); break;
     case TextEditAction::DeleteWordForward:  model.deleteWordForward(); break;
+    case TextEditAction::InsertNewline:      model.insert("\n"); break;
+    case TextEditAction::InsertTab:          model.type("\t"); break;
     case TextEditAction::MoveLeft:           model.moveLeft(); break;
     case TextEditAction::MoveRight:          model.moveRight(); break;
     case TextEditAction::MoveToStart:        model.moveToStart(); break;
@@ -179,6 +190,8 @@ bool changesText(TextEditAction action) {
     case TextEditAction::DeleteForward:
     case TextEditAction::DeleteWordBackward:
     case TextEditAction::DeleteWordForward:
+    case TextEditAction::InsertNewline:
+    case TextEditAction::InsertTab:
     case TextEditAction::Cut:
     case TextEditAction::Paste:
     case TextEditAction::Undo:

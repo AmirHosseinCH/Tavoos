@@ -187,6 +187,8 @@ protected:
     virtual bool acceptableInput() const { return true; }
     virtual void onModelTextChanged() {}
     virtual void keepCaretVisible(const Rect& caret) { (void)caret; }
+    virtual void onDisplayChanged() {}
+    virtual void onDisplayResized() {}
 
     void refreshDisplay();
     void updateCaret();
@@ -235,6 +237,7 @@ private:
     std::function<void(const std::string&)> m_onEditingFinished;
 
     State<int> m_caretX{0};
+    State<int> m_caretY{0};
     State<int> m_caretHeight{0};
     State<bool> m_caretVisible{false};
     State<bool> m_canUndo{false};

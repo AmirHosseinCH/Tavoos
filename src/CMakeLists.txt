@@ -56,6 +56,7 @@ set(TAVOOS_SOURCES
     widget/controls/swipeviewwidget.cpp
     widget/templates/texteditbase.cpp
     widget/templates/textfieldbase.cpp
+    widget/templates/textareabase.cpp
     widget/controls/textfieldwidget.cpp
     widget/templates/spinboxbase.cpp
     widget/templates/stackviewbase.cpp
@@ -142,6 +143,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/swipeviewwidget.h
     include/tavoos/widget/templates/texteditbase.h
     include/tavoos/widget/templates/textfieldbase.h
+    include/tavoos/widget/templates/textareabase.h
     include/tavoos/widget/controls/textfieldwidget.h
     include/tavoos/widget/templates/spinboxbase.h
     include/tavoos/widget/templates/stackviewbase.h
