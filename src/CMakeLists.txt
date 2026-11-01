@@ -17,6 +17,7 @@ set(TAVOOS_SOURCES
     gfx/renderer.cpp
     gfx/shader.cpp
     gfx/texturecache.cpp
+    gfx/visibility.cpp
     gfx/svgdocumentcache.cpp
     gfx/svgtexturecache.cpp
     widget/widget.cpp
@@ -167,6 +168,7 @@ target_sources(Tavoos
     include/tavoos/gfx/renderer.h
     include/tavoos/gfx/shader.h
     include/tavoos/gfx/shader_sources.h
+    include/tavoos/gfx/visibility.h
     include/tavoos/gfx/texturecache.h
     include/tavoos/gfx/svgdocumentcache.h
     include/tavoos/gfx/svgtexturecache.h
