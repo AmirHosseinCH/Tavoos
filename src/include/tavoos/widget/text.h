@@ -137,12 +137,24 @@ private:
         std::vector<TextLine> lines;
     };
 
+    struct BreakCache {
+        bool valid = false;
+        std::string text;
+        FontFace* face = nullptr;
+        float scale = 0.0f;
+        WrapMode wrapMode = WrapMode::NoWrap;
+        float wrapWidth = 0.0f;
+        std::vector<TextLine> lines;
+    };
+
     const std::vector<TextLine>& layoutLines(LineCache& cache, FontFace& face, float scale,
                                               float layoutWrapWidth, float clampMaxWidth,
                                               float heightForMaxLines);
+    const std::vector<TextLine>& brokenLines(FontFace& face, float scale, WrapMode wrap, float wrapWidth);
 
     LineCache m_intrinsicLineCache;
     LineCache m_renderLineCache;
+    BreakCache m_breakCache;
 
     Property<std::string> m_text;
     Property<std::string> m_family{};

@@ -86,7 +86,8 @@ void TextEditModel::setMaximumLength(std::size_t length) {
 }
 
 void TextEditModel::setText(std::string text) {
-    text.resize(byteOffsetOfCharacter(text, m_maximumLength));
+    if (text.size() > m_maximumLength)
+        text.resize(byteOffsetOfCharacter(text, m_maximumLength));
     if (text == m_text)
         return;
     m_text = std::move(text);
@@ -212,9 +213,11 @@ bool TextEditModel::removeSelection() {
 
 void TextEditModel::insertText(std::string_view text, bool typing) {
     std::string inserted = m_singleLine ? withoutLineBreaks(text) : std::string{text};
-    const std::size_t selected = characterIndexAt(m_text, selectionEnd()) - characterIndexAt(m_text, selectionStart());
-    const std::size_t kept = characterCount(m_text) - selected;
-    inserted.resize(byteOffsetOfCharacter(inserted, m_maximumLength > kept ? m_maximumLength - kept : 0));
+    if (m_text.size() - (selectionEnd() - selectionStart()) + inserted.size() > m_maximumLength) {
+        const std::size_t selected = characterIndexAt(m_text, selectionEnd()) - characterIndexAt(m_text, selectionStart());
+        const std::size_t kept = characterCount(m_text) - selected;
+        inserted.resize(byteOffsetOfCharacter(inserted, m_maximumLength > kept ? m_maximumLength - kept : 0));
+    }
     if (inserted.empty())
         return;
     replace(selectionStart(), selectionEnd(), std::move(inserted), typing);
