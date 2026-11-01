@@ -35,9 +35,8 @@ const std::vector<TextLine>& TextWidget::layoutLines(LineCache& cache, FontFace&
     }
 
     float lineHeight = face.lineHeight() * scale;
-    auto lines = layoutTextLines(text, face, scale, wrap, layoutWrapWidth);
     int limit = effectiveMaxLines(maxLines, heightForMaxLines, lineHeight);
-    lines = clampLines(std::move(lines), limit, text, face, scale, elide, clampMaxWidth);
+    auto lines = clampLines(brokenLines(face, scale, wrap, layoutWrapWidth), limit, text, face, scale, elide, clampMaxWidth);
 
     cache.valid = true;
     cache.text = text;
@@ -75,6 +74,24 @@ Widget::Size TextWidget::computeIntrinsicSize() {
         (width()  > 0) ? static_cast<float>(width())  : measuredWidth,
         (height() > 0) ? static_cast<float>(height()) : measuredHeight
     };
+}
+
+const std::vector<TextLine>& TextWidget::brokenLines(FontFace& face, float scale, WrapMode wrap, float wrapWidth) {
+    const std::string& text = m_text.get();
+    if (wrap == WrapMode::NoWrap)
+        wrapWidth = 0.0f;
+    if (m_breakCache.valid && m_breakCache.text == text && m_breakCache.face == &face && m_breakCache.scale == scale &&
+        m_breakCache.wrapMode == wrap && m_breakCache.wrapWidth == wrapWidth)
+        return m_breakCache.lines;
+
+    m_breakCache.valid = true;
+    m_breakCache.text = text;
+    m_breakCache.face = &face;
+    m_breakCache.scale = scale;
+    m_breakCache.wrapMode = wrap;
+    m_breakCache.wrapWidth = wrapWidth;
+    m_breakCache.lines = layoutTextLines(text, face, scale, wrap, wrapWidth);
+    return m_breakCache.lines;
 }
 
 float TextWidget::lineHeight() {
