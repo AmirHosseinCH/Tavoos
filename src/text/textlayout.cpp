@@ -9,10 +9,10 @@ namespace Tavoos {
 
 namespace {
 
-float measureWidth(const std::string& s, FontFace& face, float scale) {
+float measureWidth(const std::string& s, std::size_t from, std::size_t to, FontFace& face, float scale) {
     float w = 0.0f;
-    std::size_t i = 0;
-    while (i < s.size()) {
+    std::size_t i = from;
+    while (i < to) {
         const Utf8Decoded d = decodeUtf8At(s, i);
         i += d.length;
         const GlyphMetrics& m = face.glyph(d.codepoint);
@@ -20,6 +20,10 @@ float measureWidth(const std::string& s, FontFace& face, float scale) {
             w += m.advance * scale;
     }
     return w;
+}
+
+float measureWidth(const std::string& s, FontFace& face, float scale) {
+    return measureWidth(s, 0, s.size(), face, scale);
 }
 
 std::vector<std::pair<std::size_t,std::size_t>> codepointRanges(const std::string& s) {
@@ -72,7 +76,7 @@ std::vector<TextLine> layoutTextLines(const std::string& text, FontFace& face, f
                 && lastBreakOpportunity > lineStart) {
                 lines.push_back({lineStart, lastBreakOpportunity, widthAtLastBreak, ""});
                 lineStart = lastBreakOpportunity + 1;
-                lineWidth -= widthAtLastBreak;
+                lineWidth = measureWidth(text, lineStart, charStart, face, scale);
             } else {
                 lines.push_back({lineStart, charStart, lineWidth, ""});
                 lineStart = charStart;
