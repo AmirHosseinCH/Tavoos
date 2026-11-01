@@ -18,6 +18,7 @@
 #include <tavoos/widget/controls/swipeviewwidget.h>
 #include <tavoos/widget/controls/spinboxwidget.h>
 #include <tavoos/widget/controls/switchwidget.h>
+#include <tavoos/widget/controls/textareawidget.h>
 #include <tavoos/widget/controls/textfieldwidget.h>
 #include <tavoos/widget/controls/tooltipwidget.h>
 #include <tavoos/widget/widgets.h>
@@ -74,6 +75,7 @@ public:
     static void ToolTip(std::function<void(ToolTipWidget&)> body)     { create<ToolTipWidget>(std::move(body)); }
     static void Shortcut(std::function<void(Tavoos::Shortcut&)> body) { create<Tavoos::Shortcut>(std::move(body)); }
     static void TextField(std::function<void(TextFieldWidget&)> body) { create<TextFieldWidget>(std::move(body)); }
+    static void TextArea(std::function<void(TextAreaWidget&)> body) { create<TextAreaWidget>(std::move(body)); }
     static void SpinBox(std::function<void(SpinBoxWidget&)> body)     { create<SpinBoxWidget>(std::move(body)); }
 
     template<typename T>

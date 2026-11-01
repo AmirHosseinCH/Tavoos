@@ -15,6 +15,7 @@
 #include <tavoos/widget/controls/style/spinboxstyle.h>
 #include <tavoos/widget/controls/style/swipeviewstyle.h>
 #include <tavoos/widget/controls/style/switchstyle.h>
+#include <tavoos/widget/controls/style/textareastyle.h>
 #include <tavoos/widget/controls/style/textfieldstyle.h>
 #include <tavoos/widget/controls/style/tooltipstyle.h>
 
@@ -29,6 +30,7 @@ public:
     State<ProgressBarStyle> progressBar{ProgressBarStyle{}};
     State<SliderStyle> slider{SliderStyle{}};
     State<TextFieldStyle> textField{TextFieldStyle{}};
+    State<TextAreaStyle> textArea{TextAreaStyle{}};
     State<PopupStyle> popup{PopupStyle{}};
     State<FlickAreaStyle> flickArea{FlickAreaStyle{}};
     State<ScrollAreaStyle> scrollArea{ScrollAreaStyle{}};
