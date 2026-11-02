@@ -63,6 +63,40 @@ private:
     EasingFn m_easing;
 };
 
+class WaitStep : public AnimationStep {
+public:
+    explicit WaitStep(float durationSeconds) : m_duration{std::max(durationSeconds, 0.0f)} {}
+
+    void begin() override { m_elapsed = 0.0f; }
+
+    std::optional<float> advance(float dt) override {
+        m_elapsed += dt;
+        if (m_elapsed < m_duration)
+            return std::nullopt;
+        return m_elapsed - m_duration;
+    }
+
+private:
+    float m_duration;
+    float m_elapsed{0.0f};
+};
+
+class ScriptStep : public AnimationStep {
+public:
+    explicit ScriptStep(std::function<void()> action) : m_action{std::move(action)} {}
+
+    void begin() override {}
+
+    std::optional<float> advance(float dt) override {
+        if (m_action)
+            m_action();
+        return dt;
+    }
+
+private:
+    std::function<void()> m_action;
+};
+
 }
 
 class SequentialAnimation;
@@ -80,6 +114,16 @@ public:
     decltype(auto) animateTo(this auto&& self, AnimatedState<T>& state, const std::type_identity_t<T>& to,
                              float durationSeconds, EasingFn easing = Easing::linear) {
         self.m_steps.push_back(std::make_unique<detail::AnimateStep<T>>(state, to, durationSeconds, std::move(easing)));
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) wait(this auto&& self, float durationSeconds) {
+        self.m_steps.push_back(std::make_unique<detail::WaitStep>(durationSeconds));
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) script(this auto&& self, std::function<void()> action) {
+        self.m_steps.push_back(std::make_unique<detail::ScriptStep>(std::move(action)));
         return std::forward<decltype(self)>(self);
     }
 
@@ -106,6 +150,7 @@ public:
 protected:
     std::uint64_t generation() const noexcept { return m_root->m_generation; }
     bool interrupted(std::uint64_t generation) const noexcept { return m_root->m_generation != generation; }
+    bool rootPaused() const noexcept { return m_root->m_paused; }
 
     std::vector<std::unique_ptr<detail::AnimationStep>> m_steps;
 

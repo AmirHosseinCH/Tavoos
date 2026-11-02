@@ -132,6 +132,8 @@ std::optional<float> SequentialAnimation::advance(float dt) {
             if (interrupted(current))
                 return std::nullopt;
         }
+        if (rootPaused())
+            return std::nullopt;
     }
     return dt;
 }
