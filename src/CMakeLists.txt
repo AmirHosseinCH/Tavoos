@@ -8,6 +8,7 @@ set(TAVOOS_SOURCES
     events/keysequence.cpp
     events/shortcut.cpp
     animation/animationmanager.cpp
+    animation/animationgroup.cpp
     animation/transitionrunner.cpp
     animation/transitions.cpp
     effects/graphicaleffect.cpp
@@ -201,6 +202,7 @@ target_sources(Tavoos
     include/tavoos/animation/easing.h
     include/tavoos/animation/animatedstate.h
     include/tavoos/animation/animationmanager.h
+    include/tavoos/animation/animationgroup.h
     include/tavoos/animation/animation.h
     include/tavoos/animation/transition.h
     include/tavoos/animation/transitions.h

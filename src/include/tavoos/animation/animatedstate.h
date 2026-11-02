@@ -11,6 +11,11 @@
 
 namespace Tavoos {
 
+namespace detail {
+template<Interpolatable T>
+class AnimateStep;
+}
+
 template<Interpolatable T>
 class AnimatedState : public State<T>, public AnimatableBase {
 public:
@@ -91,6 +96,8 @@ public:
     State<bool>& runningState() { return m_running; }
 
 private:
+    friend class detail::AnimateStep<T>;
+
     bool tick(float dt) override {
         m_elapsed += dt;
         if (m_elapsed >= m_duration) {
