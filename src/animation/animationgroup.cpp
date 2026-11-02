@@ -32,6 +32,11 @@ void AnimationGroup::start() {
 void AnimationGroup::stop() {
     if (m_root != this)
         return;
+    if (m_active && m_alwaysRunToEnd) {
+        m_stopping = true;
+        resume();
+        return;
+    }
     if (halt())
         notifyFinished(false);
 }
@@ -52,6 +57,27 @@ void AnimationGroup::resume() {
     m_running.setIfChanged(true);
 }
 
+void AnimationGroup::begin() {
+    m_round = 0;
+    beginRound();
+}
+
+std::optional<float> AnimationGroup::advance(float dt) {
+    const auto current = generation();
+    while (true) {
+        const auto leftover = advanceRound(dt);
+        if (interrupted(current) || !leftover)
+            return std::nullopt;
+        if (m_stopping || (m_loops != Infinite && m_round + 1 >= m_loops))
+            return leftover;
+        ++m_round;
+        beginRound();
+        if (interrupted(current) || rootPaused() || *leftover >= dt)
+            return std::nullopt;
+        dt = *leftover;
+    }
+}
+
 bool AnimationGroup::tick(float dt) {
     run(dt);
     return m_registered;
@@ -63,11 +89,14 @@ void AnimationGroup::run(float dt) {
     if (interrupted(current) || !leftover)
         return;
 
+    const bool completed = !m_stopping;
     m_active = false;
     m_paused = false;
+    m_stopping = false;
     setRegistered(false);
     m_running.setIfChanged(false);
-    notifyFinished(true);
+    if (!m_active)
+        notifyFinished(completed);
 }
 
 bool AnimationGroup::halt() {
@@ -76,6 +105,7 @@ bool AnimationGroup::halt() {
     ++m_generation;
     m_active = false;
     m_paused = false;
+    m_stopping = false;
     setRegistered(false);
     m_running.setIfChanged(false);
     return true;
@@ -114,13 +144,13 @@ ParallelAnimation& AnimationGroup::addParallel() {
     return result;
 }
 
-void SequentialAnimation::begin() {
+void SequentialAnimation::beginRound() {
     m_index = 0;
     if (!m_steps.empty())
         m_steps.front()->begin();
 }
 
-std::optional<float> SequentialAnimation::advance(float dt) {
+std::optional<float> SequentialAnimation::advanceRound(float dt) {
     const auto current = generation();
     while (m_index < m_steps.size()) {
         const auto leftover = m_steps[m_index]->advance(dt);
@@ -138,7 +168,7 @@ std::optional<float> SequentialAnimation::advance(float dt) {
     return dt;
 }
 
-void ParallelAnimation::begin() {
+void ParallelAnimation::beginRound() {
     const auto current = generation();
     m_finished.assign(m_steps.size(), false);
     for (auto& step : m_steps) {
@@ -148,7 +178,7 @@ void ParallelAnimation::begin() {
     }
 }
 
-std::optional<float> ParallelAnimation::advance(float dt) {
+std::optional<float> ParallelAnimation::advanceRound(float dt) {
     const auto current = generation();
     float leftover = dt;
     bool finished = true;

@@ -31,13 +31,14 @@ public:
 template<Interpolatable T>
 class AnimateStep : public AnimationStep {
 public:
-    AnimateStep(AnimatedState<T>& state, const T& to, float durationSeconds, EasingFn easing)
-        : m_state{state}, m_to{to}, m_duration{std::max(durationSeconds, 0.0f)}, m_easing{std::move(easing)} {}
+    AnimateStep(AnimatedState<T>& state, std::optional<T> from, const T& to, float durationSeconds, EasingFn easing)
+        : m_state{state}, m_start{std::move(from)}, m_to{to}, m_duration{std::max(durationSeconds, 0.0f)},
+          m_easing{std::move(easing)} {}
 
     void begin() override {
         if (m_state.halt())
             m_state.notifyFinished(false);
-        m_from = m_state.get();
+        m_from = m_start ? *m_start : m_state.get();
         m_elapsed = 0.0f;
     }
 
@@ -56,6 +57,7 @@ public:
 
 private:
     AnimatedState<T>& m_state;
+    std::optional<T> m_start;
     T m_from{};
     T m_to;
     float m_duration;
@@ -104,6 +106,8 @@ class ParallelAnimation;
 
 class TAVOOS_EXPORT AnimationGroup : public detail::AnimationStep, private AnimatableBase {
 public:
+    static constexpr int Infinite = -1;
+
     AnimationGroup() = default;
     ~AnimationGroup() override;
 
@@ -113,7 +117,17 @@ public:
     template<Interpolatable T>
     decltype(auto) animateTo(this auto&& self, AnimatedState<T>& state, const std::type_identity_t<T>& to,
                              float durationSeconds, EasingFn easing = Easing::linear) {
-        self.m_steps.push_back(std::make_unique<detail::AnimateStep<T>>(state, to, durationSeconds, std::move(easing)));
+        self.m_steps.push_back(
+            std::make_unique<detail::AnimateStep<T>>(state, std::nullopt, to, durationSeconds, std::move(easing)));
+        return std::forward<decltype(self)>(self);
+    }
+
+    template<Interpolatable T>
+    decltype(auto) animateFrom(this auto&& self, AnimatedState<T>& state, const std::type_identity_t<T>& from,
+                               const std::type_identity_t<T>& to, float durationSeconds,
+                               EasingFn easing = Easing::linear) {
+        self.m_steps.push_back(
+            std::make_unique<detail::AnimateStep<T>>(state, from, to, durationSeconds, std::move(easing)));
         return std::forward<decltype(self)>(self);
     }
 
@@ -137,6 +151,19 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) loops(this auto&& self, int count) {
+        self.m_loops = count == Infinite ? Infinite : std::max(count, 1);
+        return std::forward<decltype(self)>(self);
+    }
+
+    decltype(auto) alwaysRunToEnd(this auto&& self, bool enabled) {
+        self.m_alwaysRunToEnd = enabled;
+        return std::forward<decltype(self)>(self);
+    }
+
+    int loops() const noexcept { return m_loops; }
+    bool alwaysRunToEnd() const noexcept { return m_alwaysRunToEnd; }
+
     void start();
     void stop();
     void pause();
@@ -155,6 +182,10 @@ protected:
     std::vector<std::unique_ptr<detail::AnimationStep>> m_steps;
 
 private:
+    void begin() override;
+    std::optional<float> advance(float dt) override;
+    virtual void beginRound() = 0;
+    virtual std::optional<float> advanceRound(float dt) = 0;
     bool tick(float dt) override;
     void run(float dt);
     bool halt();
@@ -165,6 +196,10 @@ private:
 
     AnimationGroup* m_root{this};
     std::uint64_t m_generation{0};
+    int m_loops{1};
+    long long m_round{0};
+    bool m_alwaysRunToEnd{false};
+    bool m_stopping{false};
     bool m_active{false};
     bool m_paused{false};
     bool m_registered{false};
@@ -174,16 +209,16 @@ private:
 
 class TAVOOS_EXPORT SequentialAnimation : public AnimationGroup {
 private:
-    void begin() override;
-    std::optional<float> advance(float dt) override;
+    void beginRound() override;
+    std::optional<float> advanceRound(float dt) override;
 
     std::size_t m_index{0};
 };
 
 class TAVOOS_EXPORT ParallelAnimation : public AnimationGroup {
 private:
-    void begin() override;
-    std::optional<float> advance(float dt) override;
+    void beginRound() override;
+    std::optional<float> advanceRound(float dt) override;
 
     std::vector<bool> m_finished;
 };
