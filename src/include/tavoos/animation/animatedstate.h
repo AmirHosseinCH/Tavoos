@@ -106,12 +106,15 @@ private:
                 const bool completed = !m_stopping;
                 if (completed)
                     m_loop = m_loops - 1;
-                State<T>::set(valueAt(1.0f));
                 m_active = false;
                 m_stopping = false;
                 m_registered = false;
+                State<T>::set(valueAt(1.0f));
+                if (m_active)
+                    return m_registered;
                 m_running.setIfChanged(false);
-                notifyFinished(completed);
+                if (!m_active)
+                    notifyFinished(completed);
                 return m_registered;
             }
             m_loop += passed;
