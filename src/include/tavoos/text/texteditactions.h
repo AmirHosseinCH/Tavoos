@@ -14,18 +14,32 @@ enum class TextEditAction {
     DeleteForward,
     DeleteWordBackward,
     DeleteWordForward,
+    InsertNewline,
+    InsertTab,
     MoveLeft,
     MoveRight,
     MoveToStart,
     MoveToEnd,
     MoveWordLeft,
     MoveWordRight,
+    MoveToLineStart,
+    MoveToLineEnd,
+    MoveUp,
+    MoveDown,
+    MovePageUp,
+    MovePageDown,
     SelectLeft,
     SelectRight,
     SelectToStart,
     SelectToEnd,
     SelectWordLeft,
     SelectWordRight,
+    SelectToLineStart,
+    SelectToLineEnd,
+    SelectUp,
+    SelectDown,
+    SelectPageUp,
+    SelectPageDown,
     SelectAll,
     Copy,
     Cut,
@@ -38,5 +52,6 @@ TAVOOS_EXPORT std::optional<TextEditAction> textEditActionFor(Key key, KeyModifi
 TAVOOS_EXPORT void applyTextEditAction(TextEditModel& model, TextEditAction action);
 TAVOOS_EXPORT bool isTextInputKey(Key key, KeyModifier modifiers);
 TAVOOS_EXPORT bool changesText(TextEditAction action);
+TAVOOS_EXPORT bool needsLayout(TextEditAction action);
 
 }

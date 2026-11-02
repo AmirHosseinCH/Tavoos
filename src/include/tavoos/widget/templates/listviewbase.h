@@ -94,6 +94,7 @@ public:
     Widget* rowAt(int index) const;
     void reload();
     void scrollToIndex(int index);
+    using Widget::ensureVisible;
     void ensureVisible(int index);
 
 protected:

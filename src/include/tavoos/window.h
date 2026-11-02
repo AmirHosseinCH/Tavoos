@@ -97,6 +97,7 @@ private:
     int m_framebufferWidth{0};
     int m_framebufferHeight{0};
     bool m_renderDirty{true};
+    bool m_layoutRequested{false};
     bool m_windowActive{true};
     std::vector<std::unique_ptr<Object>> m_pendingDestruction;
 

@@ -407,41 +407,11 @@ void Renderer::renderText(TextWidget& text) {
     const float scale = text.fontSize() / FontFace::ReferencePixelSize;
     const float lineHeight = face->lineHeight() * scale;
 
-    const float wrapWidth = (text.wrapMode() != WrapMode::NoWrap)
-                          ? text.resolvedWidth() - text.paddingLeft() - text.paddingRight()
-                          : 0.0f;
-    const float elideWidth = text.resolvedWidth() - text.paddingLeft() - text.paddingRight();
+    const auto& lines = text.renderLines(*face, scale);
+    const float blockStartY = text.blockStartY(lines.size(), lineHeight);
+    auto lineStartX = [&](std::size_t idx) { return text.lineStartX(lines[idx]); };
 
-    const auto& lines = text.layoutLines(text.m_renderLineCache, *face, scale,
-                                          wrapWidth, elideWidth, text.resolvedHeight());
-
-    float blockWidth = 0.0f;
-    for (auto& line : lines)
-        blockWidth = std::max(blockWidth, line.width);
-    const float blockHeight = lineHeight * static_cast<float>(lines.size());
-
-    const float boxWidth  = text.resolvedWidth()  - text.paddingLeft() - text.paddingRight();
-    const float boxHeight = text.resolvedHeight() - text.paddingTop()  - text.paddingBottom();
-
-    const Alignment align = text.textAlignment();
-
-    auto lineStartX = [&](std::size_t idx) -> float {
-        float w = lines[idx].width;
-        if (hasFlag(align, Alignment::Right))            return text.paddingLeft() + boxWidth - w;
-        if (hasFlag(align, Alignment::CenterHorizontal))  return text.paddingLeft() + (boxWidth - w) * 0.5f;
-        return text.paddingLeft();
-    };
-
-    float blockStartY = text.paddingTop();
-    if (hasFlag(align, Alignment::Bottom))
-        blockStartY = text.paddingTop() + boxHeight - blockHeight;
-    else if (hasFlag(align, Alignment::CenterVertical))
-        blockStartY = text.paddingTop() + (boxHeight - blockHeight) * 0.5f;
-
-    const auto advance = [&](char32_t codepoint) {
-        const GlyphMetrics& m = face->glyph(codepoint);
-        return m.valid ? m.advance * scale : 0.0f;
-    };
+    const GlyphAdvance advance{*face, scale, text.tabStopDistance()};
     const std::vector<VisibleSpan> spans = visibleSpans(content, lines, blockStartY, lineHeight,
                                                         visibleBounds(projection * text.worldMatrix()), lineStartX, advance);
     std::size_t spanBytes = 0;
@@ -458,11 +428,13 @@ void Renderer::renderText(TextWidget& text) {
     const std::size_t selectionEnd = std::max(text.selectionStart(), text.selectionEnd());
 
     if (selectionStart < selectionEnd) {
-        auto advanceBetween = [&](std::size_t from, std::size_t to) {
+        auto advanceBetween = [&](std::size_t from, std::size_t to, float& lineX) {
             float width = 0.0f;
             for (std::size_t i = from; i < to; ) {
                 const Utf8Decoded d = decodeUtf8At(content, i);
-                width += advance(d.codepoint);
+                const float w = advance(d.codepoint, lineX);
+                width += w;
+                lineX += w;
                 i += d.length;
             }
             return width;
@@ -480,8 +452,9 @@ void Renderer::renderText(TextWidget& text) {
             const std::size_t to = std::min(selectionEnd, span.end);
             if (!lines[span.line].overrideText.empty() || from >= to)
                 continue;
-            const float x0 = span.x + advanceBetween(span.start, from);
-            const float width = advanceBetween(from, to);
+            float lineX = span.lineX;
+            const float x0 = span.x + advanceBetween(span.start, from, lineX);
+            const float width = advanceBetween(from, to, lineX);
             const float top = blockStartY + lineHeight * static_cast<float>(span.line);
             quadShader.setMat4("world", text.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{x0, top, 0.0f}));
             quadShader.setVec2("uHalfSize", glm::vec2{width, lineHeight} * 0.5f);
@@ -536,6 +509,7 @@ void Renderer::renderText(TextWidget& text) {
     bool drawingSelected = false;
     for (const VisibleSpan& span : spans) {
         float penX = span.x;
+        float lineX = span.lineX;
         const float baselineY = blockStartY + face->ascender() * scale + lineHeight * static_cast<float>(span.line);
 
         const bool original = lines[span.line].overrideText.empty();
@@ -546,6 +520,12 @@ void Renderer::renderText(TextWidget& text) {
             const bool selected = original && i >= selectionStart && i < selectionEnd;
             Utf8Decoded d = decodeUtf8At(source, i);
             i += d.length;
+            const float width = advance(d.codepoint, lineX);
+            lineX += width;
+            if (d.codepoint == '\t') {
+                penX += width;
+                continue;
+            }
             const GlyphMetrics& m = face->glyph(d.codepoint);
             if (!m.valid) continue;
             if (selected != drawingSelected) {
@@ -594,14 +574,26 @@ void Renderer::renderWidgetContents(Widget& widget) {
         return;
     }
 
-    const int texW = static_cast<int>(std::ceil(std::max(widget.displayedWidth(), 0.0f)));
-    const int texH = static_cast<int>(std::ceil(std::max(widget.displayedHeight(), 0.0f)));
+    constexpr float kSnap = 1e-3f;
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = std::max(widget.displayedWidth(), 0.0f);
+    float bottom = std::max(widget.displayedHeight(), 0.0f);
+    if (const auto visible = visibleBounds(projection * widget.worldMatrix())) {
+        left = std::max(left, std::floor(visible->left + kSnap));
+        top = std::max(top, std::floor(visible->top + kSnap));
+        right = std::min(right, std::ceil(visible->right - kSnap));
+        bottom = std::min(bottom, std::ceil(visible->bottom - kSnap));
+    }
+    const int texW = static_cast<int>(std::ceil(right - left));
+    const int texH = static_cast<int>(std::ceil(bottom - top));
     if (texW <= 0 || texH <= 0)
         return;
 
-    ensureClipMask(widget, texW, texH);
-    renderClipLayer(widget, texW, texH);
-    compositeClipLayer(widget, texW, texH);
+    const glm::mat4 layerWorld = widget.worldMatrix() * glm::translate(glm::mat4{1.0f}, glm::vec3{left, top, 0.0f});
+    ensureClipMask(widget, layerWorld, texW, texH);
+    renderClipLayer(widget, layerWorld, texW, texH);
+    compositeClipLayer(widget, layerWorld, texW, texH);
 }
 
 static void setClipTextureParams() {
@@ -661,7 +653,7 @@ static void endClipTarget(const SavedRenderTarget& saved, GLuint clipFBO, GLuint
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &projectionRef);
 }
 
-void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
+void Renderer::ensureClipMask(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     if (widget.m_clipMaskTexture == 0)
         glGenTextures(1, &widget.m_clipMaskTexture);
 
@@ -674,7 +666,7 @@ void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
         widget.m_clipMaskHeight = texH;
     }
 
-    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipMaskTexture, texW, texH, widget.worldMatrix());
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipMaskTexture, texW, texH, layerWorld);
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
 
     if (widget.isLayouter())
@@ -698,7 +690,7 @@ void Renderer::ensureClipMask(Widget& widget, int texW, int texH) {
     widget.render(*this);
 }
 
-void Renderer::renderClipLayer(Widget& widget, int texW, int texH) {
+void Renderer::renderClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     if (widget.m_clipColorTexture == 0)
         glGenTextures(1, &widget.m_clipColorTexture);
 
@@ -711,7 +703,7 @@ void Renderer::renderClipLayer(Widget& widget, int texW, int texH) {
         widget.m_clipColorHeight = texH;
     }
 
-    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipColorTexture, texW, texH, widget.worldMatrix());
+    const SavedRenderTarget saved = beginClipTarget(clipFBO, cameraUBO, projection, widget.m_clipColorTexture, texW, texH, layerWorld);
     ScopeExit restoreTarget{[&] { endClipTarget(saved, clipFBO, cameraUBO, projection); }};
 
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -739,10 +731,10 @@ static bool isAxisAlignedUnitScale(const glm::mat4& m) {
            std::abs(m[0][3]) < eps && std::abs(m[1][3]) < eps && std::abs(m[3][3] - 1.0f) < eps;
 }
 
-void Renderer::compositeClipLayer(Widget& widget, int texW, int texH) {
+void Renderer::compositeClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH) {
     clipCompositeShader.use();
 
-    glm::mat4 world = widget.worldMatrix();
+    glm::mat4 world = layerWorld;
     if (isAxisAlignedUnitScale(world)) {
         world[3].x = std::round(world[3].x);
         world[3].y = std::round(world[3].y);

@@ -97,6 +97,7 @@ public:
     void scrollToRight();
 
 protected:
+    Rect revealRect(const Rect& rect) override;
     virtual Size computeContentSize();
     virtual bool isContentChild(const Widget& child) const;
     virtual void onOffsetsSynced(bool offsetsChanged) { (void)offsetsChanged; }
@@ -126,6 +127,7 @@ private:
     Property<bool> m_keyNavigation{true};
     State<float> m_contentXState{0.0f};
     State<float> m_contentYState{0.0f};
+    mutable Point m_laidOutOffset{};
     bool m_syncPending{false};
 
     std::function<void(float, float)> m_onScroll;

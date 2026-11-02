@@ -16,6 +16,15 @@ struct Point {
     bool operator==(const Point&) const = default;
 };
 
+struct Rect {
+    float x{0.0f};
+    float y{0.0f};
+    float width{0.0f};
+    float height{0.0f};
+
+    bool operator==(const Rect&) const = default;
+};
+
 struct CornerRadii {
     float topLeft{0.0f};
     float topRight{0.0f};

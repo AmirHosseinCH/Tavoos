@@ -17,6 +17,12 @@
 
 namespace Tavoos {
 
+namespace {
+
+constexpr int kMaxLayoutPasses = 4;
+
+}
+
 Window::Window() {
     if (Application::instance() == nullptr)
         throw std::runtime_error{"Tavoos::Application must be constructed before Tavoos::Window"};
@@ -270,15 +276,20 @@ Widget* Window::hitTestChildren(Window* self, double x, double y, const Widget* 
 }
 
 void Window::layoutTree() {
-    for (const auto& child : children()) {
-        if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout();
-    }
-    std::vector<OverlayBase*> overlays = m_retiredOverlays;
-    overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
-    for (OverlayBase* const overlay : overlays) {
-        overlay->place();
-        overlay->layout(true);
+    for (int pass = 0; pass < kMaxLayoutPasses; ++pass) {
+        m_layoutRequested = false;
+        for (const auto& child : children()) {
+            if (auto* widget = dynamic_cast<Widget*>(child.get()))
+                widget->layout();
+        }
+        std::vector<OverlayBase*> overlays = m_retiredOverlays;
+        overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
+        for (OverlayBase* const overlay : overlays) {
+            overlay->place();
+            overlay->layout(true);
+        }
+        if (!m_layoutRequested)
+            return;
     }
 }
 
@@ -767,12 +778,12 @@ void Window::keyCallback(GLFWwindow* window, int key, int /*scancode*/, int acti
         }
     }
 
-    if (key == GLFW_KEY_TAB && action == GLFW_PRESS) {
+    const KeyModifier km = toKeyModifier(mods);
+
+    if (key == GLFW_KEY_TAB && action == GLFW_PRESS && !self->claimsShortcut(KeyEvent{EventType::KeyPress, key, km})) {
         self->focusNext(mods & GLFW_MOD_SHIFT);
         return;
     }
-
-    const KeyModifier km = toKeyModifier(mods);
 
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         KeyEvent event{EventType::KeyPress, key, km};

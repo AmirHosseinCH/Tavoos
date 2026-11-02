@@ -54,8 +54,11 @@ set(TAVOOS_SOURCES
     widget/controls/comboboxwidget.cpp
     widget/controls/tooltipwidget.cpp
     widget/controls/swipeviewwidget.cpp
+    widget/templates/texteditbase.cpp
     widget/templates/textfieldbase.cpp
+    widget/templates/textareabase.cpp
     widget/controls/textfieldwidget.cpp
+    widget/controls/textareawidget.cpp
     widget/templates/spinboxbase.cpp
     widget/templates/stackviewbase.cpp
     widget/templates/listviewbase.cpp
@@ -139,8 +142,11 @@ target_sources(Tavoos
     include/tavoos/widget/controls/comboboxwidget.h
     include/tavoos/widget/controls/tooltipwidget.h
     include/tavoos/widget/controls/swipeviewwidget.h
+    include/tavoos/widget/templates/texteditbase.h
     include/tavoos/widget/templates/textfieldbase.h
+    include/tavoos/widget/templates/textareabase.h
     include/tavoos/widget/controls/textfieldwidget.h
+    include/tavoos/widget/controls/textareawidget.h
     include/tavoos/widget/templates/spinboxbase.h
     include/tavoos/widget/templates/stackviewbase.h
     include/tavoos/widget/templates/listviewbase.h
@@ -161,6 +167,7 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/listviewstyle.h
     include/tavoos/widget/controls/style/swipeviewstyle.h
     include/tavoos/widget/controls/style/textfieldstyle.h
+    include/tavoos/widget/controls/style/textareastyle.h
     include/tavoos/widget/controls/style/spinboxstyle.h
     include/tavoos/widget/controls/style/comboboxstyle.h
     include/tavoos/widget/controls/style/tooltipstyle.h

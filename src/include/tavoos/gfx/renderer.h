@@ -58,11 +58,11 @@ private:
     void drawQuad(float w, float h);
     void drawQuad(float x0, float y0, float x1, float y1);
 
-    void ensureClipMask(Widget& widget, int texW, int texH);
+    void ensureClipMask(Widget& widget, const glm::mat4& layerWorld, int texW, int texH);
 
-    void renderClipLayer(Widget& widget, int texW, int texH);
+    void renderClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH);
 
-    void compositeClipLayer(Widget& widget, int texW, int texH);
+    void compositeClipLayer(Widget& widget, const glm::mat4& layerWorld, int texW, int texH);
 
     void renderAlphaShadow(Widget& widget, const ShadowBase& shadow, bool inner);
     void renderWidgetContents(Widget& widget);

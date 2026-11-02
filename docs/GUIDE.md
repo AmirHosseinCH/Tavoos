@@ -30,6 +30,7 @@ quick-start example in [README.md](../README.md).
    - [`ProgressBarWidget`](#progressbarwidget)
    - [`SliderWidget`](#sliderwidget)
    - [`TextFieldWidget`](#textfieldwidget)
+   - [`TextAreaWidget`](#textareawidget)
    - [`SpinBoxWidget`](#spinboxwidget)
    - [`PopupWidget`](#popupwidget)
    - [`ToolTipWidget`](#tooltipwidget)
@@ -167,6 +168,7 @@ Plus, on every widget:
 - **`focus()`** - programmatically focuses this widget.
 - **Effects** - `dropShadow()`, `innerShadow()`, `addDropShadow()`, `addInnerShadow()`, `removeEffect()` and `clearEffects()` manage the widget's graphical effects - see [Graphical effects](#graphical-effects). Controls and layouts don't take shadows; put them on a slot or a wrapping rectangle instead.
 - **Coordinate mapping** - `mapToParent`/`mapFromParent` and `mapToWindow`/`mapFromWindow` (all `Point mapX(const Point&) const`) convert a point between this widget's local space and its parent's or the window's - useful when building a custom composite that needs to translate a coordinate across that boundary itself.
+- **`ensureVisible(rect)`** - asks every flick or scroll area around this widget to scroll just enough to show `rect`, given in this widget's own coordinates, the innermost area first. A focused text area does this for its caret.
 
 ### Dynamic children
 
@@ -260,15 +262,17 @@ control's `background` and `content` slots.
 | `fontSize()` | `float` |
 | `color()` | `Paint` |
 | `textAlignment()` | `Alignment` - alignment of the text *within* the widget's own resolved bounds. |
-| `wrapMode()` | `WrapMode` - `NoWrap`/`WordWrap`/`WrapAnywhere`. |
+| `wrapMode()` | `WrapMode` - `NoWrap`/`WordWrap`/`WrapAnywhere`. With `WordWrap`, a space or tab that doesn't fit at the end of a line ends that line. |
 | `elideMode()` | `ElideMode` - `None`/`Left`/`Right`/`Middle`, applied when a line still doesn't fit after wrapping. |
 | `maxLines()` | `int` - `0` means unlimited. |
+| `tabStopDistance()` | `float` - a tab advances to the next multiple of this distance, counted from the start of its line. `80` by default. |
 | `selection(start, end)` | `std::size_t`, `std::size_t` - a range of **bytes** drawn as selected: a `selectionColor()` highlight behind each laid-out line it covers, and the characters in `selectedTextColor()`. An empty range, the default, draws nothing; elided lines aren't highlighted. |
 | `selectionColor()`, `selectedTextColor()` | `Paint` |
 
-For building an editor on top of a text widget, `lineHeight()` gives the height of one line, and
-`xOffsetForByteIndex()` and `byteIndexForXOffset()` convert between a byte position in a single
-line of text and its x coordinate.
+For building an editor on top of a text widget, `lineHeight()` gives the height of one line,
+`positionToRectangle(position)` gives the caret rectangle for a byte position (its `x`, the top of
+its line and the line's height, in the widget's own coordinates), and `positionAt(x, y)` gives the
+byte position nearest a point. Both use the lines exactly as they are drawn, wrapped and aligned.
 
 ### `ImageWidget`
 
@@ -547,8 +551,8 @@ count characters, not bytes.
 
 | Keys | Action |
 |---|---|
-| ←, →, Home, End | Move the caret; with a selection, ← and → go to its start or end. |
-| Shift + ←, →, Home, End | Extend the selection. |
+| ←, →, Home, End | Move the caret; with a selection, ← and → go to its start or end. Home and End, with or without Ctrl, go to the start and end of the text. |
+| Shift + ←, →, Home, End | Extend the selection, also with Ctrl+Shift+Home and Ctrl+Shift+End. |
 | Ctrl+←, Ctrl+→ | Move to the start of the previous or next word. |
 | Ctrl+Shift+←, Ctrl+Shift+→ | Extend the selection by words. |
 | Backspace, Delete | Delete the character before or after the caret, or the selection. |
@@ -560,10 +564,10 @@ count characters, not bytes.
 
 A word is a run of letters, digits and `_`, a run of other punctuation, or a run of spaces; any
 character outside ASCII counts as a letter. While the field has focus it claims these keys and the
-keys that type text, so a window shortcut on the same key doesn't run. Enter, Escape, Tab, function
-keys and modifier combinations the field doesn't use still reach shortcuts, and a read-only field
-claims only what it still does: moving, selecting and copying. `onShortcutOverride` can give a key
-back by ignoring it.
+keys that type text, so a window shortcut on the same key doesn't run. Enter, Escape, Tab, ↑, ↓,
+Page Up, Page Down, function keys and modifier combinations the field doesn't use still reach
+shortcuts and the field's parents, and a read-only field claims only what it still does: moving,
+selecting and copying. `onShortcutOverride` can give a key back by ignoring it.
 
 With the mouse, a press places the caret and Shift+click extends the selection. Dragging selects,
 scrolling the text as the pointer passes an edge. A double-click selects a word, and dragging after
@@ -623,6 +627,57 @@ f.validator([](const std::string& text) {
 
 Text set from code isn't checked, and neither are undo and redo. If code sets text the validator
 rates `Invalid`, the user can still select all of it and type over it.
+
+### `TextAreaWidget`
+
+```cpp
+TB::ScrollArea([](Tavoos::ScrollAreaWidget& s) {
+    s.width(400).height(200);
+    TB::TextArea([](Tavoos::TextAreaWidget& a) {
+        a.fill(Tavoos::Fill::Width).wrapMode(Tavoos::WrapMode::WordWrap).placeholder("Notes...");
+    });
+});
+```
+
+Multi-line text entry. It edits like a [`TextFieldWidget`](#textfieldwidget), with the same
+selection, clipboard, undo, word editing, read-only mode, length limit and callbacks, and adds line
+breaks, tabs, moving by lines and wrapping. It has no echo modes, validator or `onSubmit`.
+
+| Property | Type | Notes |
+|---|---|---|
+| `text()`, `textState()`, `placeholder()`, `font()` | | As on a text field. |
+| The colors, `radius()`, `borderWidth()`, `transition()` | | As on a text field. |
+| `innerPadding()`, `innerPaddingLeft/Top/Right/Bottom()` | `float` | 10 at the sides and 8 above and below by default. |
+| `wrapMode()` | `WrapMode` | `NoWrap` (the default), `WordWrap` or `WrapAnywhere`. Wrapping needs a width: set one, or let the layout give one with `fill()`. |
+| `tabStopDistance()` | `float` | The distance between tab stops, `80` by default. |
+| `readOnly()`, `maximumLength()`, `selectByMouse()`, `cursorPosition()` | | As on a text field. |
+| `canUndo()`, `canRedo()`, `canUndoState()`, `canRedoState()` | `bool` / `State<bool>&` | As on a text field. |
+| `onTextEdited(fn)`, `onEditingFinished(fn)` | `std::function<void(const std::string&)>` | As on a text field; editing finishes when the area loses focus. |
+
+The area grows to fit its text and placeholder. Its height follows the lines, and its width is
+the widest line, or at least 200 pixels. An explicit `width()` or `height()` fixes that side, and
+text that doesn't fit is clipped. For a long text, put the area in a scroll area as above: while
+it has focus, it keeps the caret in view by scrolling every scroll area around it (see
+[`ensureVisible`](#flickareawidget)). To change the defaults for every text area, set
+`Theme::textArea` with a `TextAreaStyle`.
+
+#### Editing keys
+
+A text area has all of a text field's keys, plus:
+
+| Keys | Action |
+|---|---|
+| Enter, Shift+Enter, keypad Enter | Insert a line break. |
+| Tab | Insert a tab. Shift+Tab and Ctrl+Tab still move focus. |
+| ↑, ↓ | Move to the line above or below, keeping the column across shorter lines. |
+| Page Up, Page Down | Move by the height of the part of the text that is visible. |
+| Home, End | Go to the start or end of the line as drawn; a wrapped paragraph has several. |
+| Ctrl+Home, Ctrl+End | Go to the start or end of the text. |
+| Shift + any of these moves | Extend the selection. |
+
+↑ on the first line goes to the start of the text, and ↓ on the last line to the end. A
+triple-click selects the paragraph under the mouse: the text between two line breaks. A read-only
+area doesn't claim Enter or Tab, so Tab moves focus as usual.
 
 ### `SpinBoxWidget`
 
@@ -857,6 +912,10 @@ TB::FlickArea([](Tavoos::FlickAreaWidget& strip) {
 Dragging inside an area does not click the item the drag started on, and a control inside that
 handles its own drag, such as a slider, keeps it. When an inner area reaches its end, further
 wheel input scrolls the area around it.
+
+A widget inside an area can ask to be shown with `ensureVisible(rect)`. The area scrolls just
+enough to bring the rectangle into view, keeping its top-left corner when it is larger than the
+view, and then each area further out does the same.
 
 ### `ScrollAreaWidget`
 
@@ -1383,6 +1442,7 @@ what you give it.
 | `StackViewBase` | a stack of items, push/pop/replace, transitions, focus handover, `depth`/`currentItem`/`indexOf` | `background`; items are created with `push<T>`/`initialItem<T>` |
 | `SwipeViewBase` | pages as children laid out along an orientation, `position`, drag and flick snapping, `currentIndex`/`count`, key navigation, per-page focus | `background` (also the clip shape); pages are declared inside it |
 | `TextFieldBase` | all text editing, caret, scrolling, text properties | `background` only |
+| `TextAreaBase` | multi-line text editing, wrap mode, tab stops, growing to fit the text, keeping the caret visible in scroll areas | `background` only |
 
 **A progress bar** - bind the fill to the position and layout does the sizing:
 
@@ -2289,7 +2349,7 @@ Set `.focusable(true)` on any widget to make it focusable - via Tab/Shift+Tab (c
 forward/backward through all focusable, visible widgets in the tree, depth-first order,
 wrapping at the ends) or by clicking it, or any of its descendants (the nearest focusable
 ancestor of whatever was actually clicked receives focus). Buttons, checkboxes, radios,
-switches, sliders, and text fields (see [Controls](#controls)) are `focusable(true)` by default. The currently-focused widget
+switches, sliders, text fields and text areas (see [Controls](#controls)) are `focusable(true)` by default. The currently-focused widget
 receives:
 
 - `onKeyPress` / `onKeyRelease` - `KeyEvent::keyCode()` compares against the `Key` enum (`Tavoos::Key::Enter`, `Tavoos::Key::A`, etc., matching GLFW key codes) and `.modifiers()` (`KeyModifier::Shift/Control/Alt/Super`, combine with `|`).
@@ -2300,6 +2360,11 @@ receives:
   border-color `AnimatedState`).
 
 Call `.focus()` on a widget to focus it programmatically instead of waiting for Tab.
+
+The focused widget, or one of its parents, can keep Tab for itself by accepting it in
+`onShortcutOverride`, as a text area does to insert a tab. Tab then arrives as an ordinary key
+press instead of moving focus. Shift+Tab and Ctrl+Tab are separate key combinations, so they still
+move focus unless they are claimed too.
 
 Popups manage focus for you: opening one moves focus to its first focusable child, and closing it
 gives focus back to whatever had it, unless you clicked somewhere else in the meantime. While a

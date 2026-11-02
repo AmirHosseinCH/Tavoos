@@ -518,6 +518,7 @@ public:
     Point mapFromParent(const Point& point) const;
     Point mapToWindow(const Point& point) const;
     Point mapFromWindow(const Point& point) const;
+    void ensureVisible(const Rect& rect);
 
     template<typename T>
     T* addChild(std::function<void(T&)> body = {}) {
@@ -622,6 +623,7 @@ protected:
     virtual Size computeIntrinsicSize();
     virtual void onResolvedSizeChanged() {}
     virtual void onBuilt() {}
+    virtual Rect revealRect(const Rect& rect) { return rect; }
 
     struct ContentArea { float x, y, width, height; };
     ContentArea resolveContentArea();

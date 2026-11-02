@@ -76,6 +76,13 @@ std::pair<std::size_t, std::size_t> TextEditModel::wordAt(std::size_t position) 
     return {start, end};
 }
 
+std::pair<std::size_t, std::size_t> TextEditModel::paragraphAt(std::size_t position) const {
+    position = std::min(position, m_text.size());
+    const std::size_t before = position == 0 ? std::string::npos : m_text.rfind('\n', position - 1);
+    const std::size_t after = m_text.find('\n', position);
+    return {before == std::string::npos ? 0 : before + 1, after == std::string::npos ? m_text.size() : after};
+}
+
 ValidatorState TextEditModel::validatorState() const {
     return m_validator ? m_validator(m_text) : ValidatorState::Acceptable;
 }
