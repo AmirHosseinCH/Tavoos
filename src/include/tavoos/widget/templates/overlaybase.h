@@ -99,6 +99,7 @@ public:
     bool isOverlay() const override { return true; }
 
 protected:
+    const Widget* scrimSlot() const noexcept { return m_scrim; }
     virtual void applyOpened(bool opened);
     bool hasHandlerFor(EventType type) override;
     Size computeIntrinsicSize() override;
