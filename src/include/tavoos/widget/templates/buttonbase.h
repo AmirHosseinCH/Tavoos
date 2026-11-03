@@ -74,6 +74,7 @@ protected:
     void triggerKeyPress(KeyEvent& event) override;
     void triggerKeyRelease(KeyEvent& event) override;
     void triggerFocusOut(Event& event) override;
+    void sendClickFromKeyboard(KeyModifier modifiers);
 
 private:
     template<typename W>
@@ -91,7 +92,6 @@ private:
 
     static void runInBuilderScope(Widget& slot, const std::function<void()>& call);
     void sendClick(float x, float y, KeyModifier modifiers, int clickCount);
-    void sendClickFromKeyboard(KeyModifier modifiers);
 
     State<bool> m_pressed{false};
     Property<bool> m_checkable{false};
