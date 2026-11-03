@@ -48,10 +48,12 @@ private:
     bool m_shouldQuit{false};
 
     GLFWwindow* m_shareContext{nullptr};
+    Window* m_vsyncWindow{nullptr};
 
     void initRenderer();
     void registerWindow(std::unique_ptr<Window>&);
     void unregisterWindow(Window*);
+    void syncVsync();
     GLFWwindow* shareContextHandle();
 };
 

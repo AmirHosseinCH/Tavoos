@@ -6,6 +6,7 @@
 #include <tavoos/text/fontmanager.h>
 #include <tavoos/window.h>
 
+#include <algorithm>
 #include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
@@ -13,6 +14,22 @@
 #include <spdlog/spdlog.h>
 
 namespace Tavoos {
+
+namespace {
+
+double fastestFrameInterval() {
+    constexpr int kFallbackRefreshRate = 60;
+    int fastest = 0;
+    int count = 0;
+    GLFWmonitor** const monitors = glfwGetMonitors(&count);
+    for (int i = 0; i < count; ++i) {
+        if (const GLFWvidmode* const mode = glfwGetVideoMode(monitors[i]))
+            fastest = std::max(fastest, mode->refreshRate);
+    }
+    return 1.0 / (fastest > 0 ? fastest : kFallbackRefreshRate);
+}
+
+}
 
 Application* Application::m_instance = nullptr;
 
@@ -64,14 +81,17 @@ int Application::run() {
         return 0;
     }
 
+    const double frameInterval = fastestFrameInterval();
     double lastTime = glfwGetTime();
 
     while (!m_shouldQuit) {
         const bool wasAnimating = AnimationManager::instance().hasActiveAnimations();
-        if (wasAnimating)
-            glfwPollEvents();
-        else
+        if (!wasAnimating)
             glfwWaitEvents();
+        else if (const double remaining = frameInterval - (glfwGetTime() - lastTime); remaining > 0.0)
+            glfwWaitEventsTimeout(remaining);
+        else
+            glfwPollEvents();
 
         const double now = glfwGetTime();
         const float dt = wasAnimating ? static_cast<float>(now - lastTime) : 0.0f;
@@ -127,6 +147,7 @@ GLFWwindow* Application::shareContextHandle() {
 
 void Application::registerWindow(std::unique_ptr<Window>& window) {
     m_windows.push_back(std::move(window));
+    syncVsync();
 }
 
 void Application::unregisterWindow(Window* window) {
@@ -136,6 +157,19 @@ void Application::unregisterWindow(Window* window) {
     std::erase_if(m_windows, [window](const std::unique_ptr<Window>& w) {
         return w.get() == window;
     });
+    syncVsync();
+}
+
+void Application::syncVsync() {
+    if (m_windows.empty()) {
+        m_vsyncWindow = nullptr;
+        return;
+    }
+    if (m_windows.front().get() == m_vsyncWindow)
+        return;
+    m_vsyncWindow = m_windows.front().get();
+    glfwMakeContextCurrent(m_vsyncWindow->handle());
+    glfwSwapInterval(1);
 }
 
 }
