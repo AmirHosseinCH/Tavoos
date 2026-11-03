@@ -194,6 +194,7 @@ void Window::setup() {
     m_windowActive = glfwGetWindowAttrib(m_window, GLFW_FOCUSED) == GLFW_TRUE;
 
     glfwMakeContextCurrent(m_window);
+    glfwSwapInterval(0);
 
     Application::instance()->initRenderer();
 

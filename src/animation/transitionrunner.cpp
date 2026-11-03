@@ -74,7 +74,7 @@ bool TransitionRunner::tick(float dt) {
 
     m_registered = false;
     complete();
-    return false;
+    return m_registered;
 }
 
 void TransitionRunner::complete() {

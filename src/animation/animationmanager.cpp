@@ -10,7 +10,8 @@ AnimationManager& AnimationManager::instance() {
 }
 
 void AnimationManager::registerAnimation(AnimatableBase* animation) {
-    m_active.push_back(animation);
+    if (std::find(m_active.begin(), m_active.end(), animation) == m_active.end())
+        m_active.push_back(animation);
 }
 
 void AnimationManager::unregisterAnimation(AnimatableBase* animation) {
@@ -19,15 +20,12 @@ void AnimationManager::unregisterAnimation(AnimatableBase* animation) {
 
 void AnimationManager::tick(float dt) {
     const auto activeSnapshot = m_active;
-    std::vector<AnimatableBase*> finished;
     for (AnimatableBase* animation : activeSnapshot) {
         if (std::find(m_active.begin(), m_active.end(), animation) == m_active.end())
             continue;
         if (!animation->tick(dt))
-            finished.push_back(animation);
+            unregisterAnimation(animation);
     }
-    for (AnimatableBase* animation : finished)
-        unregisterAnimation(animation);
 }
 
 }

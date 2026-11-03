@@ -34,6 +34,7 @@ document is where the "why" behind non-obvious code lives instead.
 7. [Animation system](#animation-system)
    - [`AnimatableBase` / `AnimationManager`](#animatablebase--animationmanager)
    - [`AnimatedState<T>`](#animatedstatet)
+   - [Animation groups](#animation-groups)
    - [`Widget::PairTween`](#widgetpairtween)
    - [Transitions](#transitions)
 8. [Event system](#event-system)
@@ -1820,23 +1821,29 @@ type.
 it once per frame:
 
 ```cpp
+void AnimationManager::registerAnimation(AnimatableBase* animation) {
+    if (std::find(m_active.begin(), m_active.end(), animation) == m_active.end())
+        m_active.push_back(animation);
+}
+
 void AnimationManager::tick(float dt) {
     const auto activeSnapshot = m_active;
-    std::vector<AnimatableBase*> finished;
     for (AnimatableBase* animation : activeSnapshot) {
         if (std::find(m_active.begin(), m_active.end(), animation) == m_active.end())
             continue;   // unregistered by an earlier callback in this same tick - skip it
         if (!animation->tick(dt))
-            finished.push_back(animation);
+            unregisterAnimation(animation);
     }
-    for (AnimatableBase* animation : finished)
-        unregisterAnimation(animation);
 }
 ```
 
-Same snapshot-plus-live-check reentrancy pattern as `State::notifyObservers()` - a completion
-callback (fired from inside `tick()`) can legally start or cancel another animation, mutating
-`m_active` mid-loop.
+Same snapshot-plus-live-check reentrancy pattern as `State::notifyObservers()`: a completion
+callback, fired from inside `tick()`, can start or cancel another animation and change `m_active`
+mid-loop. An animation that returns `false` is removed right away, not at the end of the frame, and
+registering twice is a no-op. Together those let an `onFinished` callback restart the animation that
+is finishing: it registers again (still listed, so nothing changes) and its `tick()` returns `true`,
+so it stays. An animation started by a callback is appended outside the snapshot and first ticks on
+the next frame.
 
 `registerAnimation`/`unregisterAnimation` are deliberately public - they're the intended
 extension point for a consumer's own custom `AnimatableBase` subclass (a consumer can
@@ -1850,41 +1857,63 @@ class existing as a public type.
 
 ### `AnimatedState<T>`
 
-`State<T>` + `AnimatableBase` together (`animatedstate.h`):
+`State<T>` + `AnimatableBase` together (`animatedstate.h`). Three flags describe where it is:
+`m_active` (an animation exists, running or paused), `m_paused` (off the manager but resumable) and
+`m_registered` (on the manager's list). `runningState()` is `m_active && !m_paused`. Every way of
+cutting an animation short (`set()`, `stop()`, a new `animateTo()`) goes through `halt()`, which
+clears the flags and unregisters, and then reports `onFinished(false)`.
 
 ```cpp
-template<Interpolatable T>
-class AnimatedState : public State<T>, public AnimatableBase {
-public:
-    void animateTo(const T& target, float durationSeconds, EasingFn easing = Easing::linear) {
-        if (durationSeconds <= 0.0f) {
-            if (m_animating) { m_animating = false; AnimationManager::instance().unregisterAnimation(this); }
-            this->set(target);
-            return;
+bool tick(float dt) override {
+    m_elapsed += dt;
+    if (m_elapsed >= m_duration) {
+        const auto passed = static_cast<long long>(m_elapsed / m_duration);
+        if (m_stopping || (m_loops != Infinite && m_loop + passed >= m_loops)) {
+            const bool completed = !m_stopping;
+            if (completed)
+                m_loop = m_loops - 1;
+            m_active = false;
+            m_stopping = false;
+            m_registered = false;
+            State<T>::set(valueAt(1.0f));
+            if (m_active)
+                return m_registered;
+            m_running.setIfChanged(false);
+            if (!m_active)
+                notifyFinished(completed);
+            return m_registered;
         }
-        m_from = this->get(); m_to = target;
-        m_duration = durationSeconds; m_elapsed = 0.0f; m_easing = std::move(easing);
-        if (!m_animating) { m_animating = true; AnimationManager::instance().registerAnimation(this); }
+        m_loop += passed;
+        m_elapsed -= static_cast<float>(passed) * m_duration;
     }
+    State<T>::set(valueAt(m_elapsed / m_duration));
+    return true;
+}
 
-private:
-    bool tick(float dt) override {
-        m_elapsed += dt;
-        const float t = std::min(m_elapsed / m_duration, 1.0f);
-        const float eased = m_easing ? m_easing(t) : t;
-        this->set(lerp(m_from, m_to, eased));   // State::set() -> notifyObservers() -> every bound Property
-        if (t >= 1.0f) { m_animating = false; return false; }
-        return true;
-    }
-    T m_from{}, m_to{};
-    float m_duration{0.0f}, m_elapsed{0.0f};
-    bool m_animating{false};
-    EasingFn m_easing{Easing::linear};
-};
+T valueAt(float progress) const {
+    const float p = m_alternate && m_loop % 2 == 1 ? 1.0f - progress : progress;
+    return lerp(m_from, m_to, m_easing ? m_easing(p) : p);
+}
 ```
 
+- Writes go through `State<T>::set`. `AnimatedState::set()` hides it and cancels the animation,
+  so only the animation itself writes without cancelling.
+- One loop is one pass from `m_from` to `m_to`. `passed` counts every loop that ended this frame,
+  and the time past the last one stays in `m_elapsed`, so loops keep pace with the clock however
+  long a frame is. On a backward loop of an `alternate` animation, `valueAt` reads the curve from
+  the end, so the motion back is the motion forward played in reverse.
+- The animation is marked finished before the final value is written. Code that reacts to that
+  value sees a finished animation, and if it starts a new one, `m_active` is true again: the rest
+  of the branch steps aside, the new animation keeps running, and the old one reports nothing more.
+  The same check before `notifyFinished` covers a restart from a `runningState()` handler.
+- `stop()` with `alwaysRunToEnd` only sets `m_stopping` (and resumes if paused). The next loop end
+  then takes the finishing branch with `completed` false, ending at that loop's end value.
+- `detail::AnimateStep<T>` (see [Animation groups](#animation-groups)) is a friend, so a group step
+  can cancel the state's own animation through `halt()` without writing the value.
+
 Requires `T` to satisfy `Interpolatable` (a `lerp(a, b, t) -> T` free function must exist -
-`float`, `Color`, and `Paint` all have one in `types.h`; `Paint`'s handles cross-fading
+`float`, `Point`, `Color` and `Paint` have one in `types.h`, `int` uses the `float` one, and the
+effect styles have their own; `Paint`'s handles cross-fading
 gradient stops and interpolating the angle/center/radius fields together, falling back to a
 hard switch at `t=1` if the two `Paint`s aren't structurally compatible - different `kind` or
 stop count).
@@ -1897,6 +1926,103 @@ because the upcast to `AnimatableBase*` needed for `registerAnimation`/`unregist
 happens from inside `TextFieldBase`'s own methods, and it keeps the animation machinery out
 of the class's public interface entirely - tighter encapsulation than `AnimatedState`'s public
 shape, useful whenever the animated thing isn't itself a value a consumer should bind to.
+
+### Animation groups
+
+`animationgroup.h` / `animationgroup.cpp`. A group is a tree of nodes, and every node, step or
+group, implements one interface:
+
+```cpp
+class AnimationStep {
+public:
+    virtual ~AnimationStep() = default;
+    virtual void begin() = 0;
+    virtual std::optional<float> advance(float dt) = 0;
+};
+```
+
+`begin()` starts the node, and it is where a step reads its start value. `advance(dt)` returns
+nothing while the node is still running, or the part of `dt` it did not use once it ends, so time
+left over by one node flows into the next within the same frame. The leaves are `AnimateStep<T>`,
+`WaitStep` and `ScriptStep`, which runs its function and returns all of `dt`. `AnimateStep<T>`
+writes through the plain `State<T>::set`, and in `begin()` it cancels the state's own animation
+through `halt()`, which `AnimatedState` gives it as a friend.
+
+`AnimationGroup` is the shared base of `SequentialAnimation` and `ParallelAnimation`:
+`public detail::AnimationStep` so it can be a node, `private AnimatableBase` so it can be ticked.
+Only the outermost group, the root, ever registers with the `AnimationManager`, and its `tick(dt)`
+hands each frame's time down the tree. `sequential()` and `parallel()` create a nested group owned
+by the parent through `unique_ptr`, point its `m_root` at the root, and pass it to the build
+lambda. Controls return at once when `m_root != this`, so they only act on the root.
+
+Each kind describes one round, through `beginRound()` and `advanceRound()`:
+
+```cpp
+std::optional<float> SequentialAnimation::advanceRound(float dt) {
+    const auto current = generation();
+    while (m_index < m_steps.size()) {
+        const auto leftover = m_steps[m_index]->advance(dt);
+        if (interrupted(current) || !leftover)
+            return std::nullopt;
+        dt = *leftover;
+        if (++m_index < m_steps.size()) {
+            m_steps[m_index]->begin();
+            if (interrupted(current))
+                return std::nullopt;
+        }
+        if (rootPaused())
+            return std::nullopt;
+    }
+    return dt;
+}
+```
+
+A sequence begins only its first step, and each later step begins when the one before it ends.
+A parallel group begins every child together, gives each unfinished child the same `dt`, and ends
+when the last one does, with the smallest leftover of that frame. `AnimationGroup` wraps loops
+around the rounds:
+
+```cpp
+std::optional<float> AnimationGroup::advance(float dt) {
+    const auto current = generation();
+    while (true) {
+        const auto leftover = advanceRound(dt);
+        if (interrupted(current) || !leftover)
+            return std::nullopt;
+        if (m_stopping || (m_loops != Infinite && m_round + 1 >= m_loops))
+            return leftover;
+        ++m_round;
+        beginRound();
+        if (interrupted(current) || rootPaused() || *leftover >= dt)
+            return std::nullopt;
+        dt = *leftover;
+    }
+}
+```
+
+Every round begins the steps again, so they read their start values again, and a nested group's
+`begin()` resets its own round count each time its parent begins it. A round that gives back all of
+`dt` used no time, as a group of only scripts does. `*leftover >= dt` makes it wait for the next
+frame instead of looping forever inside this one. `alwaysRunToEnd` works through `m_stopping`,
+which `stop()` sets on the root and which ends the group at the end of the current round.
+
+**The run counter.** User code runs in the middle of a frame: scripts, `onChange` of a written
+state, `onFinished(false)` of a cancelled state, `runningState()` handlers. That code can stop or
+restart the group while the loops above are still on the call stack. The root keeps
+`m_generation`, which `start()` and `halt()` increase. Every node reads it on entry and checks it
+after each call into a child; once it changed, the run that node belonged to is over, and the node
+returns without touching its own state. A restart has already rebuilt the tree inside `start()`,
+so the layers below it only step aside. `pause()` does not end the run and does not change the
+counter; a sequence checks `rootPaused()` instead, so the next step has begun but gets no time,
+and `resume()` continues from that point.
+
+`start()` cuts a running run short with `onFinished(false)`, increases the counter, registers,
+`begin()`s the tree and runs one frame of length 0. That is why a leading script runs inside
+`start()`, why `animateFrom` shows its start value at once, and why an empty group finishes there.
+`run(dt)` advances the tree and, once it returns a value, switches the group off, unregisters, sets
+`runningState()` false and calls `onFinished(!m_stopping)`, unless a handler has started it again.
+`tick()` returns `m_registered`, so a group restarted from its own `onFinished` stays on the
+manager.
 
 ### `Widget::PairTween`
 
@@ -3903,14 +4029,18 @@ Application::Application() {
 }
 
 int Application::run() {
+    const double frameInterval = fastestFrameInterval();   // 1 / fastest monitor's refresh rate, 60 Hz fallback
     double lastTime = glfwGetTime();
     while (!m_shouldQuit) {
-        if (AnimationManager::instance().hasActiveAnimations())
-            glfwPollEvents();    // non-blocking: keep animating even with no input
-        else
+        const bool wasAnimating = AnimationManager::instance().hasActiveAnimations();
+        if (!wasAnimating)
             glfwWaitEvents();    // blocking: idle CPU when nothing's happening
+        else if (const double remaining = frameInterval - (glfwGetTime() - lastTime); remaining > 0.0)
+            glfwWaitEventsTimeout(remaining);   // frame cap: sleep out the rest of the frame, wake on input
+        else
+            glfwPollEvents();
 
-        const float dt = /* time since lastTime */;
+        const float dt = /* time since lastTime, 0 when nothing was animating */;
         AnimationManager::instance().tick(dt);
 
         for (const auto& window : m_windows)
@@ -3930,15 +4060,31 @@ forward-declared there) - PIMPL, but for compile-firewall reasons rather than AB
 body, which isn't covered by `Application`'s friendship with `Renderer` (friendship isn't
 transitive into library code).
 
-`glfwPollEvents()` vs `glfwWaitEvents()` is the idle-CPU story: with no active animations,
-the loop blocks entirely until an OS input event arrives, so an idle Tavoos app uses ~0% CPU;
-as soon as anything is animating, it switches to non-blocking polling so the animation can
-keep advancing every iteration.
+The event call is the CPU story. With no active animations, the loop blocks in `glfwWaitEvents()`
+until an OS input event arrives, so an idle Tavoos app uses ~0% CPU. While anything animates, the
+loop has to run every frame, but no faster: the first window swaps with vsync, and the frame cap
+waits out whatever is left of one frame of the fastest display. With working vsync the swap has
+already waited, so the cap waits about nothing. Without vsync, or when an animation runs but no
+window is dirty and so nothing swaps, the cap holds the loop at the display rate instead of
+spinning a core. `glfwWaitEventsTimeout` returns as soon as input arrives, so the cap never delays
+input. The interval comes from the fastest monitor, so a window on a monitor faster than the
+primary is never held below its vsync rate, and it is read once per `run()`, because on X11
+`glfwGetVideoMode` asks the X server.
 
 Multiple `Window`s share one GL context via `Application::m_shareContext` - a hidden
 1x1 window created lazily (`shareContextHandle()`) purely to be the shared-context anchor
 every real `Window` is created against, so textures/shaders/buffers created for one window
 are usable from another without duplication.
+
+The swap interval belongs to a context, and every window has its own. `Window::setup()` sets 0
+on each new context, and `Application::syncVsync()`, run after every window is registered or
+unregistered, sets 1 on the first window's. With vsync on every window, each swap would wait for
+its own vertical blank, and N animating windows would each get refresh/N. With one, the first
+window's swap paces the whole loop, and the others are drawn in the same pass right after it;
+under a compositor they don't tear either, without one they may. When the first window closes,
+the next one gets interval 1. A context only ever goes from 0 to 1, because some swap-control
+extensions can't return to 0. `m_vsyncWindow` is cleared when the last window closes, so a new
+window that reuses the same address still gets vsync.
 
 ## Adding a new widget type
 

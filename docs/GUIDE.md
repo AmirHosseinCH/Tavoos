@@ -53,6 +53,8 @@ quick-start example in [README.md](../README.md).
 11. [Dragging](#dragging)
    - [Drag and drop](#drag-and-drop)
 12. [Animation](#animation)
+   - [Sequential and parallel animations](#sequential-and-parallel-animations)
+   - [More ways to animate](#more-ways-to-animate)
 13. [Resource embedding](#resource-embedding)
 14. [Keyboard & focus](#keyboard--focus)
    - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -2269,23 +2271,119 @@ go to the area under the last pointer position the window saw.
 
 ## Animation
 
-**`AnimatedState<T>`** - a `State<T>` that can ease toward a new value over time instead of
-jumping instantly. Works for any `T` with a `lerp(a, b, t)` free function - built in for
-`float`, `Color`, and `Paint`.
+**`AnimatedState<T>`** is a `State<T>` that moves toward a new value over time instead of jumping.
+Bind it like any state, and every frame of the animation reaches the bound properties. It works for
+any `T` with a `lerp(a, b, t)` free function: `float`, `int`, `Point`, `Color`, `Paint`, and the
+effect styles (`ShadowStyle`, `BlurStyle`, `GlassStyle`).
 
 ```cpp
 Tavoos::AnimatedState<float> boxScale{1.0f};
 
 TB::Rectangle([](Tavoos::RectangleWidget& r) {
     r.scale(boxScale).onClick([](Tavoos::MouseEvent&) {
-        boxScale.animateTo(boxScale + 0.1f, /*seconds=*/0.2f, Tavoos::Easing::easeInOutQuad);
+        boxScale.animateTo(boxScale + 0.1f, 0.2f, Tavoos::Easing::easeOutBack);
     });
 });
 ```
 
-Available easing functions (`Tavoos::Easing::`, in `easing.h`): `linear`, `easeInQuad`,
-`easeOutQuad`, `easeInOutQuad`. `EasingFn` is a plain `std::function<float(float)>`, so you
-can pass your own.
+`animateTo` starts from the current value, so calling it again halfway turns smoothly toward the new
+target.
+
+| Method | Notes |
+|---|---|
+| `animateTo(target, seconds, easing = linear)` | Moves from the current value to `target`, cutting short a running animation first. A duration of 0 or less sets the value at once. |
+| `set(value)` | Jumps to `value` and cancels a running animation. |
+| `stop()` | Stops where it is. With `alwaysRunToEnd`, finishes the current loop first. |
+| `pause()`, `resume()` | Freeze and continue. They do nothing when there is nothing to pause or resume. |
+| `onFinished(fn(bool completed))` | Called when an animation ends: `true` when it ran to the end, `false` when `stop()`, `set()` or a new `animateTo()` cut it short. `pause()` does not call it. |
+| `isAnimating()`, `isPaused()` | |
+| `runningState()` | `State<bool>&`, true while animating and not paused. |
+| `loops(n)` | Plays each animation `n` times, or forever with `AnimatedState<T>::Infinite`. Default 1. |
+| `alternate(bool)` | Every other loop runs backward, with the easing mirrored. Default false. |
+| `alwaysRunToEnd(bool)` | `stop()` lets the current loop finish smoothly and stops at its end. Default false. |
+
+`loops`, `alternate` and `alwaysRunToEnd` stay on the state and apply to every later `animateTo`.
+One loop is one direction, and each loop starts again from where `animateTo` began:
+
+```cpp
+Tavoos::AnimatedState<float> pulse{1.0f};
+pulse.loops(Tavoos::AnimatedState<float>::Infinite);
+pulse.alternate(true);
+pulse.animateTo(1.2f, 0.6f, Tavoos::Easing::easeInOutSine);
+```
+
+`onFinished` runs after the final value is set and `runningState()` is false, so it can start the
+next animation.
+
+**Easing.** `Tavoos::Easing::` (in `easing.h`) has `linear` and the standard families, each as
+`easeIn…`, `easeOut…` and `easeInOut…`: `Quad`, `Cubic`, `Quart`, `Quint`, `Sine`, `Expo`,
+`Circ`, `Back` (overshoots the end), `Elastic` (springs around the end) and `Bounce`.
+`cubicBezier(x1, y1, x2, y2)` builds a CSS-style curve; `cubicBezier(0.25f, 0.1f, 0.25f, 1.0f)`
+is CSS `ease`. `EasingFn` is a plain `std::function<float(float)>`, so any function from 0 to 1
+works.
+
+### Sequential and parallel animations
+
+`SequentialAnimation` runs its steps one after another, and `ParallelAnimation` runs them all at
+once. One group can drive any number of `AnimatedState`s, and groups nest inside each other:
+
+```cpp
+Tavoos::AnimatedState<int> x{0};
+Tavoos::AnimatedState<float> opacity{0.0f};
+Tavoos::AnimatedState<Tavoos::Paint> color{Tavoos::Color::White};
+Tavoos::State<std::string> status{"Hidden"};
+Tavoos::SequentialAnimation intro;
+
+intro.animateTo(opacity, 1.0f, 0.2f)
+     .parallel([](Tavoos::ParallelAnimation& p) {
+         p.animateTo(x, 240, 0.5f, Tavoos::Easing::easeOutCubic);
+         p.animateTo(color, Tavoos::Color::rgba(40, 120, 230), 0.3f);
+     })
+     .wait(1.0f)
+     .script([] { status.set("Shown"); })
+     .animateTo(opacity, 0.0f, 0.2f);
+intro.start();
+```
+
+| Step | Notes |
+|---|---|
+| `animateTo(state, target, seconds, easing = linear)` | Moves `state` from the value it has when the step begins. |
+| `animateFrom(state, from, target, seconds, easing = linear)` | Starts from `from` instead, which a loop that only goes one way needs. |
+| `wait(seconds)` | Lets time pass. In a parallel group it keeps the group running at least that long. |
+| `script(fn)` | Runs `fn` at that point and takes no time. |
+| `sequential(fn)`, `parallel(fn)` | A nested group, built inside `fn`. |
+
+| Method | Notes |
+|---|---|
+| `start()` | Runs the group from its first step. On a running group it starts over, and the old run reports `false`. |
+| `stop()`, `pause()`, `resume()` | As on `AnimatedState`. A `pause()` from a script stops a sequence right at that point. |
+| `onFinished(fn(bool completed))`, `isAnimating()`, `isPaused()`, `runningState()` | As on `AnimatedState`. |
+| `loops(n)` | Repeats the whole group `n` times, or forever with `AnimationGroup::Infinite`. Default 1. |
+| `alwaysRunToEnd(bool)` | `stop()` lets the current round finish. Default false. |
+
+`loops` and `alwaysRunToEnd` return the group, so they can end the chain:
+
+```cpp
+Tavoos::SequentialAnimation blink;
+blink.animateFrom(opacity, 0.0f, 1.0f, 0.6f).loops(Tavoos::AnimationGroup::Infinite);
+```
+
+- Each step reads its start value when it begins, not when the group is built, so `animateTo(x,
+  100, ...)` followed by `animateTo(x, 0, ...)` goes there and back. Every round of a loop begins
+  the steps again.
+- Time left over when a step ends goes to the next step in the same frame, so a group takes exactly
+  as long as its steps add up to.
+- A nested group can have its own `loops`, which repeat inside each round of its parent. Its
+  controls do nothing: start, stop and pause the outermost group.
+- A step that begins on a state animating by itself cancels that animation, so the state's
+  `onFinished(false)` fires. While a group drives a state, `set()` or `animateTo()` on that state
+  is overwritten by the group's next frame. The state's own `runningState()` stays false.
+- A script at the very start runs inside `start()`, and a script can call `start()` or `stop()`
+  on its own group.
+- A group keeps references to its states, so declare it after them, for example as the last member
+  of a class. It is then destroyed first.
+
+### More ways to animate
 
 For position/size transitions specifically (rather than an arbitrary property), see
 `alignmentAnimation()`/`fillAnimation()` in the [common properties table](#common-widget-properties)
@@ -2296,13 +2394,20 @@ To animate a custom property over time yourself (not covered by `AnimatedState`)
 `AnimatableBase`, implement `tick(float dt) -> bool` (return `false` when the animation is
 done), and call `AnimationManager::instance().registerAnimation(this)` /
 `unregisterAnimation(this)` to start/stop it - this is the same mechanism `AnimatedState`
-itself is built on.
+and the groups are built on.
+
+Everything registered with the animation manager is ticked once per frame. While anything is
+animating, the loop waits for the display's vertical blank on the first window and never runs
+faster than the fastest display, so an animation costs one tick per frame even when nothing on
+screen changes. With nothing animating, the app sleeps until the next input event.
 
 **Transitions.** `Tavoos::Transition` and the presets (`FadeIn`, `SlideOut`, ...) animate a widget
 through `prepare`, `update` and `finish`, and a `TransitionRunner` runs several of them on one clock.
 The stack view uses them for its push, pop and replace animations (see
 [`StackViewWidget`](#stackviewwidget)), popups use them for opening and closing (see
 [`PopupWidget`](#popupwidget)), and you can write your own by deriving `Transition`.
+They take any `EasingFn`, so the curves above work there too, for example
+`std::make_unique<Tavoos::SlideIn>(Tavoos::Edge::Right, 0.3f, Tavoos::Easing::easeOutBack)`.
 
 ## Resource embedding
 
