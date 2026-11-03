@@ -57,6 +57,7 @@ public:
 
     State<bool>& pressedState() { return m_pressed; }
     State<bool>& checkedState() { return m_checkedState; }
+    State<bool>& checkableState() { return m_checkableState; }
 
     ToolTipBase& toolTip();
     ToolTipBase* toolTipItem() const { return m_toolTip; }
@@ -95,6 +96,7 @@ private:
 
     State<bool> m_pressed{false};
     Property<bool> m_checkable{false};
+    State<bool> m_checkableState{false};
     Property<bool> m_exclusive{false};
     ButtonGroup* m_group{nullptr};
     Property<bool> m_checked{false};

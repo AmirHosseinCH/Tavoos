@@ -6,6 +6,7 @@ namespace Tavoos {
 
 ButtonBase::ButtonBase(Object* parent) : Control{parent} {
     enabledState().onChange([this](const bool& enabled) { focusable(enabled); });
+    m_checkable.onChange([this](const bool& checkable) { m_checkableState.setIfChanged(checkable); });
     m_checked.onChange([this](const bool& checked) { m_checkedState.setIfChanged(checked); });
     focusable(true);
 }

@@ -6,6 +6,9 @@
 #include <tavoos/widget/controls/style/comboboxstyle.h>
 #include <tavoos/widget/controls/style/flickareastyle.h>
 #include <tavoos/widget/controls/style/listviewstyle.h>
+#include <tavoos/widget/controls/style/menuitemstyle.h>
+#include <tavoos/widget/controls/style/menuseparatorstyle.h>
+#include <tavoos/widget/controls/style/menustyle.h>
 #include <tavoos/widget/controls/style/popupstyle.h>
 #include <tavoos/widget/controls/style/radiostyle.h>
 #include <tavoos/widget/controls/style/scrollareastyle.h>
@@ -40,6 +43,9 @@ public:
     State<SpinBoxStyle> spinBox{SpinBoxStyle{}};
     State<ComboBoxStyle> comboBox{ComboBoxStyle{}};
     State<ToolTipStyle> toolTip{ToolTipStyle{}};
+    State<MenuStyle> menu{MenuStyle{}};
+    State<MenuItemStyle> menuItem{MenuItemStyle{}};
+    State<MenuSeparatorStyle> menuSeparator{MenuSeparatorStyle{}};
 };
 
 }
