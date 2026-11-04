@@ -70,6 +70,11 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    decltype(auto) anchor(this auto&& self, Widget& widget) {
+        self.m_anchor = &widget;
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) onOpen(this auto&& self, std::function<void()> callback) {
         self.m_onOpen = std::move(callback);
         return std::forward<decltype(self)>(self);
@@ -84,6 +89,7 @@ public:
     ClosePolicy closePolicy() const { return m_closePolicy; }
     bool modal() const { return m_modal; }
     bool modalActive() const noexcept { return m_modalActive; }
+    Widget* anchor() const;
 
     const TransitionFactory& enter() const { return m_enter; }
     const TransitionFactory& exit() const { return m_exit; }
@@ -130,6 +136,7 @@ private:
     Property<ClosePolicy> m_closePolicy{ClosePolicy::ClickOutside | ClosePolicy::Escape};
     Property<bool> m_modal{false};
     Widget* m_scrim{nullptr};
+    Widget* m_anchor{nullptr};
     bool m_modalActive{false};
 
     TransitionFactory m_enter;

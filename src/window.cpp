@@ -545,7 +545,7 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
             const ClosePolicy policy = top->closePolicy();
             bool closes = hasFlag(policy, ClosePolicy::ClickOutside);
             if (!closes && hasFlag(policy, ClosePolicy::ClickOutsideParent)) {
-                const Object* const anchor = static_cast<Widget*>(top)->parent();
+                const Object* const anchor = top->anchor();
                 bool onAnchor = false;
                 for (const Object* object = hit; object && !onAnchor; object = object->parent())
                     onAnchor = object == anchor;

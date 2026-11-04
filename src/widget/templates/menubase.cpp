@@ -37,7 +37,7 @@ void MenuBase::popup() {
     if (!window)
         return;
     const Point cursor = window->cursorPosition();
-    auto* const anchor = dynamic_cast<Widget*>(parent());
+    Widget* const anchor = this->anchor();
     popup(anchor && target() == PlacementTarget::Parent ? anchor->mapFromWindow(cursor) : cursor);
 }
 

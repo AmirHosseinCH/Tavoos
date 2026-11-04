@@ -69,6 +69,10 @@ void OverlayBase::finishHiding() {
         window->releaseOverlay(this);
 }
 
+Widget* OverlayBase::anchor() const {
+    return m_anchor ? m_anchor : dynamic_cast<Widget*>(parent());
+}
+
 bool OverlayBase::isContentHit(const Widget* hit) const {
     for (const Widget* w = hit; w && w != this; w = dynamic_cast<const Widget*>(w->parent())) {
         if (w == m_scrim)

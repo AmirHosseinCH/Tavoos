@@ -52,7 +52,7 @@ void PopupBase::place() {
     const float windowW = static_cast<float>(window->width());
     const float windowH = static_cast<float>(window->height());
 
-    auto* const anchor = dynamic_cast<Widget*>(parent());
+    Widget* const anchor = this->anchor();
     const bool toWindow = m_target.get() == PlacementTarget::Window || !anchor;
 
     Edges ref{0.0f, 0.0f, windowW, windowH};
