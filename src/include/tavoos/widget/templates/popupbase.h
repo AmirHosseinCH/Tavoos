@@ -81,12 +81,16 @@ public:
     int x() const { return m_requestedX; }
     int y() const { return m_requestedY; }
 
+    void openAt(const Point& point);
     void place() override;
 
 protected:
     void setCenteredOnAnchor(bool centered) { m_centeredOnAnchor = centered; }
+    void applyOpened(bool opened) override;
 
 private:
+    void moveTo(float x, float y);
+
     Property<Placement> m_placement{Placement::Bottom};
     Property<PlacementTarget> m_target{PlacementTarget::Parent};
     SidedProperty<float> m_offset{0.0f};
@@ -95,6 +99,9 @@ private:
     bool m_hasRequestedX{false};
     bool m_hasRequestedY{false};
     bool m_centeredOnAnchor{false};
+    Point m_point{};
+    bool m_atPoint{false};
+    bool m_pointRequested{false};
 };
 
 }
