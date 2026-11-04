@@ -1,5 +1,6 @@
 #include <tavoos/widget/templates/menuitembase.h>
 
+#include <tavoos/builder.h>
 #include <tavoos/events/shortcut.h>
 
 namespace Tavoos {
@@ -27,6 +28,11 @@ MenuItemBase::MenuItemBase(Object* parent) : ButtonBase{parent} {
     fill(Fill::Width);
 }
 
+void MenuItemBase::runInBuilderScope(Widget& slot, const std::function<void()>& call) {
+    Builder::Scope scope{&slot};
+    call();
+}
+
 void MenuItemBase::setShortcut(const KeySequence& sequence) {
     m_shortcut.setIfChanged(sequence);
     if (!m_shortcutTrigger) {
@@ -37,9 +43,35 @@ void MenuItemBase::setShortcut(const KeySequence& sequence) {
     m_shortcutTrigger->sequence(sequence);
 }
 
+void MenuItemBase::openSubMenu() {
+    if (!m_subMenu)
+        return;
+    if (MenuBase* const owner = menu(); owner && !owner->openedState().get())
+        return;
+    if (m_subMenu->openedState().get())
+        m_subMenu->focusHighlighted();
+    else
+        m_subMenu->open();
+}
+
+MenuBase* MenuItemBase::rootMenu() const {
+    MenuBase* root = menu();
+    while (root) {
+        MenuBase* const above = root->ancestor<MenuBase>();
+        if (!above)
+            break;
+        root = above;
+    }
+    return root;
+}
+
 void MenuItemBase::handleClick(MouseEvent& event) {
-    if (MenuBase* const owner = menu())
-        owner->close();
+    if (m_subMenu) {
+        openSubMenu();
+        return;
+    }
+    if (MenuBase* const root = rootMenu())
+        root->close();
     ButtonBase::handleClick(event);
 }
 
@@ -48,7 +80,13 @@ void MenuItemBase::triggerMouseEnter(MouseEvent& event) {
     if (!enabled())
         return;
     if (MenuBase* const owner = menu())
-        owner->highlight(this);
+        owner->highlight(this, true);
+}
+
+void MenuItemBase::triggerMouseLeave(MouseEvent& event) {
+    ButtonBase::triggerMouseLeave(event);
+    if (MenuBase* const owner = menu(); owner && owner->m_pendingItem == this)
+        owner->stopSubMenuTimer();
 }
 
 void MenuItemBase::triggerFocusIn(Event& event) {

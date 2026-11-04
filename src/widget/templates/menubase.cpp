@@ -22,27 +22,22 @@ void collectItems(const Object& root, bool navigableOnly, std::vector<MenuItemBa
     }
 }
 
-bool isNavigationKey(const KeyEvent& event) {
-    switch (event.keyCode()) {
-    case static_cast<int>(Key::Up):
-    case static_cast<int>(Key::Down):
-    case static_cast<int>(Key::Home):
-    case static_cast<int>(Key::End):
-        return true;
-    case static_cast<int>(Key::Tab):
-        return event.modifiers() == KeyModifier::None || event.modifiers() == KeyModifier::Shift;
-    default:
-        return false;
-    }
-}
-
 }
 
 MenuBase::MenuBase(Object* parent) : PopupBase{parent} {}
 
+MenuBase::~MenuBase() {
+    if (m_ticking)
+        AnimationManager::instance().unregisterAnimation(this);
+}
+
 void MenuBase::applyOpened(bool opened) {
     if (opened && !openedState().get())
         highlight(nullptr);
+    if (!opened) {
+        stopSubMenuTimer();
+        closeSubMenus(nullptr);
+    }
     PopupBase::applyOpened(opened);
 }
 
@@ -52,8 +47,28 @@ bool MenuBase::hasHandlerFor(EventType type) {
     return PopupBase::hasHandlerFor(type);
 }
 
+bool MenuBase::handlesKey(const KeyEvent& event) const {
+    switch (event.keyCode()) {
+    case static_cast<int>(Key::Up):
+    case static_cast<int>(Key::Down):
+    case static_cast<int>(Key::Home):
+    case static_cast<int>(Key::End):
+        return true;
+    case static_cast<int>(Key::Tab):
+        return event.modifiers() == KeyModifier::None || event.modifiers() == KeyModifier::Shift;
+    case static_cast<int>(Key::Right): {
+        const MenuItemBase* const item = highlightedItem();
+        return item && item->subMenuItem();
+    }
+    case static_cast<int>(Key::Left):
+        return ancestor<MenuBase>() != nullptr;
+    default:
+        return false;
+    }
+}
+
 void MenuBase::triggerKeyPress(KeyEvent& event) {
-    if (!isNavigationKey(event)) {
+    if (!handlesKey(event)) {
         event.ignore();
         PopupBase::triggerKeyPress(event);
         return;
@@ -76,6 +91,12 @@ void MenuBase::triggerKeyPress(KeyEvent& event) {
             highlight(event.keyCode() == static_cast<int>(Key::Home) ? navigable.front() : navigable.back());
         break;
     }
+    case static_cast<int>(Key::Right):
+        highlightedItem()->openSubMenu();
+        break;
+    case static_cast<int>(Key::Left):
+        close();
+        break;
     default:
         break;
     }
@@ -83,7 +104,7 @@ void MenuBase::triggerKeyPress(KeyEvent& event) {
 }
 
 void MenuBase::triggerShortcutOverride(KeyEvent& event) {
-    if (isNavigationKey(event))
+    if (handlesKey(event))
         event.accept();
     PopupBase::triggerShortcutOverride(event);
 }
@@ -111,6 +132,18 @@ Widget::ContentArea MenuBase::contentAreaFor(const Widget& child) const {
     return PopupBase::contentAreaFor(child);
 }
 
+bool MenuBase::tick(float dt) {
+    m_pendingElapsed += dt;
+    if (m_pendingElapsed >= m_subMenuDelay.get()) {
+        MenuItemBase* const item = m_pendingItem;
+        m_pendingItem = nullptr;
+        m_ticking = false;
+        if (std::ranges::contains(items(false), item) && item->highlighted())
+            item->openSubMenu();
+    }
+    return m_ticking;
+}
+
 std::vector<Widget*> MenuBase::stackedChildren() const {
     std::vector<Widget*> result;
     for (const auto& child : children()) {
@@ -134,11 +167,30 @@ MenuItemBase* MenuBase::highlightedItem() const {
     return nullptr;
 }
 
-void MenuBase::highlight(MenuItemBase* item) {
-    for (MenuItemBase* const each : items(false))
-        each->m_highlighted.setIfChanged(each == item);
+void MenuBase::highlight(MenuItemBase* item, bool byHover) {
+    const bool changed = item != highlightedItem();
+    if (changed) {
+        stopSubMenuTimer();
+        for (MenuItemBase* const each : items(false))
+            each->m_highlighted.setIfChanged(each == item);
+    }
     if (item && !item->focused())
         item->focus();
+    if (changed)
+        closeSubMenus(item);
+    if (byHover && item && item->subMenuItem() && !item->subMenuItem()->openedState().get())
+        startSubMenuTimer(item);
+}
+
+void MenuBase::focusHighlighted() {
+    MenuItemBase* item = highlightedItem();
+    if (!item) {
+        const auto navigable = items(true);
+        if (navigable.empty())
+            return;
+        item = navigable.front();
+    }
+    highlight(item);
 }
 
 void MenuBase::step(int delta) {
@@ -151,6 +203,34 @@ void MenuBase::step(int delta) {
                          ? (delta > 0 ? 0 : count - 1)
                          : (static_cast<int>(current - navigable.begin()) + delta + count) % count;
     highlight(navigable[next]);
+}
+
+void MenuBase::closeSubMenus(const MenuItemBase* except) {
+    for (MenuItemBase* const each : items(false))
+        if (each != except && each->subMenuItem())
+            each->subMenuItem()->close();
+}
+
+void MenuBase::startSubMenuTimer(MenuItemBase* item) {
+    if (m_subMenuDelay.get() <= 0.0f) {
+        stopSubMenuTimer();
+        item->openSubMenu();
+        return;
+    }
+    m_pendingItem = item;
+    m_pendingElapsed = 0.0f;
+    if (m_ticking)
+        return;
+    m_ticking = true;
+    AnimationManager::instance().registerAnimation(this);
+}
+
+void MenuBase::stopSubMenuTimer() {
+    m_pendingItem = nullptr;
+    if (!m_ticking)
+        return;
+    m_ticking = false;
+    AnimationManager::instance().unregisterAnimation(this);
 }
 
 }
