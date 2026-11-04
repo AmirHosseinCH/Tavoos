@@ -26,6 +26,9 @@ public:
 
     float subMenuDelay() const { return m_subMenuDelay; }
 
+    void popup();
+    void popup(const Point& point);
+
 protected:
     void applyOpened(bool opened) override;
     bool hasHandlerFor(EventType type) override;

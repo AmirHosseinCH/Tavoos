@@ -1,6 +1,7 @@
 #include <tavoos/widget/templates/menubase.h>
 
 #include <tavoos/widget/templates/menuitembase.h>
+#include <tavoos/window.h>
 
 #include <algorithm>
 
@@ -29,6 +30,19 @@ MenuBase::MenuBase(Object* parent) : PopupBase{parent} {}
 MenuBase::~MenuBase() {
     if (m_ticking)
         AnimationManager::instance().unregisterAnimation(this);
+}
+
+void MenuBase::popup() {
+    Window* const window = ownerWindow();
+    if (!window)
+        return;
+    const Point cursor = window->cursorPosition();
+    auto* const anchor = dynamic_cast<Widget*>(parent());
+    popup(anchor && target() == PlacementTarget::Parent ? anchor->mapFromWindow(cursor) : cursor);
+}
+
+void MenuBase::popup(const Point& point) {
+    openAt(point);
 }
 
 void MenuBase::applyOpened(bool opened) {

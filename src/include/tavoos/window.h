@@ -66,6 +66,7 @@ public:
     Color color() const { return m_color; };
     int framebufferWidth() const noexcept { return m_framebufferWidth; }
     int framebufferHeight() const noexcept { return m_framebufferHeight; }
+    Point cursorPosition() const;
 
     void setFocusedWidget(Widget* widget);
     Widget* focusedWidget() const noexcept { return m_focusedWidget; }

@@ -173,6 +173,15 @@ Window::~Window() {
     }
 }
 
+Point Window::cursorPosition() const {
+    if (!m_window)
+        return {};
+    double x = 0.0;
+    double y = 0.0;
+    glfwGetCursorPos(m_window, &x, &y);
+    return { static_cast<float>(x), static_cast<float>(y) };
+}
+
 void Window::setup() {
     m_window = glfwCreateWindow(m_width, m_height, m_title.get().c_str(), nullptr,
                                  Application::instance()->shareContextHandle());
