@@ -47,6 +47,7 @@ public:
     MenuBase* subMenuItem() const { return m_subMenu; }
 
 protected:
+    virtual void styleSubMenu(MenuBase&) {}
     void handleClick(MouseEvent& event) override;
     void triggerMouseEnter(MouseEvent& event) override;
     void triggerMouseLeave(MouseEvent& event) override;
@@ -59,8 +60,9 @@ private:
             removeChild(m_subMenu);
             m_subMenu = nullptr;
         }
-        m_subMenu = addChild<W>([&body](W& slot) {
+        m_subMenu = addChild<W>([this, &body](W& slot) {
             slot.placement(Placement::Right).closePolicy(ClosePolicy::ClickOutsideParent | ClosePolicy::Escape);
+            styleSubMenu(slot);
             if (body)
                 runInBuilderScope(slot, [&slot, &body] { body(slot); });
         });

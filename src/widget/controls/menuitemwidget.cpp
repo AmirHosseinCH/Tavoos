@@ -11,11 +11,14 @@ namespace Tavoos {
 namespace {
 
 constexpr const char* kCheckSvg = R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L9.5 17 L19 6.5" /></svg>)svg";
+constexpr const char* kArrowSvg = R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 L15 12 L9 18" /></svg>)svg";
 constexpr int kCheckSize = 14;
+constexpr int kArrowSize = 12;
 constexpr float kPaddingX = 10.0f;
 constexpr float kPaddingY = 7.0f;
 constexpr float kSpacing = 8.0f;
 constexpr float kShortcutGap = 24.0f;
+constexpr float kArrowGap = 16.0f;
 
 }
 
@@ -25,6 +28,7 @@ MenuItemWidget::MenuItemWidget(Object* parent) : MenuItemBase{parent} {
     m_disabledTextColor.onChange([this](const Paint&) { updateColors(); });
     m_shortcutColor.onChange([this](const Paint&) { updateColors(); });
     m_checkColor.onChange([this](const Paint&) { updateColors(); });
+    m_arrowColor.onChange([this](const Paint&) { updateColors(); });
     highlightedState().onChange([this](const bool&) { updateColors(); });
     enabledState().onChange([this](const bool&) { updateColors(); });
     checkedState().onChange([this](const bool&) { updateColors(); });
@@ -57,6 +61,10 @@ MenuItemWidget::MenuItemWidget(Object* parent) : MenuItemBase{parent} {
             keys.text(m_shortcutText).font(m_font.state()).color(m_shortcutOut)
                 .marginLeft(kShortcutGap).alignment(Alignment::CenterVertical).visible(m_hasShortcut);
         });
+        row.addChild<SVGWidget>([this](SVGWidget& arrow) {
+            arrow.source(std::string("data:") + kArrowSvg).width(kArrowSize).height(kArrowSize)
+                .marginLeft(kArrowGap).alignment(Alignment::CenterVertical).color(m_arrowOut).visible(m_hasSubMenu);
+        });
     });
 
     updateColors();
@@ -71,6 +79,7 @@ void MenuItemWidget::updateColors() {
     m_shortcutOut.set(enabled() ? m_shortcutColor.get() : m_disabledTextColor.get());
     const Paint& check = enabled() ? m_checkColor.get() : m_disabledTextColor.get();
     m_checkOut.set(checked() ? check : Paint{Color::Transparent});
+    m_arrowOut.set(enabled() ? m_arrowColor.get() : m_disabledTextColor.get());
 }
 
 void MenuItemWidget::applyStyle(const MenuItemStyle& value) {
@@ -79,12 +88,20 @@ void MenuItemWidget::applyStyle(const MenuItemStyle& value) {
     disabledTextColor(value.disabledTextColor);
     shortcutColor(value.shortcutColor);
     checkColor(value.checkColor);
+    arrowColor(value.arrowColor);
     font(value.font);
     radius(value.radius);
 }
 
 void MenuItemWidget::createToolTip() {
     toolTip<ToolTipWidget>({});
+}
+
+void MenuItemWidget::styleSubMenu(MenuBase& subMenu) {
+    m_hasSubMenu.set(true);
+    requestRelayout();
+    if (MenuBase* const owner = menu())
+        subMenu.offsetLeft(owner->paddingLeft()).offsetRight(owner->paddingRight());
 }
 
 }

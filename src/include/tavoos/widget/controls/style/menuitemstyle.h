@@ -11,6 +11,7 @@ struct MenuItemStyle {
     Paint disabledTextColor{Color::rgba(160, 163, 175)};
     Paint shortcutColor{Color::rgba(130, 133, 145)};
     Paint checkColor{Color::rgba(85, 112, 241)};
+    Paint arrowColor{Color::rgba(110, 113, 125)};
     Font font;
     int radius{6};
 };
