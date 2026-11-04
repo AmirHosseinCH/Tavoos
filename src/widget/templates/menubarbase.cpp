@@ -88,6 +88,8 @@ Widget::Size MenuBarBase::computeIntrinsicSize() {
 }
 
 Widget::ContentArea MenuBarBase::contentAreaFor(const Widget& child) const {
+    if (&child == backgroundSlot())
+        return { 0.0f, 0.0f, displayedWidth(), displayedHeight() };
     float x = paddingLeft();
     for (Widget* const stacked : stackedChildren()) {
         const float width = stacked->marginLeft() + stacked->intrinsicSize().width + stacked->marginRight();

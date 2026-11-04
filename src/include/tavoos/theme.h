@@ -6,6 +6,8 @@
 #include <tavoos/widget/controls/style/comboboxstyle.h>
 #include <tavoos/widget/controls/style/flickareastyle.h>
 #include <tavoos/widget/controls/style/listviewstyle.h>
+#include <tavoos/widget/controls/style/menubaritemstyle.h>
+#include <tavoos/widget/controls/style/menubarstyle.h>
 #include <tavoos/widget/controls/style/menuitemstyle.h>
 #include <tavoos/widget/controls/style/menuseparatorstyle.h>
 #include <tavoos/widget/controls/style/menustyle.h>
@@ -46,6 +48,8 @@ public:
     State<MenuStyle> menu{MenuStyle{}};
     State<MenuItemStyle> menuItem{MenuItemStyle{}};
     State<MenuSeparatorStyle> menuSeparator{MenuSeparatorStyle{}};
+    State<MenuBarStyle> menuBar{MenuBarStyle{}};
+    State<MenuBarItemStyle> menuBarItem{MenuBarItemStyle{}};
 };
 
 }

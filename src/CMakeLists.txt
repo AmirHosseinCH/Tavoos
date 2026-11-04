@@ -56,6 +56,8 @@ set(TAVOOS_SOURCES
     widget/controls/menuwidget.cpp
     widget/controls/menuitemwidget.cpp
     widget/controls/menuseparatorwidget.cpp
+    widget/controls/menubarwidget.cpp
+    widget/controls/menubaritemwidget.cpp
     widget/controls/tooltipwidget.cpp
     widget/controls/swipeviewwidget.cpp
     widget/templates/texteditbase.cpp
@@ -151,6 +153,8 @@ target_sources(Tavoos
     include/tavoos/widget/controls/menuwidget.h
     include/tavoos/widget/controls/menuitemwidget.h
     include/tavoos/widget/controls/menuseparatorwidget.h
+    include/tavoos/widget/controls/menubarwidget.h
+    include/tavoos/widget/controls/menubaritemwidget.h
     include/tavoos/widget/controls/tooltipwidget.h
     include/tavoos/widget/controls/swipeviewwidget.h
     include/tavoos/widget/templates/texteditbase.h
@@ -188,6 +192,8 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/menustyle.h
     include/tavoos/widget/controls/style/menuitemstyle.h
     include/tavoos/widget/controls/style/menuseparatorstyle.h
+    include/tavoos/widget/controls/style/menubarstyle.h
+    include/tavoos/widget/controls/style/menubaritemstyle.h
     include/tavoos/widget/controls/style/tooltipstyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h
