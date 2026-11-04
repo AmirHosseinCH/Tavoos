@@ -57,6 +57,7 @@ public:
 
     State<bool>& pressedState() { return m_pressed; }
     State<bool>& checkedState() { return m_checkedState; }
+    State<bool>& checkableState() { return m_checkableState; }
 
     ToolTipBase& toolTip();
     ToolTipBase* toolTipItem() const { return m_toolTip; }
@@ -74,6 +75,7 @@ protected:
     void triggerKeyPress(KeyEvent& event) override;
     void triggerKeyRelease(KeyEvent& event) override;
     void triggerFocusOut(Event& event) override;
+    void sendClickFromKeyboard(KeyModifier modifiers);
 
 private:
     template<typename W>
@@ -91,10 +93,10 @@ private:
 
     static void runInBuilderScope(Widget& slot, const std::function<void()>& call);
     void sendClick(float x, float y, KeyModifier modifiers, int clickCount);
-    void sendClickFromKeyboard(KeyModifier modifiers);
 
     State<bool> m_pressed{false};
     Property<bool> m_checkable{false};
+    State<bool> m_checkableState{false};
     Property<bool> m_exclusive{false};
     ButtonGroup* m_group{nullptr};
     Property<bool> m_checked{false};

@@ -24,6 +24,10 @@ Shortcut::~Shortcut() {
 bool Shortcut::matches(const KeySequence& sequence, bool repeat) const {
     if (!m_enabled.get() || m_sequence.get().isEmpty() || m_sequence.get() != sequence || (repeat && !m_autoRepeat.get()))
         return false;
+    return reachable();
+}
+
+bool Shortcut::reachable() const {
     for (const Object* object = parent(); object; object = object->parent()) {
         if (const auto* const widget = dynamic_cast<const Widget*>(object); widget && !widget->visible())
             return false;

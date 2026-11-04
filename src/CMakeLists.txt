@@ -53,6 +53,11 @@ set(TAVOOS_SOURCES
     widget/controls/stackviewwidget.cpp
     widget/controls/listviewwidget.cpp
     widget/controls/comboboxwidget.cpp
+    widget/controls/menuwidget.cpp
+    widget/controls/menuitemwidget.cpp
+    widget/controls/menuseparatorwidget.cpp
+    widget/controls/menubarwidget.cpp
+    widget/controls/menubaritemwidget.cpp
     widget/controls/tooltipwidget.cpp
     widget/controls/swipeviewwidget.cpp
     widget/templates/texteditbase.cpp
@@ -64,6 +69,10 @@ set(TAVOOS_SOURCES
     widget/templates/stackviewbase.cpp
     widget/templates/listviewbase.cpp
     widget/templates/comboboxbase.cpp
+    widget/templates/menubase.cpp
+    widget/templates/menuitembase.cpp
+    widget/templates/menubarbase.cpp
+    widget/templates/menubaritembase.cpp
     widget/templates/tooltipbase.cpp
     widget/templates/swipeviewbase.cpp
     widget/controls/spinboxwidget.cpp
@@ -141,6 +150,11 @@ target_sources(Tavoos
     include/tavoos/widget/controls/stackviewwidget.h
     include/tavoos/widget/controls/listviewwidget.h
     include/tavoos/widget/controls/comboboxwidget.h
+    include/tavoos/widget/controls/menuwidget.h
+    include/tavoos/widget/controls/menuitemwidget.h
+    include/tavoos/widget/controls/menuseparatorwidget.h
+    include/tavoos/widget/controls/menubarwidget.h
+    include/tavoos/widget/controls/menubaritemwidget.h
     include/tavoos/widget/controls/tooltipwidget.h
     include/tavoos/widget/controls/swipeviewwidget.h
     include/tavoos/widget/templates/texteditbase.h
@@ -152,6 +166,10 @@ target_sources(Tavoos
     include/tavoos/widget/templates/stackviewbase.h
     include/tavoos/widget/templates/listviewbase.h
     include/tavoos/widget/templates/comboboxbase.h
+    include/tavoos/widget/templates/menubase.h
+    include/tavoos/widget/templates/menuitembase.h
+    include/tavoos/widget/templates/menubarbase.h
+    include/tavoos/widget/templates/menubaritembase.h
     include/tavoos/widget/templates/tooltipbase.h
     include/tavoos/widget/templates/swipeviewbase.h
     include/tavoos/widget/controls/spinboxwidget.h
@@ -171,6 +189,11 @@ target_sources(Tavoos
     include/tavoos/widget/controls/style/textareastyle.h
     include/tavoos/widget/controls/style/spinboxstyle.h
     include/tavoos/widget/controls/style/comboboxstyle.h
+    include/tavoos/widget/controls/style/menustyle.h
+    include/tavoos/widget/controls/style/menuitemstyle.h
+    include/tavoos/widget/controls/style/menuseparatorstyle.h
+    include/tavoos/widget/controls/style/menubarstyle.h
+    include/tavoos/widget/controls/style/menubaritemstyle.h
     include/tavoos/widget/controls/style/tooltipstyle.h
     include/tavoos/widget/widgets.h
     include/tavoos/gfx/renderer.h

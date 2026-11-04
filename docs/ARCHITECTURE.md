@@ -61,6 +61,7 @@ document is where the "why" behind non-obvious code lives instead.
    - [List views](#list-views)
    - [Combo boxes](#combo-boxes)
    - [Tooltips](#tooltips)
+   - [Menus](#menus)
    - [Stack views](#stack-views)
    - [Swipe views](#swipe-views)
    - [Theme and style structs](#theme-and-style-structs)
@@ -2418,8 +2419,10 @@ skipped by every traversal. Its constructor walks up its parents to the nearest 
 `ownerWindow()` it takes, or to the window itself, and registers there with `addShortcut`; the
 destructor calls `removeShortcut`. Removing it, or a widget above it, goes through
 `clearReferencesTo`, which erases it from `m_shortcuts` at once, before the deferred destruction.
-`matches(sequence, repeat)` checks that it is enabled and not empty, that the sequence is equal, that
-a key repeat is allowed by `autoRepeat`, and that every widget above it is visible.
+`matches(sequence, repeat)` checks that it is enabled and not empty, that the sequence is equal, and
+that a key repeat is allowed by `autoRepeat`, then asks the protected virtual `reachable()`. By
+default that requires every widget above the shortcut to be visible; a menu item's shortcut overrides
+it to look past closed menus (see [Menus](#menus)).
 
 A key press or repeat that is not Escape for a popup or Tab reaches this, in `keyCallback`:
 
@@ -3118,6 +3121,12 @@ through `Widget::contentAreaFor()`. As with `TextEditBase`, `content()` is hidde
 children are declared inside it. A subclass overrides the virtual `place()` to choose where it
 sits.
 
+The **anchor** is the widget the overlay belongs to: `anchor()` returns the widget set with
+`anchor(widget)`, kept in `m_anchor`, or the parent when none was set. Placement and
+`ClickOutsideParent` use it, so a popup can be declared in one place and placed against a widget in
+another; the menu bar does this. `m_anchor` is a plain pointer, so the anchor must outlive the
+overlay.
+
 The **scrim** is a slot like `background`, painted first (`z(-2)`) and sized to the whole window
 through `contentAreaFor()`; it is shown only while the overlay is open *and* modal. A transparent
 scrim is installed by default, so an overlay never needs one to block input. Because the scrim is
@@ -3131,9 +3140,14 @@ Dismissal is driven from `Window`, using the overlay's `closePolicy` (a bitmask 
   press continue to whatever is behind it; a modal one swallows it. A press on the *anchor* counts
   as outside, so an anchor that toggles on click should call `open()` rather than flip state.
 - With `ClickOutsideParent` instead, a press outside the overlay closes it only if the widget it hit is
-  not the overlay's parent or inside it. `Window::mouseButtonCallback` walks up from the hit widget
-  looking for the parent. A press on the anchor then reaches the anchor with the overlay still open, so
-  the anchor can toggle it; the combo box relies on this.
+  not the overlay's anchor or inside it. `Window::mouseButtonCallback` walks up from the hit widget
+  looking for the anchor. A press on the anchor then reaches the anchor with the overlay still open, so
+  the anchor can toggle it; the combo box, submenus and the menu bar rely on this.
+- After closing the topmost overlay, `mouseButtonCallback` checks the next one down the same way, and
+  keeps going until an overlay contains the press, does not close for it, or was modal. It also stops
+  if the overlay it closed is still on top, which happens when its `onClose` opened it again. A press
+  outside a menu and its submenus therefore closes all of them, and a press inside a lower popup
+  closes only the ones above it.
 - `Escape` closes the topmost overlay when `Escape` is set, and the key is consumed before the
   focused widget sees it.
 - `modal` is read when the overlay opens. While it is open, hit-testing blocks hover, press, drag,
@@ -3154,7 +3168,7 @@ it hides immediately. `modalActive` clears at the moment of `close()`, so the an
 blocks input, and `onOpen`/`onClose` fire at that moment too.
 
 **`PopupBase`** (`templates/popupbase.h`) is an `OverlayBase` that places itself relative to a
-target rectangle - the parent widget by default, or the window (`target(PlacementTarget::Window)`)
+target rectangle - the anchor by default, or the window (`target(PlacementTarget::Window)`)
 - in `place()`, on every layout pass, so it follows an anchor that moves or resizes:
 
 | Target | `Bottom` / `Top` / `Left` / `Right` | `Center` |
@@ -3170,6 +3184,16 @@ axis and are not clamped. Whichever of `x`, `y`, and `placement` was set last wi
 the properties' change notifications rather than call order, so a bound value that changes later
 counts as the latest. A subclass can call the protected `setCenteredOnAnchor(true)` to center on
 the cross axis against the parent instead of start-aligning; tooltips do.
+
+**Opening at a point.** `openAt(point)` stores a point in the anchor's coordinates, or the window's
+for the `Window` target, and turns on `m_atPoint`, which `place()` checks first. It maps the point to
+the window and puts the popup's top-left corner there. On an axis where the popup does not fit, it
+moves the popup to the left of or above the point, then clamps it into the window. Placement, offsets
+and `x`/`y` are ignored. The point stays in force until the popup opens without one: `openAt` sets
+`m_pointRequested` before it calls `open()`, and the `applyOpened` override turns point mode off on
+any open that was not requested that way. Closing leaves it alone, so a popup fading out with an
+`exit` transition keeps its place. Both paths end in the private `moveTo()`, which rounds the
+position and writes `x` and `y`.
 
 **`PopupWidget`** (`controls/popupwidget.h`) is the concrete popup. It installs a rectangle
 `background` and a rectangle `scrim`, both bound to `PopupStyle` (`backgroundColor`, `borderColor`,
@@ -3555,6 +3579,87 @@ nothing, and the Button, Checkbox, Radio, Switch and ComboBox widgets override i
 while it is the topmost overlay, Escape and outside presses close nothing, so a popup beneath it stays open
 until the tooltip hides. A hover tooltip usually hides first, because the pointer leaves its control before
 pressing elsewhere.
+
+### Menus
+
+**Stacking.** **`MenuBase`** (`templates/menubase.h`) is a `PopupBase` with no look that stacks its
+children from top to bottom without being a layouter. `stackedChildren()` is the children that take
+part in layout, minus the background and scrim slots. `computeIntrinsicSize` returns the widest of them
+and the sum of their heights, margins included, plus padding. `contentAreaFor(child)` returns that
+child's strip: the full inner width, the child's own height, below the strips before it. Each child
+still lays itself out inside its strip, so the background and scrim keep the areas `OverlayBase` gives
+them. Items are `Fill::Width`, so every row is as wide as the menu.
+
+**Items and the highlight.** **`MenuItemBase`** (`templates/menuitembase.h`) is a `ButtonBase` that finds
+its menu with `ancestor<MenuBase>()`. `MenuBase::items()` walks the menu's children for `MenuItemBase`s
+without going inside an item or an overlay, so a submenu's items never join its parent's list;
+`items(true)` keeps the enabled, visible ones for navigation. Each item has `m_highlighted`, written only
+by the menu's `highlight(item, byHover)`. That call marks the one item, focuses it, closes the submenus
+of the other items, and when the move came from hover onto an item with a closed submenu, starts the
+submenu timer. Items call it when the pointer enters them (if enabled) and on focus-in; the call from
+focus-in finds nothing left to change, so highlight, focus and highlight again ends there. The menu
+keeps no pointer to the current item: `highlightedItem()` scans for it, because a removed item is
+destroyed later and nothing tells the menu. On open, `applyOpened(true)` clears the highlight and the
+window's `focusFirstIn` then focuses the first item, which highlights it.
+
+**Keys.** Keys reach the menu by bubbling from the focused item, whose `ButtonBase` keeps only Space and
+Enter. One function, `handlesKey()`, decides both the `ShortcutOverride` claim and the handling: Up,
+Down, Home, End, Tab and Shift+Tab always; Right only when the highlighted item has a submenu; Left only
+when the menu has a parent menu. Claiming keeps Tab from `Window::focusNext` and the arrows from window
+shortcuts. A key the menu does not handle keeps bubbling: from a submenu to the item that owns it and on
+to the parent menu, and from a bar menu to the bar.
+
+**Triggering.** A mouse click, Enter, Space and the item's shortcut all end in `handleClick`. On an item
+with a submenu it opens the submenu and stops. Otherwise it closes the root menu, the top-most
+`MenuBase` above the item, and then calls `ButtonBase::handleClick`, which toggles a checkable item and
+runs `onClick`. Closing first lets the [focus memory](#focus-memory) put focus back where it was before
+the menu opened, so a popup that `onClick` opens remembers that widget rather than a hidden item.
+`applyOpened(false)` stops the submenu timer and closes the submenus of its items before the menu
+itself, so closing the root closes the chain from the deepest level up.
+
+**Shortcuts.** `shortcut(sequence)` stores the sequence in `m_shortcut`, which the look shows, and on
+first use adds a child `Shortcut` of a private subclass, enabled through a binding to the item's
+`enabledState()`, which calls `sendClickFromKeyboard`. The subclass overrides `reachable()`: walking up,
+a hidden widget blocks it unless that widget is a `MenuBase`. Closed menus are skipped, while a hidden
+item, a hidden anchor or a closed popup above the menu still block it.
+
+**Submenus.** `subMenu<W>(body)` installs a `W`, constrained to `MenuBase`, as the item's child with
+`Placement::Right` and `ClickOutsideParent | Escape`, calls the protected virtual `styleSubMenu(MenuBase&)`,
+and runs the body in a builder scope. As the item's child, the submenu is anchored to the item and finds
+its parent menu with `ancestor<MenuBase>()`. `openSubMenu()` does nothing while the item's own menu is
+closed, moves focus into the submenu if it is already open, and opens it otherwise. The hover delay is an
+`AnimatableBase` tick on the parent menu: `startSubMenuTimer` keeps the pending item, and once
+`subMenuDelay` has passed the tick opens it if the item is still in the menu and still highlighted.
+Moving the highlight, the pointer leaving the pending item, or the menu closing stops it. `highlight()`
+focuses the new item before it closes the old submenu: closing restores focus only if focus is still
+inside the closing overlay, so with focus already moved nothing is restored and the highlight does not
+jump back.
+
+**Context menus.** `popup(point)` calls `openAt(point)`. `popup()` reads `Window::cursorPosition()`,
+which asks GLFW, maps it into the anchor's coordinates, and does the same.
+
+**Menu bar.** **`MenuBarBase`** (`templates/menubarbase.h`) is a `Control` with `content()` hidden. In
+`onBuilt` it collects its `MenuBase` children first, then for each one calls the virtual `createItem()`,
+stores the menu in the new item, sets the menu's `anchor(item)`, `Placement::Bottom` and
+`ClickOutsideParent | Escape`, and calls the item's protected virtual `bindMenu(menu)`. It lines its
+titles up left to right with the same `contentAreaFor` technique as the menu, and gives its background
+the whole bar. **`MenuBarItemBase`** (`templates/menubaritembase.h`) is a `Fill::Height` `ButtonBase`:
+a click toggles its menu, and the pointer entering it asks the bar to switch when another of the bar's
+menus is open. `openMenu(item)` closes the bar's other menus, focuses the title and then opens its menu,
+so the menu's focus memory records that title and Escape returns there. The menus are the bar's
+children, so keys from an open menu bubble to the bar: Left and Right open the neighboring menu,
+wrapping around. With no menu open and a title focused, they move focus between titles, and Down opens
+the focused title's menu.
+
+**Widgets.** `MenuWidget` installs a background bound to `MenuStyle`. `MenuItemWidget` builds a row of a
+check mark, shown while the item is checkable and transparent while unchecked, the label, the shortcut
+label from `shortcutState().toString()`, and an arrow that its `styleSubMenu` override shows. That
+override also sets the submenu's left and right offsets to the parent menu's padding, so the submenu
+starts at the parent's edge. It redeclares `subMenu<W = MenuWidget>`, so a builder needs no type.
+`MenuSeparatorWidget` is a `Control` whose content is a line. `MenuBarWidget` overrides `createItem()`
+to add `MenuBarItemWidget`s, whose `bindMenu` binds the label to `titleState()`, recolors on
+`openedState()`, and sets the menu's `offsetBottom` to the bar's bottom padding. Each follows its own
+style through `Theme::menu`, `menuItem`, `menuSeparator`, `menuBar` and `menuBarItem`.
 
 ### Stack views
 

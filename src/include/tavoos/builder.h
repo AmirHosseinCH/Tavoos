@@ -9,6 +9,10 @@
 #include <tavoos/widget/controls/comboboxwidget.h>
 #include <tavoos/widget/controls/flickareawidget.h>
 #include <tavoos/widget/controls/listviewwidget.h>
+#include <tavoos/widget/controls/menubarwidget.h>
+#include <tavoos/widget/controls/menuitemwidget.h>
+#include <tavoos/widget/controls/menuseparatorwidget.h>
+#include <tavoos/widget/controls/menuwidget.h>
 #include <tavoos/widget/controls/popupwidget.h>
 #include <tavoos/widget/controls/progressbarwidget.h>
 #include <tavoos/widget/controls/radiowidget.h>
@@ -69,6 +73,10 @@ public:
     static void ScrollArea(std::function<void(ScrollAreaWidget&)> body) { create<ScrollAreaWidget>(std::move(body)); }
     static void ListView(std::function<void(ListViewWidget&)> body)   { create<ListViewWidget>(std::move(body)); }
     static void ComboBox(std::function<void(ComboBoxWidget&)> body)   { create<ComboBoxWidget>(std::move(body)); }
+    static void Menu(std::function<void(MenuWidget&)> body)           { create<MenuWidget>(std::move(body)); }
+    static void MenuItem(std::function<void(MenuItemWidget&)> body)   { create<MenuItemWidget>(std::move(body)); }
+    static void MenuSeparator(std::function<void(MenuSeparatorWidget&)> body) { create<MenuSeparatorWidget>(std::move(body)); }
+    static void MenuBar(std::function<void(MenuBarWidget&)> body)     { create<MenuBarWidget>(std::move(body)); }
     static void StackView(std::function<void(StackViewWidget&)> body) { create<StackViewWidget>(std::move(body)); }
     static void SwipeView(std::function<void(SwipeViewWidget&)> body) { create<SwipeViewWidget>(std::move(body)); }
     static void Popup(std::function<void(PopupWidget&)> body)         { create<PopupWidget>(std::move(body)); }

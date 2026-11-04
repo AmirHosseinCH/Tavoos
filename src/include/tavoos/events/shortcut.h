@@ -64,6 +64,9 @@ public:
     bool enabled() const { return m_enabled; }
     bool autoRepeat() const { return m_autoRepeat; }
 
+protected:
+    virtual bool reachable() const;
+
 private:
     bool matches(const KeySequence& sequence, bool repeat) const;
 

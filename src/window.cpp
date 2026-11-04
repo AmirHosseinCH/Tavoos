@@ -173,6 +173,15 @@ Window::~Window() {
     }
 }
 
+Point Window::cursorPosition() const {
+    if (!m_window)
+        return {};
+    double x = 0.0;
+    double y = 0.0;
+    glfwGetCursorPos(m_window, &x, &y);
+    return { static_cast<float>(x), static_cast<float>(y) };
+}
+
 void Window::setup() {
     m_window = glfwCreateWindow(m_width, m_height, m_title.get().c_str(), nullptr,
                                  Application::instance()->shareContextHandle());
@@ -528,19 +537,26 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
     Widget* const hit = hitTestChildren(self, mx, my);
     const Point windowPoint{static_cast<float>(mx), static_cast<float>(my)};
 
-    if (action == GLFW_PRESS && !self->m_overlays.empty()) {
-        OverlayBase* const top = self->m_overlays.back();
-        const ClosePolicy policy = top->closePolicy();
-        const bool outside = !top->isContentHit(static_cast<Widget*>(top)->hitTestTree(static_cast<float>(mx), static_cast<float>(my)));
-        if (outside && hasFlag(policy, ClosePolicy::ClickOutside)) {
+    if (action == GLFW_PRESS) {
+        while (!self->m_overlays.empty()) {
+            OverlayBase* const top = self->m_overlays.back();
+            if (top->isContentHit(static_cast<Widget*>(top)->hitTestTree(static_cast<float>(mx), static_cast<float>(my))))
+                break;
+            const ClosePolicy policy = top->closePolicy();
+            bool closes = hasFlag(policy, ClosePolicy::ClickOutside);
+            if (!closes && hasFlag(policy, ClosePolicy::ClickOutsideParent)) {
+                const Object* const anchor = top->anchor();
+                bool onAnchor = false;
+                for (const Object* object = hit; object && !onAnchor; object = object->parent())
+                    onAnchor = object == anchor;
+                closes = !onAnchor;
+            }
+            if (!closes)
+                break;
+            const bool modal = top->modalActive();
             top->close();
-        } else if (outside && hasFlag(policy, ClosePolicy::ClickOutsideParent)) {
-            const Object* const anchor = static_cast<Widget*>(top)->parent();
-            bool onAnchor = false;
-            for (const Object* object = hit; object && !onAnchor; object = object->parent())
-                onAnchor = object == anchor;
-            if (!onAnchor)
-                top->close();
+            if (modal || (!self->m_overlays.empty() && self->m_overlays.back() == top))
+                break;
         }
     }
 

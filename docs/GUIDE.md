@@ -34,6 +34,8 @@ quick-start example in [README.md](../README.md).
    - [`SpinBoxWidget`](#spinboxwidget)
    - [`PopupWidget`](#popupwidget)
    - [`ToolTipWidget`](#tooltipwidget)
+   - [`MenuWidget`](#menuwidget)
+   - [`MenuBarWidget`](#menubarwidget)
    - [`FlickAreaWidget`](#flickareawidget)
    - [`ScrollAreaWidget`](#scrollareawidget)
    - [`ListViewWidget`](#listviewwidget)
@@ -740,6 +742,8 @@ Built on `PopupBase`, itself built on `OverlayBase`.
 | `target()` | `PlacementTarget` | `Parent` (default) places it against the anchor, `Window` against the window. |
 | `offset()`, `offsetLeft()` / `offsetTop()` / `offsetRight()` / `offsetBottom()` | `float` | Gap from the anchor, or inset from the window edge, for the side it ends up on. `offset(v)` sets all four. |
 | `x()`, `y()` | `int` | Explicit position from the target's top-left corner. Overrides placement per axis; not clamped. |
+| `openAt(point)` | - | Opens it at a point measured from the anchor's top-left corner, or the window's when the target is `Window`. See below. |
+| `anchor(widget)`, `anchor()` | `Widget*` | The widget it is placed against. Default: the widget it is declared in. |
 | `closePolicy()` | `ClosePolicy` | Combine `ClickOutside` or `ClickOutsideParent` with `Escape` using `\|`; `None` for neither. Default: `ClickOutside \| Escape`. |
 | `modal()` | `bool` | Blocks pointer input behind the popup, dims the window, and confines Tab to the popup. Read when it opens. |
 | `enter<T>(args...)`, `exit<T>(args...)` | transition | Animate opening and closing. Default: a short fade in and out. An empty factory means no animation. |
@@ -755,6 +759,15 @@ edge, centered along it, and `Center` centers it in the window. The popup is alw
 the window, except where you set `x`/`y` explicitly. Whichever of `x`, `y`, and `placement` you set
 last wins.
 
+To place a popup against a widget other than the one it is declared in, pass that widget to
+`anchor()`. Placement and `ClickOutsideParent` then use it instead of the parent. The anchor must
+outlive the popup.
+
+`openAt(point)` opens the popup with its top-left corner at a point, such as where the user
+right-clicked. When it does not fit to the right of the point it opens to the left of it, and when
+it does not fit below, above it; then it is kept inside the window. Placement, offsets, `x` and `y`
+are ignored until the next plain `open()`, and calling `openAt` while the popup is open moves it.
+
 ```cpp
 TB::Popup([](Tavoos::PopupWidget& dialog) {
     dialog.target(Tavoos::PlacementTarget::Window)
@@ -769,9 +782,13 @@ A press outside the popup closes it when `ClickOutside` is set. A normal popup l
 reach the widget behind it; a modal one swallows it. Escape closes it when `Escape` is set. A press
 on the anchor itself counts as outside, so use `open()` in the anchor's click handler instead of
 toggling, or the popup closes on press and reopens on release. To let the anchor toggle, use
-`ClickOutsideParent` instead of `ClickOutside`: a press on the popup's parent, or anything inside it,
+`ClickOutsideParent` instead of `ClickOutside`: a press on the popup's anchor, or anything inside it,
 then leaves the popup open for the anchor's own click to close, while a press anywhere else still
 closes it.
+
+With several popups open on top of each other, a press closes each one it lands outside of, from
+the top down, and stops at the first that contains it, does not close for it, or is modal. A press
+inside a lower popup therefore closes only the ones above it.
 
 A popup fades in and out by default. `enter` and `exit` take a transition type and its constructor
 arguments, like the [stack view's slots](#transitions):
@@ -798,7 +815,8 @@ TB::Button([](Tavoos::ButtonWidget& b) {
 });
 ```
 
-Every control built on `ButtonBase` (Button, Checkbox, Radio, Switch, and ComboBox) has a tooltip.
+Every control built on `ButtonBase` (Button, Checkbox, Radio, Switch, ComboBox, menu items and menu
+bar titles) has a tooltip.
 `toolTip()` creates a themed `ToolTipWidget` the first time it is called and returns the same one
 after that. It shows 0.5 seconds after the pointer rests on the control and hides when the pointer
 leaves. A press hides it until the pointer leaves and comes back.
@@ -862,6 +880,175 @@ or `close()`, replaces the binding.
 Escape and presses outside do not close a tooltip; its binding, `hide()`, or its timeout do. While
 one is showing it is the topmost popup, so Escape or a press outside does not close a popup beneath
 it until the tooltip hides.
+
+### `MenuWidget`
+
+```cpp
+Tavoos::MenuWidget* fileMenu = nullptr;
+
+TB::Button([](Tavoos::ButtonWidget& b) {
+    b.text("File").onClick([](Tavoos::MouseEvent&) { fileMenu->open(); });
+
+    TB::Menu([](Tavoos::MenuWidget& menu) {
+        fileMenu = &menu;
+        menu.offsetTop(4);
+        TB::MenuItem([](Tavoos::MenuItemWidget& item) {
+            item.text("New").shortcut("Ctrl+N").onClick([](Tavoos::MouseEvent&) { newDocument(); });
+        });
+        TB::MenuSeparator([](Tavoos::MenuSeparatorWidget&) {});
+        TB::MenuItem([](Tavoos::MenuItemWidget& item) {
+            item.text("Word wrap").checkable(true).checked(true);
+        });
+    });
+});
+```
+
+A menu is a [popup](#popupwidget) that stacks its children from top to bottom: menu items, separators,
+or any other widget. Like a popup it is declared inside the widget it belongs to, opens below it by
+default, and takes every popup property: placement, offsets, `anchor()`, close policy, transitions.
+The menu is as wide as its widest child, and items and separators stretch to that width. Built on
+`MenuBase`, itself built on `PopupBase`.
+
+A `MenuItemWidget` is a button, built on `MenuItemBase` and `ButtonBase`, so it has `onClick`,
+`enabled`, and `checkable`/`checked`. It shows a check mark when it is checkable and checked, its
+text, and on the right its shortcut and, for a submenu, an arrow. Checkable items keep room for the
+check mark even while unchecked.
+
+| `MenuItemWidget` | Type | Notes |
+|---|---|---|
+| `text()` | `std::string` | |
+| `shortcut()`, `shortcutState()` | `KeySequence` | Set from a `KeySequence` or text. Shown on the right, and triggers the item, also while the menu is closed. |
+| `subMenu(body)`, `subMenuItem()` | `MenuBase*` | Gives the item a submenu, a `MenuWidget` unless you name another type: `subMenu<W>(body)`. See [Submenus](#submenus). |
+| `highlighted()`, `highlightedState()` | `bool` / `State<bool>&` | Whether this is the menu's highlighted item. Read-only. |
+| `menu()` | `MenuBase*` | The menu the item is in. |
+| `highlightColor()`, `textColor()`, `disabledTextColor()`, `shortcutColor()`, `checkColor()`, `arrowColor()` | `Paint` | |
+| `font()`, `radius()` | `Font` / `int` | |
+
+| `MenuWidget` | Type | Notes |
+|---|---|---|
+| `open()`, `close()`, `opened()`, `openedState()`, ... | - | As on a popup. |
+| `popup()`, `popup(point)` | - | Open at the mouse cursor, or at a point. See [Context menus](#context-menus). |
+| `subMenuDelay()` | `float` | Seconds the pointer rests on an item before its submenu opens. Default 0.2. |
+| `title()`, `titleState()` | `std::string` | The menu's name in a [menu bar](#menubarwidget). |
+| `backgroundColor()`, `borderColor()`, `borderWidth()`, `radius()`, `padding()` | | The box around the items. |
+
+A `MenuSeparatorWidget` is a line between groups of items, with `color()`, `thickness()` (an `int`,
+default 1) and `spacing()`, the space above and below it (default 4).
+
+- **The highlight.** One item is highlighted at a time. The pointer moves it, and so do Up and Down,
+  which wrap around at the ends, Home and End, and Tab and Shift+Tab. Separators, other widgets, and
+  disabled or hidden items are skipped. The keyboard focus is always on the highlighted item, so Enter
+  and Space trigger the item you see. Opening a menu highlights its first item, and the highlight
+  stays where it is when the pointer leaves the menu.
+- **Triggering.** A click, Enter, Space, or the item's shortcut closes the menu, and any open
+  submenus, and then toggles a checkable item and runs `onClick`. Because the menu is already closed,
+  focus is back on the widget that had it before the menu opened when `onClick` runs, for example a
+  dialog opened from there returns focus to the button.
+- **Shortcuts while closed.** An item's shortcut works whether its menu is open or not, as long as the
+  item is enabled and visible and the widget the menu belongs to is visible. A closed menu does not
+  stop it, but a closed popup or a hidden page above the menu does, like any other
+  [shortcut](#keyboard-shortcuts).
+- **Escape** closes the menu, or only the submenu on top.
+
+#### Submenus
+
+```cpp
+TB::MenuItem([](Tavoos::MenuItemWidget& item) {
+    item.text("Open Recent").subMenu([](Tavoos::MenuWidget&) {
+        TB::MenuItem([](Tavoos::MenuItemWidget& file) { file.text("notes.txt"); });
+        TB::MenuItem([](Tavoos::MenuItemWidget& file) { file.text("todo.md"); });
+    });
+});
+```
+
+The submenu's items are declared in the body, and a submenu item can have its own submenu. A submenu
+opens to the right of its item, against the edge of the parent menu, or to the left when there is no
+room.
+
+- Resting the pointer on the item for `subMenuDelay` opens it; moving the highlight to another item
+  closes it. Moving the highlight with the keyboard never opens a submenu.
+- A click, Enter, Space, or Right on the item opens it at once and moves the keyboard to its first
+  item. The item does not run `onClick`.
+- Left or Escape closes the submenu and returns to its item.
+- A press on the parent menu closes the submenu; a press outside every menu closes them all.
+- Triggering an item at any depth closes the whole chain.
+
+#### Context menus
+
+```cpp
+Tavoos::MenuWidget* contextMenu = nullptr;
+
+TB::Rectangle([](Tavoos::RectangleWidget& canvas) {
+    canvas.fill(Tavoos::Fill::Both).onPress([](Tavoos::MouseEvent& event) {
+        if (event.button() == Tavoos::MouseButton::Right)
+            contextMenu->popup();
+    });
+
+    TB::Menu([](Tavoos::MenuWidget& menu) {
+        contextMenu = &menu;
+        TB::MenuItem([](Tavoos::MenuItemWidget& item) { item.text("Paste"); });
+    });
+});
+```
+
+`popup()` opens the menu at the mouse cursor, and `popup(point)` at a point measured from its
+anchor's top-left corner, such as `{event.x(), event.y()}` in the anchor's own handler. Both use
+[`openAt()`](#popupwidget): the menu opens below and to the right of the point, or to the left of it
+and above it when it does not fit. A right-click somewhere else closes the open menu and opens it
+again at the new point.
+
+- **Without a look.** `MenuBase` and `MenuItemBase` have the same behavior and draw nothing. Give them
+  your own `background()` and `content()`, and bind them to `highlightedState()`, `checkedState()` and
+  `shortcutState()`. Any widget derived from `MenuItemBase` is an item.
+- To change the defaults for every menu, set `Theme::menu`, `Theme::menuItem` and
+  `Theme::menuSeparator` with a `MenuStyle`, `MenuItemStyle` and `MenuSeparatorStyle`.
+
+### `MenuBarWidget`
+
+```cpp
+TB::MenuBar([](Tavoos::MenuBarWidget& bar) {
+    bar.fill(Tavoos::Fill::Width);
+
+    TB::Menu([](Tavoos::MenuWidget& file) {
+        file.title("File");
+        TB::MenuItem([](Tavoos::MenuItemWidget& item) { item.text("New").shortcut("Ctrl+N"); });
+    });
+    TB::Menu([](Tavoos::MenuWidget& edit) {
+        edit.title("Edit");
+        TB::MenuItem([](Tavoos::MenuItemWidget& item) { item.text("Undo").shortcut("Ctrl+Z"); });
+    });
+});
+```
+
+A row of menu titles. Each [menu](#menuwidget) declared inside the bar gets a title showing its
+`title()`, in the order the menus are declared, and opens right below the bar under its title. Built on
+`MenuBarBase`; the titles are `MenuBarItemWidget`s, built on `MenuBarItemBase` and `ButtonBase`.
+
+- Clicking a title opens its menu, and clicking it again closes it.
+- While a menu is open, pointing at another title switches to its menu.
+- Left and Right in an open menu move to the previous or next menu, wrapping around. In a submenu,
+  Left first closes the submenu, and Right on an item with a submenu opens it.
+- With a title focused and no menu open, Left and Right move between the titles and Down opens the
+  title's menu. Enter and Space work as on a button.
+- Escape closes the open menu and returns focus to its title.
+- The bar finds its menus once, when it is built.
+
+| `MenuBarWidget` | Type | Notes |
+|---|---|---|
+| `backgroundColor()` | `Paint` | |
+| `padding()` | `float` | The space around the titles (default 4, set by the style). |
+
+| `MenuBarItemWidget` | Type | Notes |
+|---|---|---|
+| `menu()` | `MenuBase*` | The menu the title opens. |
+| `highlightColor()` | `Paint` | While its menu is open. |
+| `hoverColor()` | `Paint` | While the pointer is over it. |
+| `textColor()`, `disabledTextColor()`, `font()`, `radius()` | | |
+
+The bar creates its titles itself, so they are styled through `Theme::menuBarItem` with a
+`MenuBarItemStyle`; the bar follows `Theme::menuBar` with a `MenuBarStyle`. For titles of your own,
+derive from `MenuBarBase` and override `createItem()` to add your item type, and in that type override
+`bindMenu(menu)` to bind its look to the menu, such as `menu.titleState()` and `menu.openedState()`.
 
 ### `FlickAreaWidget`
 
@@ -1395,7 +1582,7 @@ half a page. Built on `SwipeViewBase`. It has no size of its own, so give it one
 
 ## Theme & styling
 
-Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `ToolTipStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `ComboBoxStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
+Every control above (`ButtonStyle`, `CheckboxStyle`, ..., `SpinBoxStyle`, `PopupStyle`, `ToolTipStyle`, `FlickAreaStyle`, `ScrollAreaStyle`, `ListViewStyle`, `ComboBoxStyle`, `MenuStyle`, `MenuItemStyle`, `MenuSeparatorStyle`, `MenuBarStyle`, `MenuBarItemStyle`, `StackViewStyle`, `SwipeViewStyle` - one plain struct
 per control in `tavoos/widget/controls/style/`) has a matching entry on the app-wide theme:
 
 ```cpp
@@ -2502,7 +2689,8 @@ with nothing focused. It is not a widget: it draws nothing and takes no space, s
 usually next to what it acts on. Its `context` decides where it applies: `ShortcutContext::Window`, the
 default, while its window has focus, or `ShortcutContext::Application` from any of the app's windows. A
 shortcut applies only while it is enabled and every widget above it is visible, so the shortcuts of a
-hidden page are off.
+hidden page are off. A [menu item's shortcut](#menuwidget) is the exception: a closed menu above it
+does not turn it off.
 
 A sequence is a key with its modifiers, written as text or as a `KeySequence`:
 

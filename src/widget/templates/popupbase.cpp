@@ -29,6 +29,20 @@ PopupBase::PopupBase(Object* parent) : OverlayBase{parent} {
     m_placement.onChange([this](const Placement&) { m_hasRequestedX = m_hasRequestedY = false; });
 }
 
+void PopupBase::openAt(const Point& point) {
+    m_point = point;
+    m_atPoint = true;
+    m_pointRequested = true;
+    open();
+}
+
+void PopupBase::applyOpened(bool opened) {
+    if (opened && !m_pointRequested)
+        m_atPoint = false;
+    m_pointRequested = false;
+    OverlayBase::applyOpened(opened);
+}
+
 void PopupBase::place() {
     Window* const window = ownerWindow();
     if (!window)
@@ -38,7 +52,7 @@ void PopupBase::place() {
     const float windowW = static_cast<float>(window->width());
     const float windowH = static_cast<float>(window->height());
 
-    auto* const anchor = dynamic_cast<Widget*>(parent());
+    Widget* const anchor = this->anchor();
     const bool toWindow = m_target.get() == PlacementTarget::Window || !anchor;
 
     Edges ref{0.0f, 0.0f, windowW, windowH};
@@ -46,6 +60,15 @@ void PopupBase::place() {
         const Point a = anchor->mapToWindow({0.0f, 0.0f});
         const Point b = anchor->mapToWindow({anchor->displayedWidth(), anchor->displayedHeight()});
         ref = {std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
+    }
+
+    if (m_atPoint) {
+        const Point point = toWindow ? m_point : anchor->mapToWindow(m_point);
+        const float x = point.x + size.width > windowW ? point.x - size.width : point.x;
+        const float y = point.y + size.height > windowH ? point.y - size.height : point.y;
+        moveTo(std::clamp(x, 0.0f, std::max(0.0f, windowW - size.width)),
+               std::clamp(y, 0.0f, std::max(0.0f, windowH - size.height)));
+        return;
     }
 
     float x = (ref.left + ref.right - size.width) * 0.5f;
@@ -90,7 +113,10 @@ void PopupBase::place() {
                         : std::clamp(x, 0.0f, std::max(0.0f, windowW - size.width));
     y = m_hasRequestedY ? ref.top + static_cast<float>(m_requestedY.get())
                         : std::clamp(y, 0.0f, std::max(0.0f, windowH - size.height));
+    moveTo(x, y);
+}
 
+void PopupBase::moveTo(float x, float y) {
     const int placedX = static_cast<int>(std::lround(x));
     const int placedY = static_cast<int>(std::lround(y));
     if (Widget::x() != placedX)
