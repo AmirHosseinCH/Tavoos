@@ -69,6 +69,8 @@ set(TAVOOS_SOURCES
     widget/templates/comboboxbase.cpp
     widget/templates/menubase.cpp
     widget/templates/menuitembase.cpp
+    widget/templates/menubarbase.cpp
+    widget/templates/menubaritembase.cpp
     widget/templates/tooltipbase.cpp
     widget/templates/swipeviewbase.cpp
     widget/controls/spinboxwidget.cpp
@@ -162,6 +164,8 @@ target_sources(Tavoos
     include/tavoos/widget/templates/comboboxbase.h
     include/tavoos/widget/templates/menubase.h
     include/tavoos/widget/templates/menuitembase.h
+    include/tavoos/widget/templates/menubarbase.h
+    include/tavoos/widget/templates/menubaritembase.h
     include/tavoos/widget/templates/tooltipbase.h
     include/tavoos/widget/templates/swipeviewbase.h
     include/tavoos/widget/controls/spinboxwidget.h

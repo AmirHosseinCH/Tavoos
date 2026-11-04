@@ -6,6 +6,7 @@
 #include <tavoos/reactive/reactive.h>
 #include <tavoos/widget/templates/popupbase.h>
 
+#include <string>
 #include <vector>
 
 namespace Tavoos {
@@ -19,12 +20,19 @@ public:
     MenuBase(Object* parent);
     ~MenuBase() override;
 
+    decltype(auto) title(this auto&& self, PropertyArg<std::string> text) {
+        self.m_title.set(text);
+        return std::forward<decltype(self)>(self);
+    }
+
     decltype(auto) subMenuDelay(this auto&& self, PropertyArg<float> seconds) {
         seconds.applyTo(self.m_subMenuDelay);
         return std::forward<decltype(self)>(self);
     }
 
+    std::string title() const { return m_title.get(); }
     float subMenuDelay() const { return m_subMenuDelay; }
+    State<std::string>& titleState() { return m_title.state(); }
 
     void popup();
     void popup(const Point& point);
@@ -50,6 +58,7 @@ private:
     void startSubMenuTimer(MenuItemBase* item);
     void stopSubMenuTimer();
 
+    BindableState<std::string> m_title;
     Property<float> m_subMenuDelay{0.2f};
     MenuItemBase* m_pendingItem{nullptr};
     float m_pendingElapsed{0.0f};
