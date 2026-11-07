@@ -33,13 +33,9 @@ MenuItemWidget::MenuItemWidget(Object* parent) : MenuItemBase{parent} {
     enabledState().onChange([this](const bool&) { updateColors(); });
     checkedState().onChange([this](const bool&) { updateColors(); });
 
-    m_text.onChange([this](const std::string&) { requestRelayout(); });
-    m_font.onChange([this](const Font&) { requestRelayout(); });
-    checkableState().onChange([this](const bool&) { requestRelayout(); });
     shortcutState().onChange([this](const KeySequence& sequence) {
         m_shortcutText.set(sequence.toString());
         m_hasShortcut.setIfChanged(!sequence.isEmpty());
-        requestRelayout();
     });
 
     background([this](RectangleWidget& box) {
@@ -99,7 +95,6 @@ void MenuItemWidget::createToolTip() {
 
 void MenuItemWidget::styleSubMenu(MenuBase& subMenu) {
     m_hasSubMenu.set(true);
-    requestRelayout();
     if (MenuBase* const owner = menu())
         subMenu.offsetLeft(owner->paddingLeft()).offsetRight(owner->paddingRight());
 }

@@ -75,7 +75,6 @@ private:
                 body(slot);
         });
         ++m_contentRevision;
-        requestRelayout();
     }
 
     void replaceSlot(Widget*& slot);

@@ -21,7 +21,6 @@ MenuBarItemWidget::MenuBarItemWidget(Object* parent) : MenuBarItemBase{parent} {
     m_disabledTextColor.onChange([this](const Paint&) { updateColors(); });
     hoveredState().onChange([this](const bool&) { updateColors(); });
     enabledState().onChange([this](const bool&) { updateColors(); });
-    m_font.onChange([this](const Font&) { requestRelayout(); });
 
     background([this](RectangleWidget& box) {
         box.radius(m_radius.state()).color(m_backgroundOut);
@@ -44,7 +43,6 @@ void MenuBarItemWidget::bindMenu(MenuBase& menu) {
     menu.openedState().onChange([this](const bool&) { updateColors(); });
     if (const auto* const owner = ancestor<MenuBarBase>())
         menu.offsetBottom(owner->paddingBottom());
-    requestRelayout();
     updateColors();
 }
 
