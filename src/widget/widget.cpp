@@ -24,14 +24,15 @@ Widget::Widget(Object* parent) : Object{parent} {
     else if (auto* window = dynamic_cast<Window*>(parent))
         m_ownerWindow = window;
 
-    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_xFraction, m_yFraction, m_visible, m_alignment, m_fill,
+    bindRelayoutTriggers(m_width, m_height, m_visible, m_fill,
                          m_padding.leftProperty(), m_padding.topProperty(),
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
                          m_margin.rightProperty(), m_margin.bottomProperty(),
-                         m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin,
                          m_gridColumnSpan, m_gridRowSpan,
                          m_gridRow, m_gridColumn);
+    bindRepositionTriggers(m_x, m_y, m_xFraction, m_yFraction, m_widthFraction, m_heightFraction, m_alignment);
+    bindMatrixTriggers(m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
     m_cursor.onChange([this](const CursorShape&) {
@@ -243,6 +244,30 @@ bool Widget::isSizeBoundary() const {
     const bool widthFixed  = hasFlag(m_fill.get(), Fill::Width)  || m_width.get()  > 0 || m_widthFraction.get()  >= 0.0f;
     const bool heightFixed = hasFlag(m_fill.get(), Fill::Height) || m_height.get() > 0 || m_heightFraction.get() >= 0.0f;
     return widthFixed && heightFixed;
+}
+
+void Widget::requestReposition() {
+    if (s_isBuilding)
+        return;
+
+    markLayoutDirty();
+
+    if (isOverlay())
+        return;
+
+    auto* const parentWidget = dynamic_cast<Widget*>(parent());
+    if (!parentWidget)
+        return;
+
+    if (parentWidget->sizesFromChildPositions())
+        parentWidget->requestRelayout();
+    else if (parentWidget->isLayouter())
+        parentWidget->markLayoutDirty();
+}
+
+void Widget::requestMatrixUpdate() {
+    if (!s_isBuilding)
+        markLayoutDirty();
 }
 
 void Widget::requestRelayout() {

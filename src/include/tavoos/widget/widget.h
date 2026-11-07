@@ -504,6 +504,7 @@ public:
 
     virtual bool isLayouter() const { return false; }
     virtual bool sizesFromChildren() const { return isLayouter(); }
+    virtual bool sizesFromChildPositions() const { return false; }
     virtual bool isOverlay() const { return false; }
     virtual std::optional<CornerRadii> shapeRadii() const { return std::nullopt; }
 
@@ -634,6 +635,8 @@ protected:
     bool isSizeBoundary() const;
 
     void requestRelayout();
+    void requestReposition();
+    void requestMatrixUpdate();
     void markLayoutDirty();
     void syncDisplayedGeometry();
     void notifyResolvedSizeIfChanged();
@@ -665,6 +668,18 @@ protected:
     void bindRelayoutTriggers(Props&... props) {
         auto relayout = [this](const auto&) { requestRelayout(); };
         (props.onChange(relayout), ...);
+    }
+
+    template<typename... Props>
+    void bindRepositionTriggers(Props&... props) {
+        auto reposition = [this](const auto&) { requestReposition(); };
+        (props.onChange(reposition), ...);
+    }
+
+    template<typename... Props>
+    void bindMatrixTriggers(Props&... props) {
+        auto matrix = [this](const auto&) { requestMatrixUpdate(); };
+        (props.onChange(matrix), ...);
     }
 
     Property<int>& widthProperty() { return m_width; }

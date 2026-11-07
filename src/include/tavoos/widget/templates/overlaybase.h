@@ -103,6 +103,7 @@ public:
     bool isContentHit(const Widget* hit) const;
 
     bool isOverlay() const override { return true; }
+    bool sizesFromChildPositions() const override { return true; }
 
 protected:
     const Widget* scrimSlot() const noexcept { return m_scrim; }
