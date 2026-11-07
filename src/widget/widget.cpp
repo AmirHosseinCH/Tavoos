@@ -171,7 +171,7 @@ void Widget::detachAndDefer(Object* child) {
         m_ownerWindow->deferDestruction(std::move(detached));
     }
 
-    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->isLayouter())
+    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->sizesFromChildren())
         parentWidget->requestRelayout();
 }
 
@@ -256,7 +256,7 @@ void Widget::requestRelayout() {
         return;
 
     auto* const parentWidget = dynamic_cast<Widget*>(parent());
-    if (!parentWidget || !parentWidget->isLayouter())
+    if (!parentWidget || !parentWidget->sizesFromChildren())
         return;
 
     if (parentWidget->isSizeBoundary())

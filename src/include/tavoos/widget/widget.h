@@ -503,6 +503,7 @@ public:
     float displayedHeight() const { return m_displayedHeight; }
 
     virtual bool isLayouter() const { return false; }
+    virtual bool sizesFromChildren() const { return isLayouter(); }
     virtual bool isOverlay() const { return false; }
     virtual std::optional<CornerRadii> shapeRadii() const { return std::nullopt; }
 

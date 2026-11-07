@@ -302,10 +302,8 @@ void Window::layoutTree() {
         layoutQueued();
         std::vector<OverlayBase*> overlays = m_retiredOverlays;
         overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
-        for (OverlayBase* const overlay : overlays) {
+        for (OverlayBase* const overlay : overlays)
             overlay->place();
-            overlay->layout();
-        }
         if (m_layoutQueue.empty())
             return;
     }

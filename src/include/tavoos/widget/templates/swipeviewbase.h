@@ -26,6 +26,8 @@ public:
     SwipeViewBase(Object* parent);
     ~SwipeViewBase() override;
 
+    bool sizesFromChildren() const override { return false; }
+
     decltype(auto) orientation(this auto&& self, PropertyArg<Orientation> value) {
         value.applyTo(self.m_orientation);
         return std::forward<decltype(self)>(self);
