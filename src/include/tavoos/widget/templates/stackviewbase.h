@@ -26,6 +26,8 @@ class TAVOOS_EXPORT StackViewBase : public Control {
 public:
     StackViewBase(Object* parent);
 
+    bool sizesFromChildren() const override { return false; }
+
     template<typename T>
     T* push(std::function<void(T&)> body = {}, std::optional<TransitionSet> transitions = std::nullopt) {
         static_assert(std::is_base_of_v<Widget, T>, "push<T>() requires T to derive from Widget");

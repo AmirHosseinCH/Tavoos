@@ -21,6 +21,13 @@ namespace {
 
 constexpr int kMaxLayoutPasses = 4;
 
+int depthOf(const Object* object) {
+    int depth = 0;
+    for (const Object* ancestor = object->parent(); ancestor; ancestor = ancestor->parent())
+        ++depth;
+    return depth;
+}
+
 }
 
 Window::Window() {
@@ -73,6 +80,7 @@ void Window::clearReferencesTo(Object* subtreeRoot) {
         setFocusedWidget(nullptr);
     std::erase_if(m_overlays, isOrDescendantOf);
     std::erase_if(m_retiredOverlays, isOrDescendantOf);
+    std::erase_if(m_layoutQueue, isOrDescendantOf);
     std::erase_if(m_focusMemory, [&](const auto& entry) { return isOrDescendantOf(entry.first); });
     for (auto& entry : m_focusMemory)
         if (isOrDescendantOf(entry.second))
@@ -218,6 +226,10 @@ void Window::setup() {
 
     Widget::s_isBuilding = false;
     Builder::currentItem = nullptr;
+
+    for (const auto& child : children())
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->markLayoutDirty();
 }
 
 GLFWwindow* Window::handle() const {
@@ -287,20 +299,25 @@ Widget* Window::hitTestChildren(Window* self, double x, double y, const Widget* 
 
 void Window::layoutTree() {
     for (int pass = 0; pass < kMaxLayoutPasses; ++pass) {
-        m_layoutRequested = false;
-        for (const auto& child : children()) {
-            if (auto* widget = dynamic_cast<Widget*>(child.get()))
-                widget->layout();
-        }
+        layoutQueued();
         std::vector<OverlayBase*> overlays = m_retiredOverlays;
         overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
-        for (OverlayBase* const overlay : overlays) {
+        for (OverlayBase* const overlay : overlays)
             overlay->place();
-            overlay->layout(true);
-        }
-        if (!m_layoutRequested)
+        if (m_layoutQueue.empty())
             return;
     }
+}
+
+void Window::layoutQueued() {
+    std::vector<std::pair<int, Widget*>> queued;
+    queued.reserve(m_layoutQueue.size());
+    for (Widget* const widget : std::exchange(m_layoutQueue, {}))
+        queued.emplace_back(depthOf(widget), widget);
+    std::ranges::stable_sort(queued, {}, &std::pair<int, Widget*>::first);
+    for (const auto& [depth, widget] : queued)
+        if (widget->m_layoutDirty)
+            widget->layout();
 }
 
 Point Window::dragHotSpotInWindow() const {

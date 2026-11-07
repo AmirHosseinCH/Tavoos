@@ -41,7 +41,7 @@ protected:
     Size computeIntrinsicSize() override;
 
 private:
-    void layout(bool = false) override;
+    void performLayout() override;
 
     struct Placement {
         Widget* widget;

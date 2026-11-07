@@ -7,15 +7,7 @@ RowWidget::RowWidget(Object* parent) : EffectlessWidget{parent} {
     bindRelayoutTriggers(m_spacing);
 }
 
-void RowWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void RowWidget::performLayout() {
     std::vector<Widget*> items;
     for (auto& child : children())
         if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->participatesInLayout())
@@ -106,7 +98,7 @@ void RowWidget::layout(bool force) {
 
         item->setResolved(cursorX + itemMarginLeft, childY, childW, childH);
         cursorX += itemMarginLeft + childW + itemMarginRight + m_spacing;
-        item->layout(true);
+        item->layout();
     }
 }
 

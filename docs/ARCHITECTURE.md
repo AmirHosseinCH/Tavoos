@@ -23,7 +23,7 @@ document is where the "why" behind non-obvious code lives instead.
 5. [Layout system](#layout-system)
    - [Dirty-flag propagation](#dirty-flag-propagation)
    - [Repeated layout passes](#repeated-layout-passes)
-   - [`Widget::layout()` - the non-layouter default](#widgetlayout---the-non-layouter-default)
+   - [`Widget::performLayout()` - the non-layouter default](#widgetperformlayout---the-non-layouter-default)
    - [Column & Row](#column--row)
    - [Grid](#grid)
    - [Flex](#flex)
@@ -292,7 +292,7 @@ void Widget::detachAndDefer(Object* child) {
         m_ownerWindow->deferDestruction(std::move(detached));
     }
 
-    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->isLayouter())
+    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->sizesFromChildren())
         parentWidget->requestRelayout();
 }
 
@@ -654,8 +654,9 @@ decltype(auto) padding(this auto&& self, PropertyArg<float> value) {
 }
 ```
 
-`Widget`'s constructor wires most of its geometry-affecting properties into a relayout
-trigger, and purely visual ones into a repaint trigger, via two small generic helpers:
+`Widget`'s constructor wires its geometry-affecting properties into one of three layout
+triggers, chosen by what a change can affect, and purely visual ones into a repaint trigger, via
+small generic helpers of the same shape:
 
 ```cpp
 template<typename... Props>
@@ -663,75 +664,136 @@ void bindRelayoutTriggers(Props&... props) {
     auto relayout = [this](const auto&) { requestRelayout(); };
     (props.onChange(relayout), ...);
 }
-template<typename... Props>
-void bindRepaintTriggers(Props&... props) {
-    auto repaint = [this](const auto&) { requestRepaint(); };
-    (props.onChange(repaint), ...);
-}
+// bindRepositionTriggers -> requestReposition(), bindMatrixTriggers -> requestMatrixUpdate(),
+// bindRepaintTriggers -> requestRepaint()
 ```
 
 ```cpp
 // Widget::Widget(Object* parent)
-bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_alignment, m_fill,
+bindRelayoutTriggers(m_width, m_height, m_visible, m_fill,
                      m_padding.leftProperty(), m_padding.topProperty(), /* ... */
-                     m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY,
-                     m_perspective, m_transformOrigin,
+                     m_margin.leftProperty(), m_margin.topProperty(), /* ... */
                      m_gridColumnSpan, m_gridRowSpan, m_gridRow, m_gridColumn);
+bindRepositionTriggers(m_x, m_y, m_xFraction, m_yFraction, m_widthFraction, m_heightFraction, m_alignment);
+bindMatrixTriggers(m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY,
+                   m_perspective, m_transformOrigin);
 m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
-bindRepaintTriggers(m_opacity, m_visible, m_clip);
+bindRepaintTriggers(m_opacity, m_visible, m_clip, /* ... */);
 ```
+
+What each layout trigger does is under [Dirty-flag propagation](#dirty-flag-propagation).
 
 ## Layout system
 
 ### Dirty-flag propagation
 
-Two things drive when layout actually runs. First, `Widget::m_layoutDirty`:
+Layout runs only for the widgets that need it. Three pieces decide which: a queue per window,
+a skip check in `Widget::layout()`, and the trigger that decides how far a change climbs.
+
+**The queue.** Marking a widget dirty queues it on its window:
 
 ```cpp
 void Widget::markLayoutDirty() {
-    m_layoutDirty = true;
-    if (m_ownerWindow)
-        m_ownerWindow->m_layoutRequested = true;
+    if (!m_layoutDirty) {
+        m_layoutDirty = true;
+        if (m_ownerWindow)
+            m_ownerWindow->m_layoutQueue.push_back(this);
+    }
     requestRepaint();
 }
-bool Widget::consumeLayoutDirty() {
-    if (m_layoutDirty) { m_layoutDirty = false; return true; }
-    return false;
-}
 ```
 
-Every `layout()` override starts the same way:
+The flag doubles as "already queued", so a widget is queued once until it's laid out.
+`m_layoutDirty` starts false: `Window::setup()` marks the top-level widgets once after `build()`,
+and laying those out reaches everything built with them. `clearReferencesTo` erases a removed
+subtree from the queue.
+
+`Window::layoutQueued()` takes the queue, sorts it by depth, and lays out the entries that are
+still dirty, outermost first:
 
 ```cpp
-void ColumnWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);   // not dirty myself, but a descendant might be
-        return;
-    }
-    /* ... actually recompute this widget's own geometry and place children ... */
+void Window::layoutQueued() {
+    std::vector<std::pair<int, Widget*>> queued;
+    queued.reserve(m_layoutQueue.size());
+    for (Widget* const widget : std::exchange(m_layoutQueue, {}))
+        queued.emplace_back(depthOf(widget), widget);
+    std::ranges::stable_sort(queued, {}, &std::pair<int, Widget*>::first);
+    for (const auto& [depth, widget] : queued)
+        if (widget->m_layoutDirty)
+            widget->layout();
 }
 ```
 
-So a `layout()` call is cheap to make on every widget every frame - if nothing's dirty, it's
-just a tree walk checking each descendant's own flag, no math.
+Laying out a parent lays out its children and clears their flags, so a child queued along with a
+dirty parent is skipped when its own entry comes up. A widget marked dirty while this runs lands
+in the fresh queue for the next pass (see [Repeated layout passes](#repeated-layout-passes)).
 
-Second, `Widget::requestRelayout()` decides *how far up the tree* a property change needs to
-propagate:
+**`layout()` and `performLayout()`.** `layout()` is the private, non-virtual entry point that
+every caller uses - the window for queued widgets, and each parent for its children:
+
+```cpp
+void Widget::layout() {
+    const ContentArea input = layoutInput();
+    if (!m_layoutDirty && m_layoutInput == input) {
+        refreshWorldMatrices();
+        return;
+    }
+    m_layoutDirty = false;
+    m_layoutInput = input;
+    performLayout();
+}
+
+Widget::ContentArea Widget::layoutInput() {
+    if (parentIsLayouter())
+        return { m_resolvedX, m_resolvedY, m_resolvedWidth, m_resolvedHeight };
+    return resolveContentArea();
+}
+```
+
+A widget's layout depends only on its own properties and natural size, which mark it dirty when
+they change, and on its input: the rect a layouter parent gave it through `setResolved()`, or the
+area its parent offers through `contentAreaFor()`. So a widget that isn't dirty and gets the same
+input would compute the same result, and `layout()` skips it. Only its world matrix can be out of
+date, when an ancestor moved:
+
+```cpp
+void Widget::refreshWorldMatrices() {
+    const glm::mat4 previous = m_worldMatrix;
+    updateWorldMatrix();
+    if (m_worldMatrix == previous)
+        return;
+    for (auto& child : children())
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->refreshWorldMatrices();
+}
+```
+
+The walk stops wherever a matrix comes out unchanged. Children's inputs are relative to their
+parent, so a widget that moves lays itself out again while its children only refresh their
+matrices. `performLayout()` is the virtual that does the actual work: the base version in
+[`Widget::performLayout()`](#widgetperformlayout---the-non-layouter-default) and the four
+containers' overrides. The flag and the skip live in `layout()`, so an override can't forget them.
+
+**How far a change climbs.** Each layout trigger marks a different set of widgets.
+
+`requestRelayout()` is for size: width, height, visibility, fill, padding, margins, grid placement,
+and every subclass property that changes a natural size, such as a text's string or font. It clears
+the widget's intrinsic size cache and climbs:
 
 ```cpp
 void Widget::requestRelayout() {
-    if (s_isBuilding)   // no-op during Window::build() - nothing needs walking mid-construction
+    if (s_isBuilding)   // no-op during Window::build() - the first layout covers everything
         return;
 
     markLayoutDirty();
     m_intrinsicSizeCacheValid = false;
 
+    if (isOverlay())
+        return;   // laid out against the window - nothing above depends on it
+
     auto* const parentWidget = dynamic_cast<Widget*>(parent());
-    if (!parentWidget || !parentWidget->isLayouter())
-        return;   // parent isn't a container - it doesn't need to re-place me
+    if (!parentWidget || !parentWidget->sizesFromChildren())
+        return;   // the parent's size doesn't come from its children
 
     if (parentWidget->isSizeBoundary())
         parentWidget->markLayoutDirty();     // parent's own size is unaffected - only re-place children
@@ -739,6 +801,44 @@ void Widget::requestRelayout() {
         parentWidget->requestRelayout();     // parent's size may depend on me - keep walking up
 }
 ```
+
+`sizesFromChildren()` says whether a widget's own size depends on its children. It defaults to
+`isLayouter()`. `Control` returns true, because a control measures its content, and popups, menus
+and the menu bar measure their children. `StackViewBase`, `SwipeViewBase` and `FlickAreaBase`
+return false: they are always given a size, and their items never change it.
+
+`requestReposition()` is for position: x, y, xFraction, yFraction, widthFraction, heightFraction
+and alignment. These change only the widget's own rect, never a natural size, so no cache is
+cleared:
+
+```cpp
+void Widget::requestReposition() {
+    if (s_isBuilding)
+        return;
+
+    markLayoutDirty();
+
+    if (isOverlay())
+        return;
+
+    auto* const parentWidget = dynamic_cast<Widget*>(parent());
+    if (!parentWidget)
+        return;
+
+    if (parentWidget->sizesFromChildPositions())
+        parentWidget->requestRelayout();
+    else if (parentWidget->isLayouter())
+        parentWidget->markLayoutDirty();
+}
+```
+
+A layouter places its children, so it is marked to place this one again, but its own size can't
+change and the climb ends there. Any other parent isn't told at all: the widget positions itself.
+`sizesFromChildPositions()` is true only for `OverlayBase`, whose extent includes its children's
+x and y, so for an overlay a child's move is a resize.
+
+`requestMatrixUpdate()` is for transforms: rotation, scale, rotationX/Y, perspective and
+transformOrigin. No parent reads them, so only the widget itself is marked.
 
 ```cpp
 bool Widget::isSizeBoundary() const {
@@ -778,29 +878,22 @@ directly) the full window size.
 
 ### Repeated layout passes
 
-`Window::layoutTree` runs the layout pass up to four times (`kMaxLayoutPasses`). `markLayoutDirty`
-also sets the window's `m_layoutRequested`, which is cleared before each pass; if laying out sets it
-again, the pass runs again before anything is drawn. This is for layout that depends on the result
-of layout. A text area gives its text an explicit width from its own resolved width, which changes
-its natural height, and revealing a caret scrolls a scroll area, which moves its children. Without
-the repeat, such a request would wait for the next input event. A tree that asks for nothing during
-layout takes one pass, and the limit keeps a widget that always asks again from stalling the frame.
+`Window::layoutTree` runs up to four passes (`kMaxLayoutPasses`). Each pass drains the queue with
+`layoutQueued()` and then places the overlays; if that queued anything new, the next pass lays it
+out before anything is drawn. This is for layout that depends on the result of layout. A text area
+gives its text an explicit width from its own resolved width, which changes its natural height, and
+revealing a caret scrolls a scroll area, which moves its children. Without the repeat, such a
+request would wait for the next input event. A tree that asks for nothing during layout takes one
+pass. Whatever is still queued after the last pass waits for the next frame, so a widget that
+always asks again can't stall the frame.
 
-### `Widget::layout()` - the non-layouter default
+### `Widget::performLayout()` - the non-layouter default
 
 Every concrete widget except the four containers uses this base implementation as-is
 (`widget.cpp`):
 
 ```cpp
-void Widget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void Widget::performLayout() {
     if (parentIsLayouter()) {
         // A container already computed my resolved geometry directly via setResolved() -
         // I just need to propagate the world matrix and recurse into my own children.
@@ -808,7 +901,7 @@ void Widget::layout(bool force) {
         updateWorldMatrix();
         for (auto& child : children())
             if (auto* widget = dynamic_cast<Widget*>(child.get()))
-                widget->layout(true);
+                widget->layout();
         return;
     }
 
@@ -838,7 +931,7 @@ void Widget::layout(bool force) {
 
     for (auto& child : children())
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout(true);
+            widget->layout();
 }
 ```
 
@@ -863,9 +956,9 @@ over an explicit `x()`/`y()`.
 
 A widget that needs a value derived from its final size - a circular radius, an icon sized to its
 box - can't read `width()`/`height()`, which are only the properties and ignore `fill()`,
-fractions, and layout. `Widget::onResolvedSizeChanged()` is the hook for this: `Widget::layout()`
-calls it as soon as the resolved size is known, and only when it differs from the last size it
-announced:
+fractions, and layout. `Widget::onResolvedSizeChanged()` is the hook for this:
+`Widget::performLayout()` calls it as soon as the resolved size is known, and only when it differs
+from the last size it announced:
 
 ```cpp
 void Widget::notifyResolvedSizeIfChanged() {
@@ -882,8 +975,8 @@ same pass - no extra pass, no frame of stale values. The first layout always ann
 notified size starts unset), so a control's pre-layout defaults are replaced by values from its
 real size. `RadioWidget`, `CheckboxWidget`, and `SwitchWidget` use it to derive their radius,
 checkmark size, and thumb size from `resolvedWidth()`/`resolvedHeight()`. It's called from the
-base `Widget::layout()`, so a layouter (Row, Column, Grid, Flex), which overrides `layout()`,
-doesn't announce.
+base `Widget::performLayout()`, so a layouter (Row, Column, Grid, Flex), which overrides
+`performLayout()`, doesn't announce.
 
 `intrinsicSize()` caches `computeIntrinsicSize()`:
 
@@ -910,18 +1003,10 @@ Column and Row (`src/widget/column.cpp`, `row.cpp`) are near-mirror images of ea
 Column stacks on the vertical axis, Row on the horizontal - so the full walkthrough below is
 for Column; Row's code is included for completeness with every axis swapped.
 
-**`ColumnWidget::layout()`**, in full:
+**`ColumnWidget::performLayout()`**, in full:
 
 ```cpp
-void ColumnWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void ColumnWidget::performLayout() {
     std::vector<Widget*> items;
     for (auto& child : children())
         if (auto* w = dynamic_cast<Widget*>(child.get()))
@@ -953,7 +1038,7 @@ void ColumnWidget::layout(bool force) {
 
     // Resolve this Column's own geometry (fill / explicit size / hug-content), then position
     // it within its own parent's area via alignment or x()/y() - identical four-way branch
-    // to Widget::layout()'s else-branch above, just computed here instead of inherited,
+    // to Widget::performLayout()'s else-branch above, just computed here instead of inherited,
     // because Column needs fixedHeight/maxChildWidth (its own children's sizes) as the
     // "natural size" fallback instead of a generic computeIntrinsicSize() call.
     float resolvedW, resolvedH, resX, resY;
@@ -966,7 +1051,7 @@ void ColumnWidget::layout(bool force) {
                     : (height() > 0) ? static_cast<float>(height()) : fixedHeight + paddingTop() + paddingBottom();
         resolvedW = hasFlag(fill(), Fill::Width)  ? area.width - marginLeft() - marginRight()
                     : (width()  > 0) ? static_cast<float>(width())  : maxChildWidth + paddingLeft() + paddingRight();
-        // ... alignment-based resX/resY, same four-way branch as Widget::layout()
+        // ... alignment-based resX/resY, same four-way branch as Widget::performLayout()
     }
 
     setResolved(resX, resY, resolvedW, resolvedH);
@@ -1002,7 +1087,7 @@ void ColumnWidget::layout(bool force) {
 
         item->setResolved(childX, cursorY + itemMarginTop, childW, childH);
         cursorY += itemMarginTop + childH + itemMarginBottom + m_spacing;
-        item->layout(true);   // recurse - force=true since we just changed this item's geometry
+        item->layout();   // skips the item if it isn't dirty and its rect didn't change
     }
 }
 ```
@@ -1043,14 +1128,14 @@ Widget::Size ColumnWidget::computeIntrinsicSize() {
 Sums children's heights (+ spacing), takes the max of their widths - the "hug content"
 natural size. Note this ignores `Fill`-flagged children's *actual* fill behavior (a fill
 child still just contributes its `intrinsicSize()` here, same as `fixedHeight`'s accounting
-in `layout()` above) - intrinsic size is about what the column would need with no imposed
+in `performLayout()` above) - intrinsic size is about what the column would need with no imposed
 constraint, not what it does once one is imposed.
 
 **Row** is the exact same two algorithms with width/height, x/y, and Left-Right/Top-Bottom
 swapped:
 
 ```cpp
-void RowWidget::layout(bool force) {
+void RowWidget::performLayout() {
     // ... identical structure to Column, with:
     //   fixedWidth  instead of fixedHeight   (main axis = horizontal)
     //   maxChildHeight instead of maxChildWidth  (cross axis = vertical)
@@ -1062,8 +1147,8 @@ void RowWidget::layout(bool force) {
 ### Grid
 
 `src/widget/grid.cpp`. Grid's algorithm splits into two phases: `computeMetrics()` figures
-out placement and cell sizes without touching final pixel positions; `layout()` uses that to
-resolve this Grid's own geometry and then place every item.
+out placement and cell sizes without touching final pixel positions; `performLayout()` uses that
+to resolve this Grid's own geometry and then place every item.
 
 **Placement** (`computeMetrics()`, placement half):
 
@@ -1189,7 +1274,7 @@ for (auto& p : metrics.placements) {
 }
 ```
 
-**`layout()`**: resolves this Grid's own geometry (fill/explicit/natural-sum, same pattern as
+**`performLayout()`**: resolves this Grid's own geometry (fill/explicit/natural-sum, same pattern as
 Column/Row), then distributes any *extra* space beyond the natural column/row sizes evenly
 across all columns/rows (so a Grid with `fill(Fill::Both)` in a larger area doesn't leave a
 big empty margin - every column/row grows to share the extra), computes absolute `colX`/`rowY`
@@ -1237,7 +1322,7 @@ available space). `kUnbounded` (`1e9f`) is passed as `availableMainSpace` when *
 natural size (`computeIntrinsicSize()`) specifically so nothing wraps during that pass - a
 single unbounded line gives the true "everything laid out in one row/column" natural size.
 
-**Cross-axis line distribution** (`layout()`, when there's more than one line):
+**Cross-axis line distribution** (`performLayout()`, when there's more than one line):
 `alignContent` (`FlexAlign::Center`/`End`/`SpaceBetween`/`SpaceAround`/`SpaceEvenly`/
 `Stretch`) distributes the wrapped lines themselves across the cross axis, exactly mirroring
 how `justifyContent` distributes *items within a line* along the main axis (same
@@ -1299,18 +1384,12 @@ void Renderer::renderForWindow(Window& window) {
 
 void Window::layoutTree() {
     for (int pass = 0; pass < kMaxLayoutPasses; ++pass) {
-        m_layoutRequested = false;
-        for (const auto& child : children()) {
-            if (auto* widget = dynamic_cast<Widget*>(child.get()))
-                widget->layout();
-        }
+        layoutQueued();
         std::vector<OverlayBase*> overlays = m_retiredOverlays;
         overlays.insert(overlays.end(), m_overlays.begin(), m_overlays.end());
-        for (OverlayBase* const overlay : overlays) {
+        for (OverlayBase* const overlay : overlays)
             overlay->place();
-            overlay->layout(true);
-        }
-        if (!m_layoutRequested)
+        if (m_layoutQueue.empty())
             return;
     }
 }
@@ -1322,9 +1401,9 @@ detached-and-deferred by an event handler in a *previous* frame (see
 (`ensureWindowResources` - each window has independent VAOs/FBO, tracked in
 `m_windowResources`, since multiple windows can share one GL context); set up the projection
 from logical window size (not physical framebuffer size - see `HiDPI` note below); clear;
-lay out with `Window::layoutTree`, which runs the
-[dirty-flag-driven layout pass](#dirty-flag-propagation) on every top-level child and then places
-and lays out the window's [overlays](#overlays-and-popups); render every visible top-level child in
+lay out with `Window::layoutTree`, which lays out the
+[queued widgets](#dirty-flag-propagation) and places the window's
+[overlays](#overlays-and-popups); render every visible top-level child in
 `z()` order; then render the overlays on top, closing ones first and then the open ones in stack
 order. `layoutTree` is also called by the drop search during a drag (see
 [Drag and drop](#drag-and-drop)), so a frame after it finds the tree already clean.
@@ -2552,7 +2631,7 @@ the value or either bound changes. `RangeBase` is itself a `Control`, so every r
 **`ProgressBarBase`** (`templates/progressbarbase.h`) is `RangeBase` under its own name. It has no
 visuals; a concrete bar binds its fill to the position, e.g. `fill.widthFraction(positionState())`,
 and layout does the pixel math
-(see [`Widget::layout()`](#widgetlayout---the-non-layouter-default)).
+(see [`Widget::performLayout()`](#widgetperformlayout---the-non-layouter-default)).
 
 **`SliderBase`** (`templates/sliderbase.h`) adds `pressed` and a `handle` slot to the range.
 Interaction lives entirely in the base: press, release, and drag events bubble up from
@@ -3091,12 +3170,13 @@ world matrix ignores the parent chain. Ancestor `clip(true)`, rotation, and layo
 never affect it, even though it is declared as a child of an anchor widget.
 
 `Window` keeps the open overlays in a typed stack, `std::vector<OverlayBase*>` (`addOverlay`
-/ `removeOverlay`, topmost last). After the normal tree, `Window::layoutTree` calls each
-overlay's `place()` and `layout(true)`, and `Renderer::renderForWindow` then renders them in stack
+/ `removeOverlay`, topmost last). In each layout pass, after the queue, `Window::layoutTree` calls
+each overlay's `place()`. An overlay is laid out only when it's dirty: a change inside it climbs up
+to it, and `place()` marks it when it moves. `Renderer::renderForWindow` then renders them in stack
 order, as in the snippet under [Per-frame sequence](#per-frame-sequence). A second, render-only list,
 `m_retiredOverlays`, holds overlays that have left the stack but are still playing an exit
 transition. `retireOverlay` moves an overlay there (restoring focus at that moment) and
-`releaseOverlay` drops it when the exit ends; retired overlays are placed, laid out and drawn
+`releaseOverlay` drops it when the exit ends; retired overlays are placed and drawn
 first, beneath the open ones, and `clearReferencesTo` clears both lists. Hit-testing
 walks the stack in reverse before the tree:
 
@@ -4204,7 +4284,8 @@ window that reuses the same address still gets vsync.
 4. If it should be declarable inside `Window::build()`, add a `static void
    YourWidget(std::function<void(YourWidgetType&)>)` to `Builder` following the existing
    pattern (`create<YourWidgetType>(std::move(body))`).
-5. If it needs to be a layout container, override `layout()` (private) and set
-   `isLayouter()` to return `true`.
+5. If it needs to be a layout container, override `performLayout()` (private) and set
+   `isLayouter()` to return `true`. If its own size comes from its children but it doesn't place
+   them, return `true` from `sizesFromChildren()` instead (`Control` already does).
 6. If setting a property triggers work that needs the whole widget, such as its children or
    slots, ignore that callback while `!built()` and do the work once in `onBuilt()`.

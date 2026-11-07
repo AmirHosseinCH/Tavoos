@@ -27,6 +27,8 @@ class TAVOOS_EXPORT FlickAreaBase : public Control {
 public:
     FlickAreaBase(Object* parent);
 
+    bool sizesFromChildren() const override { return false; }
+
     decltype(auto) flickDirection(this auto&& self, PropertyArg<FlickDirection> direction) {
         direction.applyTo(self.m_direction);
         return std::forward<decltype(self)>(self);

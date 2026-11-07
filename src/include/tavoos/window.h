@@ -98,7 +98,7 @@ private:
     int m_framebufferWidth{0};
     int m_framebufferHeight{0};
     bool m_renderDirty{true};
-    bool m_layoutRequested{false};
+    std::vector<Widget*> m_layoutQueue;
     bool m_windowActive{true};
     std::vector<std::unique_ptr<Object>> m_pendingDestruction;
 
@@ -126,6 +126,7 @@ private:
     static Widget* hitTestChildren(Window* self, double x, double y, const Widget* skip = nullptr);
     static Widget* clickTarget(Widget* hit);
     void layoutTree();
+    void layoutQueued();
     Point dragHotSpotInWindow() const;
     void updateDropTarget();
     void leaveDropTarget();

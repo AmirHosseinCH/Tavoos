@@ -20,6 +20,8 @@ public:
         return std::forward<decltype(self)>(self);
     }
 
+    bool sizesFromChildren() const override { return true; }
+
     bool enabled() const { return m_enabled; }
     bool hovered() const { return m_hovered; }
 
@@ -73,7 +75,6 @@ private:
                 body(slot);
         });
         ++m_contentRevision;
-        requestRelayout();
     }
 
     void replaceSlot(Widget*& slot);

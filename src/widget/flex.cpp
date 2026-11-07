@@ -83,15 +83,7 @@ FlexWidget::FlexMetrics FlexWidget::computeMetrics(float availableMainSpace) con
     return metrics;
 }
 
-void FlexWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void FlexWidget::performLayout() {
     const bool horizontalMain = (m_direction.get() == FlexDirection::Row);
     const float mainGap = horizontalMain ? m_columnGap.get() : m_rowGap.get();
     const float crossGap = horizontalMain ? m_rowGap.get() : m_columnGap.get();
@@ -294,7 +286,7 @@ void FlexWidget::layout(bool force) {
             const float childH = horizontalMain ? itemCross : itemMain;
 
             item->setResolved(childX, childY, childW, childH);
-            item->layout(true);
+            item->layout();
 
             mainCursor += itemMainMarginLeading + itemMain + itemMainMarginTrailing + mainBetween;
         }

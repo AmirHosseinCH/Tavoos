@@ -71,7 +71,7 @@ protected:
     Size computeIntrinsicSize() override;
 
 private:
-    void layout(bool = false) override;
+    void performLayout() override;
 
     struct FlexLine {
         std::vector<Widget*> items;

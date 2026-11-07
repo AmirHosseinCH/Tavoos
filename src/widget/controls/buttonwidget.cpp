@@ -34,8 +34,6 @@ ButtonWidget::ButtonWidget(Object* parent) : ButtonBase{parent} {
 
     m_textColor.onChange([this](const Paint&) { updateTextColor(false); });
     m_disabledTextColor.onChange([this](const Paint&) { updateTextColor(false); });
-    m_text.onChange([this](const std::string&) { requestRelayout(); });
-    m_font.onChange([this](const Font&) { requestRelayout(); });
 
     m_icon.onChange([this](const std::string& source) {
         if (source.empty() == m_hasIcon)

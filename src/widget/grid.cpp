@@ -160,15 +160,7 @@ GridWidget::GridMetrics GridWidget::computeMetrics() const {
     return metrics;
 }
 
-void GridWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void GridWidget::performLayout() {
     const GridMetrics metrics = computeMetrics();
 
     const int cols = static_cast<int>(metrics.columnWidths.size());
@@ -292,7 +284,7 @@ void GridWidget::layout(bool force) {
             childY = cellY + itemMarginTop + static_cast<float>(item->y());
 
         item->setResolved(childX, childY, childW, childH);
-        item->layout(true);
+        item->layout();
     }
 }
 

@@ -503,6 +503,8 @@ public:
     float displayedHeight() const { return m_displayedHeight; }
 
     virtual bool isLayouter() const { return false; }
+    virtual bool sizesFromChildren() const { return isLayouter(); }
+    virtual bool sizesFromChildPositions() const { return false; }
     virtual bool isOverlay() const { return false; }
     virtual std::optional<CornerRadii> shapeRadii() const { return std::nullopt; }
 
@@ -625,7 +627,10 @@ protected:
     virtual void onBuilt() {}
     virtual Rect revealRect(const Rect& rect) { return rect; }
 
-    struct ContentArea { float x, y, width, height; };
+    struct ContentArea {
+        float x, y, width, height;
+        bool operator==(const ContentArea&) const = default;
+    };
     ContentArea resolveContentArea();
     int dragBase(bool horizontal);
     virtual ContentArea contentAreaFor(const Widget& child) const;
@@ -633,8 +638,9 @@ protected:
     bool isSizeBoundary() const;
 
     void requestRelayout();
+    void requestReposition();
+    void requestMatrixUpdate();
     void markLayoutDirty();
-    bool consumeLayoutDirty();
     void syncDisplayedGeometry();
     void notifyResolvedSizeIfChanged();
     void requestRepaint();
@@ -667,11 +673,26 @@ protected:
         (props.onChange(relayout), ...);
     }
 
+    template<typename... Props>
+    void bindRepositionTriggers(Props&... props) {
+        auto reposition = [this](const auto&) { requestReposition(); };
+        (props.onChange(reposition), ...);
+    }
+
+    template<typename... Props>
+    void bindMatrixTriggers(Props&... props) {
+        auto matrix = [this](const auto&) { requestMatrixUpdate(); };
+        (props.onChange(matrix), ...);
+    }
+
     Property<int>& widthProperty() { return m_width; }
     Property<int>& heightProperty() { return m_height; }
 
 private:
-    virtual void layout(bool force = false);
+    void layout();
+    virtual void performLayout();
+    ContentArea layoutInput();
+    void refreshWorldMatrices();
     void setResolved(float, float, float, float);
     void finishBuild() {
         m_built = true;
@@ -811,7 +832,8 @@ private:
 
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 
-    bool m_layoutDirty{true};
+    bool m_layoutDirty{false};
+    std::optional<ContentArea> m_layoutInput;
     bool m_intrinsicSizeCacheValid{false};
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};

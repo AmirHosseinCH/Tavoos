@@ -24,14 +24,15 @@ Widget::Widget(Object* parent) : Object{parent} {
     else if (auto* window = dynamic_cast<Window*>(parent))
         m_ownerWindow = window;
 
-    bindRelayoutTriggers(m_x, m_y, m_width, m_height, m_widthFraction, m_heightFraction, m_xFraction, m_yFraction, m_visible, m_alignment, m_fill,
+    bindRelayoutTriggers(m_width, m_height, m_visible, m_fill,
                          m_padding.leftProperty(), m_padding.topProperty(),
                          m_padding.rightProperty(), m_padding.bottomProperty(),
                          m_margin.leftProperty(), m_margin.topProperty(),
                          m_margin.rightProperty(), m_margin.bottomProperty(),
-                         m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin,
                          m_gridColumnSpan, m_gridRowSpan,
                          m_gridRow, m_gridColumn);
+    bindRepositionTriggers(m_x, m_y, m_xFraction, m_yFraction, m_widthFraction, m_heightFraction, m_alignment);
+    bindMatrixTriggers(m_rotation, m_scale, m_scaleX, m_scaleY, m_rotationX, m_rotationY, m_perspective, m_transformOrigin);
 
     m_opacity.onChange([this](const auto&) { updateEffectiveOpacity(); });
     m_cursor.onChange([this](const CursorShape&) {
@@ -143,9 +144,11 @@ void Widget::updateEffectiveOpacity() {
 }
 
 void Widget::markLayoutDirty() {
-    m_layoutDirty = true;
-    if (m_ownerWindow)
-        m_ownerWindow->m_layoutRequested = true;
+    if (!m_layoutDirty) {
+        m_layoutDirty = true;
+        if (m_ownerWindow)
+            m_ownerWindow->m_layoutQueue.push_back(this);
+    }
     requestRepaint();
 }
 
@@ -169,7 +172,7 @@ void Widget::detachAndDefer(Object* child) {
         m_ownerWindow->deferDestruction(std::move(detached));
     }
 
-    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->isLayouter())
+    if (auto* const parentWidget = dynamic_cast<Widget*>(parentObj); parentWidget && parentWidget->sizesFromChildren())
         parentWidget->requestRelayout();
 }
 
@@ -243,6 +246,30 @@ bool Widget::isSizeBoundary() const {
     return widthFixed && heightFixed;
 }
 
+void Widget::requestReposition() {
+    if (s_isBuilding)
+        return;
+
+    markLayoutDirty();
+
+    if (isOverlay())
+        return;
+
+    auto* const parentWidget = dynamic_cast<Widget*>(parent());
+    if (!parentWidget)
+        return;
+
+    if (parentWidget->sizesFromChildPositions())
+        parentWidget->requestRelayout();
+    else if (parentWidget->isLayouter())
+        parentWidget->markLayoutDirty();
+}
+
+void Widget::requestMatrixUpdate() {
+    if (!s_isBuilding)
+        markLayoutDirty();
+}
+
 void Widget::requestRelayout() {
     if (s_isBuilding)
         return;
@@ -254,21 +281,13 @@ void Widget::requestRelayout() {
         return;
 
     auto* const parentWidget = dynamic_cast<Widget*>(parent());
-    if (!parentWidget || !parentWidget->isLayouter())
+    if (!parentWidget || !parentWidget->sizesFromChildren())
         return;
 
     if (parentWidget->isSizeBoundary())
         parentWidget->markLayoutDirty();
     else
         parentWidget->requestRelayout();
-}
-
-bool Widget::consumeLayoutDirty() {
-    if (m_layoutDirty) {
-        m_layoutDirty = false;
-        return true;
-    }
-    return false;
 }
 
 Widget::ContentArea Widget::resolveContentArea() {
@@ -300,22 +319,41 @@ int Widget::dragBase(bool horizontal) {
     return static_cast<int>(std::lround(m_resolvedY - resolveContentArea().y - marginTop()));
 }
 
-void Widget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
+void Widget::layout() {
+    const ContentArea input = layoutInput();
+    if (!m_layoutDirty && m_layoutInput == input) {
+        refreshWorldMatrices();
         return;
     }
+    m_layoutDirty = false;
+    m_layoutInput = input;
+    performLayout();
+}
 
+Widget::ContentArea Widget::layoutInput() {
+    if (parentIsLayouter())
+        return { m_resolvedX, m_resolvedY, m_resolvedWidth, m_resolvedHeight };
+    return resolveContentArea();
+}
+
+void Widget::refreshWorldMatrices() {
+    const glm::mat4 previous = m_worldMatrix;
+    updateWorldMatrix();
+    if (m_worldMatrix == previous)
+        return;
+    for (auto& child : children())
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->refreshWorldMatrices();
+}
+
+void Widget::performLayout() {
     if (parentIsLayouter()) {
         notifyResolvedSizeIfChanged();
         syncDisplayedGeometry();
         updateWorldMatrix();
         for (auto& child : children()) {
             if (auto* widget = dynamic_cast<Widget*>(child.get()))
-                widget->layout(true);
+                widget->layout();
         }
         return;
     }
@@ -367,7 +405,7 @@ void Widget::layout(bool force) {
 
     for (auto& child : children()) {
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout(true);
+            widget->layout();
     }
 }
 

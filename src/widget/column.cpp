@@ -7,15 +7,7 @@ ColumnWidget::ColumnWidget(Object* parent) : EffectlessWidget{parent} {
     bindRelayoutTriggers(m_spacing);
 }
 
-void ColumnWidget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
-
+void ColumnWidget::performLayout() {
     std::vector<Widget*> items;
     for (auto& child : children())
         if (auto* w = dynamic_cast<Widget*>(child.get()); w && w->participatesInLayout())
@@ -106,7 +98,7 @@ void ColumnWidget::layout(bool force) {
 
         item->setResolved(childX, cursorY + itemMarginTop, childW, childH);
         cursorY += itemMarginTop + childH + itemMarginBottom + m_spacing;
-        item->layout(true);
+        item->layout();
     }
 }
 
