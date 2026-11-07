@@ -320,8 +320,30 @@ int Widget::dragBase(bool horizontal) {
 }
 
 void Widget::layout() {
+    const ContentArea input = layoutInput();
+    if (!m_layoutDirty && m_layoutInput == input) {
+        refreshWorldMatrices();
+        return;
+    }
     m_layoutDirty = false;
+    m_layoutInput = input;
     performLayout();
+}
+
+Widget::ContentArea Widget::layoutInput() {
+    if (parentIsLayouter())
+        return { m_resolvedX, m_resolvedY, m_resolvedWidth, m_resolvedHeight };
+    return resolveContentArea();
+}
+
+void Widget::refreshWorldMatrices() {
+    const glm::mat4 previous = m_worldMatrix;
+    updateWorldMatrix();
+    if (m_worldMatrix == previous)
+        return;
+    for (auto& child : children())
+        if (auto* widget = dynamic_cast<Widget*>(child.get()))
+            widget->refreshWorldMatrices();
 }
 
 void Widget::performLayout() {

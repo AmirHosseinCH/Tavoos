@@ -627,7 +627,10 @@ protected:
     virtual void onBuilt() {}
     virtual Rect revealRect(const Rect& rect) { return rect; }
 
-    struct ContentArea { float x, y, width, height; };
+    struct ContentArea {
+        float x, y, width, height;
+        bool operator==(const ContentArea&) const = default;
+    };
     ContentArea resolveContentArea();
     int dragBase(bool horizontal);
     virtual ContentArea contentAreaFor(const Widget& child) const;
@@ -688,6 +691,8 @@ protected:
 private:
     void layout();
     virtual void performLayout();
+    ContentArea layoutInput();
+    void refreshWorldMatrices();
     void setResolved(float, float, float, float);
     void finishBuild() {
         m_built = true;
@@ -828,6 +833,7 @@ private:
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 
     bool m_layoutDirty{false};
+    std::optional<ContentArea> m_layoutInput;
     bool m_intrinsicSizeCacheValid{false};
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};
