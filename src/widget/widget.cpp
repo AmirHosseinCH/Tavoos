@@ -143,9 +143,11 @@ void Widget::updateEffectiveOpacity() {
 }
 
 void Widget::markLayoutDirty() {
-    m_layoutDirty = true;
-    if (m_ownerWindow)
-        m_ownerWindow->m_layoutRequested = true;
+    if (!m_layoutDirty) {
+        m_layoutDirty = true;
+        if (m_ownerWindow)
+            m_ownerWindow->m_layoutQueue.push_back(this);
+    }
     requestRepaint();
 }
 
@@ -263,14 +265,6 @@ void Widget::requestRelayout() {
         parentWidget->requestRelayout();
 }
 
-bool Widget::consumeLayoutDirty() {
-    if (m_layoutDirty) {
-        m_layoutDirty = false;
-        return true;
-    }
-    return false;
-}
-
 Widget::ContentArea Widget::resolveContentArea() {
     ContentArea area{0, 0, 0, 0};
     if (isOverlay()) {
@@ -300,22 +294,19 @@ int Widget::dragBase(bool horizontal) {
     return static_cast<int>(std::lround(m_resolvedY - resolveContentArea().y - marginTop()));
 }
 
-void Widget::layout(bool force) {
-    const bool wasDirty = consumeLayoutDirty();
-    if (!wasDirty && !force) {
-        for (auto& child : children())
-            if (auto* w = dynamic_cast<Widget*>(child.get()))
-                w->layout(false);
-        return;
-    }
+void Widget::layout() {
+    m_layoutDirty = false;
+    performLayout();
+}
 
+void Widget::performLayout() {
     if (parentIsLayouter()) {
         notifyResolvedSizeIfChanged();
         syncDisplayedGeometry();
         updateWorldMatrix();
         for (auto& child : children()) {
             if (auto* widget = dynamic_cast<Widget*>(child.get()))
-                widget->layout(true);
+                widget->layout();
         }
         return;
     }
@@ -367,7 +358,7 @@ void Widget::layout(bool force) {
 
     for (auto& child : children()) {
         if (auto* widget = dynamic_cast<Widget*>(child.get()))
-            widget->layout(true);
+            widget->layout();
     }
 }
 

@@ -634,7 +634,6 @@ protected:
 
     void requestRelayout();
     void markLayoutDirty();
-    bool consumeLayoutDirty();
     void syncDisplayedGeometry();
     void notifyResolvedSizeIfChanged();
     void requestRepaint();
@@ -671,7 +670,8 @@ protected:
     Property<int>& heightProperty() { return m_height; }
 
 private:
-    virtual void layout(bool force = false);
+    void layout();
+    virtual void performLayout();
     void setResolved(float, float, float, float);
     void finishBuild() {
         m_built = true;
@@ -811,7 +811,7 @@ private:
 
     static std::vector<Widget*> zOrderedChildren(const Object& parent);
 
-    bool m_layoutDirty{true};
+    bool m_layoutDirty{false};
     bool m_intrinsicSizeCacheValid{false};
     Size m_cachedIntrinsicSize{};
     Window* m_ownerWindow{nullptr};

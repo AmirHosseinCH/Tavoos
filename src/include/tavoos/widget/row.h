@@ -27,7 +27,7 @@ protected:
     Size computeIntrinsicSize() override;
 
 private:
-    void layout(bool = false) override;
+    void performLayout() override;
 
     Property<float> m_spacing{0.0f};
 };
